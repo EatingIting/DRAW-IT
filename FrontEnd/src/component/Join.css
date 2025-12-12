@@ -1,0 +1,219 @@
+@charset "utf-8";
+
+/* =========================================
+   1. 전체 레이아웃 & 배경 설정
+   ========================================= */
+.join-wrapper {
+    width: 100%;
+    min-height: 100vh;
+    background-color: #347433; /* Draw-It 메인 테마 색상 (진한 초록) */
+    display: flex;
+    flex-direction: column;
+    align-items: center;       /* 가로 중앙 정렬 */
+    padding: 20px;
+    box-sizing: border-box;
+    position: relative;        /* 자식 요소(back-btn)의 기준점 */
+    font-family: 'Malgun Gothic', sans-serif;
+}
+
+/* =========================================
+   2. UI 컨트롤 요소 (버튼 등)
+   ========================================= */
+/* 좌측 상단 뒤로가기 버튼 */
+.back-btn-top {
+    position: absolute;        /* 절대 위치 고정 */
+    top: 25px;
+    left: 25px;
+    background-color: rgba(0, 0, 0, 0.4); /* 반투명 검정 배경 */
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 100;              /* 다른 요소보다 항상 위에 위치 */
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.back-btn-top:hover {
+    background-color: white;
+    color: #347433;
+    transform: scale(1.05);    /* 마우스 오버 시 살짝 커짐 */
+}
+
+/* =========================================
+   3. 헤더 영역 (로고 및 타이틀)
+   ========================================= */
+.join-header-container {
+    display: flex;
+    flex-direction: column;    /* 세로로 배치 (로고 위, 타이틀 아래) */
+    align-items: center;
+    justify-content: center;
+    padding-top: -40px;
+    margin-bottom: 40px;
+    position: relative;
+    z-index: 10;
+}
+
+.join-logo {
+    width: 250px;
+    height: auto;
+    display: block;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); /* 로고 입체감 */
+}
+
+.title-area {
+    display: flex;
+    justify-content: center;
+}
+
+.join-title {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.4); /* 글자 그림자 */
+    background-color: rgba(0, 0, 0, 0.25);    /* 글자 배경 반투명 박스 */
+    padding: 10px 30px;
+    border-radius: 50px;
+}
+
+/* =========================================
+   4. 방 목록 컨테이너 (Glassmorphism)
+   ========================================= */
+.room-list-box {
+    width: 100%;
+    max-width: 1200px;
+    background-color: rgba(255, 255, 255, 0.15); /* 유리창 같은 반투명 효과 */
+    border: 3px solid rgba(255, 255, 255, 0.3);  /* 연한 테두리 */
+    border-radius: 25px;
+    padding: 30px;
+    box-sizing: border-box;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);   /* 깊은 그림자 */
+}
+
+.room-grid-container {
+    display: grid;
+    /* 반응형 그리드: 최소 280px 유지, 화면 크기에 따라 열 개수 자동 조절 */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 25px;
+}
+
+/* =========================================
+   5. 방 카드 디자인 (핵심 로직 포함)
+   ========================================= */
+.room-card {
+    /* [색상 자동 계산 로직]
+       --ratio (0~1): 인원 비율
+       Hue: 120(초록)에서 0(빨강)까지 비율에 따라 변화
+       Saturation: 100% (가장 선명함)
+       Lightness: 85% (색감을 살리면서 텍스트 가독성 확보)
+    */
+    background-color: hsl(calc(120 * (1 - var(--ratio))), 100%, 85%);
+    
+    /* 테두리는 배경보다 훨씬 진하게(Lightness 60%) 설정하여 경계 구분 */
+    border: 3px solid hsl(calc(120 * (1 - var(--ratio))), 70%, 60%);
+    
+    border-radius: 20px;
+    padding: 20px;
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 5px 10px rgba(0,0,0,0.1);
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+/* 카드 호버 효과 */
+.room-card:hover {
+    transform: translateY(-5px); /* 위로 떠오름 */
+    
+    /* 호버 시 Lightness를 85% -> 78%로 낮춰 색상을 더 진하게 만듦 */
+    background-color: hsl(calc(120 * (1 - var(--ratio))), 100%, 78%);
+    box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+}
+
+/* 카드 내부 요소들 */
+.room-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px dashed rgba(0,0,0,0.1);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.room-name {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis; /* 긴 제목 ... 처리 */
+    white-space: nowrap;
+    max-width: 70%;
+}
+
+.room-status {
+    font-size: 0.9rem;
+    font-weight: 900;
+    color: #555;
+    background-color: rgba(255,255,255, 0.6);
+    padding: 5px 10px;
+    border-radius: 10px;
+}
+
+/* 만원일 때 인원수 스타일 */
+.room-status.full {
+    color: #d63031;
+    background-color: #ffeaa7;
+}
+
+.room-card-middle {
+    flex-grow: 1;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.owner-name {
+    font-size: 0.85rem;
+    color: #777;
+    margin-bottom: 5px;
+}
+
+.room-desc {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #444;
+}
+
+/* =========================================
+   6. 입장 버튼 스타일
+   ========================================= */
+.room-join-btn {
+    width: 100%;
+    height: 45px;
+    background-color: #3b82f6; /* 기본 파란색 */
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #2563eb; /* 입체 버튼 그림자 */
+    transition: all 0.1s;
+}
+
+.room-join-btn:active {
+    box-shadow: 0 2px 0 #2563eb;
+    transform: translateY(2px);  /* 클릭 시 눌리는 효과 */
+}
+
+/* 만원(Disabled) 버튼 스타일 */
+.room-join-btn.disabled {
+    background-color: #b2bec3;   /* 회색 */
+    box-shadow: none;            /* 그림자 제거 */
+    cursor: not-allowed;         /* 금지 커서 */
+    color: #636e72;
+    transform: none;
+}

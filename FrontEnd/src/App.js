@@ -11,7 +11,9 @@ function App() {
         <Routes>
           <Route path='/' element={<Main />} />
           <Route path="/create" element={<Create />} />
-          <Route path="/join" element={<Join />} />
+
+          {/* 메인메뉴 참여하기 버튼(로비페이지) 이동 시 */}
+          <Route path="/Join" element={<Join />} />
         </Routes>
       </Fragment>
     </>

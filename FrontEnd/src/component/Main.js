@@ -11,7 +11,8 @@ function Main() {
         <div className="start-text">게임 시작하기</div>
           <div className='btn-group'>
             <button type='button' onClick={() => navigate("/create")}>방만들기</button>
-            <button type='button' onClick={() => navigate("/join")}>참여하기</button>
+            {/* gjwjddn */}
+            <button type='button' onClick={() => navigate("/Join")}>참여하기</button>
           </div>
           <div className="join-link-group">
             <span className="join-label">참여링크 :</span>
