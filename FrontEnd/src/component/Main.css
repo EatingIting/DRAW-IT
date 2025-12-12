@@ -1,8 +1,7 @@
-.container {
+.main-wrapper {
   position: relative;
   width: 100%;
-  height: 100vh;
-  background-color: #347433;
+  height: 100%;
 }
 
 .logo {
@@ -15,7 +14,7 @@
 
 .title {
   position: absolute;
-  top: 215px;
+  top: 185px;
   left: 50%;
   transform: translate(-50%, -50%);
   color: #fff;
@@ -41,13 +40,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
 
   padding-top: 40px;
 }
 
 .start-text {
-  margin-top: 20px;
+  margin-top: 10px;
   margin-bottom: 40px;
   font-size: 24px;
   color: white;
@@ -55,16 +53,11 @@
 }
 
 .btn-group {
-  position: absolute;
   display: flex;
-  width: 600px;
-  height: 400px;
   justify-content: center;
-  align-items: center;
   gap: 50px;
-  top: 45%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  margin-top: 40px;
+  margin-bottom: 80px;
 }
 
 .btn-group button {
@@ -96,11 +89,12 @@
 }
 
 .join-link-group {
-  margin-top: 260px;
+  margin-top: auto;
+  margin-bottom: 40px;
+
   display: flex;
   align-items: center;
   gap: 12px;
-  justify-content: center;
 }
 
 .join-label {

@@ -2,7 +2,7 @@ import './Fragment.css';
 
 function Fragment({children}) {
   return (
-    <div className='container'>
+    <div className='page-container'>
       {children}
     </div>
   )

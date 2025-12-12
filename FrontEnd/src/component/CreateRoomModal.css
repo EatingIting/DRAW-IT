@@ -1,0 +1,168 @@
+.create-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.create-modal {
+  position: relative;
+  width: 1100px;
+  height: 650px;
+  background: #f7c948;
+  border-radius: 8px;
+  padding: 60px 80px;
+  box-sizing: border-box;
+}
+
+/* 닫기 버튼 */
+.close-btn {
+  position: absolute;
+  top: 30px;
+  right: 30px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e76f51;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+/* 공통 폼 */
+.form-group {
+  margin-bottom: 60px;
+}
+
+.label {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.input {
+  width: 600px;
+  height: 56px;
+  background: #f4a261;
+  border: none;
+  padding: 0 16px;
+  font-size: 18px;
+  box-sizing: border-box;
+}
+
+/* 모드 선택 */
+.mode-group {
+  display: flex;
+  gap: 40px;
+}
+
+.mode-btn {
+  width: 140px;
+  height: 140px;
+  background: #f4a261;
+  border-radius: 12px;
+  border: none;
+  font-size: 24px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  outline: 4px solid #000;
+  transform: translateY(-2px);
+}
+
+.mode-icon {
+  width: 80px;
+  height: 80px;
+}
+
+.password-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.password-input.off {
+  background: #d9d9d9;
+  color: #777;
+  cursor: not-allowed;
+}
+
+.password-input.on {
+  background: #f4a261;
+  color: #111;
+}
+
+.password-input:disabled::placeholder {
+  color: #999;
+}
+
+/* 토글 버튼(스위치) */
+.toggle-lock {
+  width: 64px;
+  height: 34px;
+  border-radius: 999px;
+  border: 3px solid #000;
+  background: transparent;
+  position: relative;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 토글 안의 동그라미 */
+.toggle-knob {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #000;
+  position: absolute;
+  left: 8px;
+  transition: left 0.18s ease;
+}
+
+/* ON이면 오른쪽으로 이동 */
+.toggle-lock.on .toggle-knob {
+  left: 36px;
+}
+
+/* ON일 때 살짝 활성화 느낌 */
+.toggle-lock.on {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.create-room-btn {
+  height: 42px;
+  margin-left: 30px;
+  padding: 0 30px;
+  border-radius: 10px;
+  border: none;
+  background: #12b886;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.create-room-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
+}
+
+.create-room-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
+}
+
+.create-room-btn:disabled {
+  background: #9fbfb5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
