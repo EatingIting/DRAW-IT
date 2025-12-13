@@ -1,0 +1,113 @@
+/* 1. 화면 전체를 덮는 투명한 배경 */
+.modalBackdrop {
+  position: fixed; /* 화면 전체 기준 */
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: transparent; /* 투명하게 (원하면 rgba(0,0,0,0.1)로 살짝 어둡게 가능) */
+  z-index: 99; /* 캔버스보단 위, 모달보단 아래 */
+  cursor: default; /* 배경 커서 */
+}
+
+/* 2. 모달을 감싸는 안전 구역 (융통성 있는 가장자리) */
+.modalSafeZone {
+  position: absolute;
+  /* 기존 tool-settings-modal의 위치를 여기로 가져옵니다 */
+  top: -20px;  /* 위로 좀 더 넓게 */
+  left: 60px;  /* 왼쪽 위치 조절 */
+  
+  /* ✨ 핵심: 눈에 보이는 모달보다 20px씩 더 넓은 투명 영역을 만듭니다 */
+  padding: 20px; 
+  
+  z-index: 100; /* 배경보다 위에 있어야 함 */
+}
+
+/* 3. 실제 말풍선 형태의 모달창 */
+.toolSettingsModal {
+  position: absolute;
+  right: 120px;
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  width: 200px;
+  
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  
+  animation: fadeIn 0.2s ease-out;
+  
+  /* 모달 내부 클릭 시 이벤트가 배경으로 전파되지 않도록 막음 */
+  cursor: auto; 
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  color: #333;
+}
+
+.modalHeader p{
+  margin: 0;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #999;
+}
+
+.slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  height: 50px; /* 전체 높이 고정 */
+}
+
+.custom-slider {
+  flex-grow: 1; /* 슬라이더가 남은 공간을 꽉 채우도록 설정 */
+  cursor: pointer;
+  width: auto;  /* 폭이 줄어들지 않도록 auto 설정 */
+}
+
+/* ✨ 추가된 부분: 원을 담는 고정된 상자 */
+.preview-box {
+  /* 최대 굵기(50px)보다 살짝 여유 있게 설정 */
+  width: 50px;
+  height: 50px;
+  
+  /* 박스 안에서 원이 항상 정중앙에 오도록 설정 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+  /* (선택사항) 박스 영역 확인용 배경색 - 나중에 지우세요 */
+  /* background-color: #f0f0f0; */
+  
+  /* 크기가 고정되어야 슬라이더를 밀지 않음 */
+  flex-shrink: 0; 
+}
+
+.size-preview-circle {
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.1);
+  
+  /* margin 등 레이아웃에 영향을 주는 속성 제거 */
+  transition: width 0.1s, height 0.1s, background-color 0.1s;
+}
+/* react-colorful 커스텀 (필요시) */
+.reactColorful {
+  width: 100% !important;
+  height: 150px !important;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}

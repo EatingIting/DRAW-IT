@@ -1,8 +1,15 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, use, act } from 'react';
+import PenSettings from './settingmodals/PenSettings';
+import PenIcon from './icons/PenIcon';
 import './GamingSession.css'
 
 function GamingSession(){
   const [activeTool, setActiveTool] = useState('pen');
+
+  const [penColor, setPenColor] = useState('#ff0000');
+  const [penWidth, setPenWidth] = useState(5);
+  const [showModal, setShowModal] = useState(false);
+
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
   const isDrawing = useRef(false);
@@ -11,13 +18,34 @@ function GamingSession(){
     const canvas = canvasRef.current;
     if(canvas){
       const ctx = canvas.getContext('2d');
-      ctx.lineWidth = 5;
       ctx.lineCap = 'round';
-      ctx.strokeStyle = 'red';
+      ctx.lineJoin = 'round';
 
       contextRef.current = ctx;
     }
   }, []);
+
+  useEffect(() => {
+    if(contextRef.current){
+      contextRef.current.strokeStyle = penColor;
+      contextRef.current.lineWidth = penWidth;
+    }
+  }, [penColor, penWidth]);
+
+  const handleToolClick = (toolName) => {
+    if(toolName === 'pen'){
+      if(activeTool === 'pen'){ // 토글 열림
+        console.log("펜 세팅 모달");
+        setShowModal(true);
+      }else{
+        setActiveTool('pen');
+        setShowModal(false);
+      }
+    }else{
+      setActiveTool(toolName);
+      setShowModal(false);
+    }
+  }
 
   const startDrawing = (e) => {
     contextRef.current.beginPath();
@@ -41,6 +69,7 @@ function GamingSession(){
     contextRef.current.closePath();
     isDrawing.current = false;
   }
+
   return(
     <div className="wrapper">
       
@@ -57,21 +86,32 @@ function GamingSession(){
           </canvas>
         </div>
         <div className="tool-box">
-          <img 
-            src="/svg/pen.svg" 
-            alt="pen" 
+          { 
+            showModal && activeTool === 'pen' && (
+              <PenSettings 
+                color={penColor} 
+                setColor={setPenColor}
+                width={penWidth}
+                setWidth={setPenWidth}
+                onClose={() => setShowModal(false)}
+              />
+            )
+          }
+          <PenIcon 
+            color={penColor}
             className={`tool-icon ${activeTool === 'pen' ? 'active' : ''}`}
-            onClick={() => setActiveTool('pen')} />
+            onClick={() => handleToolClick('pen')}
+          />
           <img 
             src="/svg/fill.svg" 
             alt="fill" 
             className={`tool-icon ${activeTool === 'fill' ? 'active' : ''}`}
-            onClick={() => setActiveTool('fill')} />
+            onClick={() => handleToolClick('fill')} />
           <img 
             src="/svg/eraser.svg" 
             alt="eraser" 
             className={`tool-icon ${activeTool === 'eraser' ? 'active' : ''}`}
-            onClick={() => setActiveTool('eraser')} />
+            onClick={() => handleToolClick('eraser')} />
         </div>
 
       </div>
