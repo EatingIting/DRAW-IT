@@ -15,7 +15,7 @@ function PenSettings({color, setColor, width, setWidth, onClose}){
                 <div className="toolSettingsModal">
                     <div className="modalHeader">
                         <span>펜 세팅</span>
-                        <button onClick={onClose} className="closeNtn">X</button>
+                        <button onClick={onClose} className="closeBtn">X</button>
                     </div>
 
                     <div className="settingSection">
@@ -34,7 +34,6 @@ function PenSettings({color, setColor, width, setWidth, onClose}){
                                 className="custom-slider"
                             />
 
-                            {/* ✨ 변경된 부분: 원을 감싸는 고정 박스 추가 */}
                             <div className="preview-box">
                                 <div 
                                 className="size-preview-circle"
