@@ -25,7 +25,6 @@
   background-repeat: no-repeat;
   background-position: center;
 
-  /* ✨ 추가된 부분: 자식 요소(canvas)의 기준점이 됩니다 */
   position: relative; 
 }
 
@@ -33,15 +32,11 @@
   width: 746px;
   height: 603px;
 
-  /* ✨ 변경된 부분: 마진 대신 절대 위치를 사용합니다 */
   position: absolute;
   
- 
   top: 38px;
   right: 101px;
 
-
-  /* 기존 margin은 제거하거나 0으로 설정 */
   margin: 0;
   
   background-color: rgba(0, 0, 0, 0.39);
