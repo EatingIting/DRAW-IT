@@ -11,7 +11,7 @@ function GamingSession(){
       <div className="play-area">
 
         <div className="drawingBoard" style={{ backgroundImage: "url('/img/board.png')" }}>
-          
+          <canvas className="canvas"></canvas>
         </div>
         <div className="tool-box">
           <img 
