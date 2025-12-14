@@ -1,9 +1,8 @@
 import { Route, Routes } from 'react-router-dom';
-import './App.css';
 import Join from './component/Join.js';
 import GamingSession from './component/GamingSession.js';
 import Main from './component/Main.js';
-import { Fragment } from 'react/jsx-runtime';
+import Fragment from './layout/Fragment.js';
 function App() {
   return (
     <>

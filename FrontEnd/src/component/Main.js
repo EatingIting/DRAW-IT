@@ -8,8 +8,10 @@ function Main() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   return (
     <div className="main-wrapper">
-      <img src='/img/logo.png' className='logo' alt='draw-it!'></img>
-      <div className='title'>그림으로 소통하는 실시간 게임!</div>
+      <div className='hero'>
+        <img src='/img/logo.png' className='logo' alt='draw-it!'></img>
+        <div className='title'>그림으로 소통하는 실시간 게임!</div>
+      </div>
       <div className='rectangle'>
         <div className="start-text">게임 시작하기</div>
         <div className='btn-group'>
