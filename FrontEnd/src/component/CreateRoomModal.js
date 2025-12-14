@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useState } from "react";
 import "./CreateRoomModal.css";
+import { useNavigate } from "react-router-dom";
 
 function CreateRoomModal({ onClose }) {
   const [lobbyName, setLobbyName] = useState('');
@@ -8,6 +9,7 @@ function CreateRoomModal({ onClose }) {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState("RANDOM");
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleTogglePassword = () => {
     setIsPasswordOn((prev) => {
@@ -28,28 +30,38 @@ function CreateRoomModal({ onClose }) {
     setIsLoading(true);
 
     const payload = {
-      lobbyName,
+      name: lobbyName,
       mode,
       password: isPasswordOn ? password : null
     };
 
     try {
-      const response = await axios.post("http://localhost:8080/lobby", {
-        lobbyName,
-        mode,
-        password : isPasswordOn ? password : null
-      });
+      const response = await axios.post(
+        "http://localhost:8080/lobby",
+        payload
+      );
+
       console.log("방 생성 성공" , response.data);
+      const { id } = response.data;
       onClose();
+      navigate(`/lobby/${id}`);
     } catch (error) {
       console.log(error);
-      alert("방 생성에 실패했습니다.");
+      if(error.response?.status === 409) {
+        alert("이미 같은 이름인 방이 존재합니다.");
+      } else if(error.response?.status === 404) {
+        alert("존재하지 않는 방입니다.");
+      } else {
+        alert("방 생성에 실패했습니다.");
+      }
     } finally {
-      setIsLoading(true);
+      setIsLoading(false);
     }
   };
 
-  const isCreateDisabled = isPasswordOn && password.trim() === "";
+  const isCreateDisabled = 
+        lobbyName.trim() === "" ||
+        isPasswordOn && password.trim() === "";
 
   return (
     <div className="create-modal-overlay">
@@ -131,7 +143,7 @@ function CreateRoomModal({ onClose }) {
               onClick={handleCreateRoom}
               disabled={isCreateDisabled}
             >
-              {isLoading ? "생성 중..." : "빙 생성"}
+              {isLoading ? "생성 중..." : "방 생성"}
             </button>
           </div>
         </div>

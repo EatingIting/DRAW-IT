@@ -1,23 +1,30 @@
 package com.example.drawIt.Service;
 
-import com.example.drawIt.DTO.CreateLobbyRequest;
-import com.example.drawIt.domain.Lobby;
+import com.example.drawIt.Entity.Lobby;
+import com.example.drawIt.Repository.LobbyRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import static Handler.GlobalExceptionHandler.*;
 
-import java.util.concurrent.atomic.AtomicLong;
 
 @Service
+@RequiredArgsConstructor
 public class LobbyService {
-    private final AtomicLong idGenerator = new AtomicLong(1);
 
-    public Lobby createLobby(CreateLobbyRequest request) {
-        Long lobbyId = idGenerator.getAndIncrement();
+    private final LobbyRepository lobbyRepository;
 
-        return new Lobby(
-                lobbyId,
-                request.getLobbyName(),
-                request.getMode(),
-                request.getPassword()
-        );
+    public Lobby createLobby(String name, String mode) {
+        if (lobbyRepository.existsByName(name)) {
+            throw new RoomAlreadyExistsException("이미 같은 이름의 방이 존재합니다.");
+        }
+
+        return lobbyRepository.save(new Lobby(name, mode));
+    }
+
+    public Lobby getLobby(Long lobbyId) {
+        return lobbyRepository.findById(lobbyId)
+                .orElseThrow(() ->
+                        new LobbyNotFoundException("존재하지 않는 방입니다.")
+                );
     }
 }

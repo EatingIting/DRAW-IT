@@ -1,15 +1,13 @@
 package com.example.drawIt.Controller;
 
-import com.example.drawIt.DTO.CreateLobbyRequest;
-import com.example.drawIt.DTO.CreateLobbyResponse;
+import com.example.drawIt.DTO.CreateLobbyDTO;
+import com.example.drawIt.DTO.LobbyResponseDTO;
 import com.example.drawIt.Service.LobbyService;
-import com.example.drawIt.domain.Lobby;
+import com.example.drawIt.Entity.Lobby;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
@@ -19,14 +17,15 @@ public class LobbyController {
     private final LobbyService lobbyService;
 
     @PostMapping("/lobby")
-    public ResponseEntity<CreateLobbyResponse> createLobby(@RequestBody CreateLobbyRequest request) {
-        Lobby lobby = lobbyService.createLobby(request);
+    public ResponseEntity<LobbyResponseDTO> createLobby(@RequestBody CreateLobbyDTO dto) {
+        Lobby lobby = lobbyService.createLobby(dto.getName(), dto.getMode());
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(new LobbyResponseDTO(lobby));
+    }
 
-        return ResponseEntity.ok(
-                new CreateLobbyResponse(
-                        lobby.getId(),
-                        lobby.getName()
-                )
-        );
+    @GetMapping("/lobby/{lobbyId}")
+    public Lobby getLobby(@PathVariable Long lobbyId) {
+        return lobbyService.getLobby(lobbyId);
     }
 }

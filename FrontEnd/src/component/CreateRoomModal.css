@@ -85,6 +85,13 @@
   display: flex;
   align-items: center;
   gap: 20px;
+  flex-wrap: nowrap;
+}
+
+.password-group .input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
 }
 
 .password-input.off {
@@ -138,9 +145,9 @@
 }
 
 .create-room-btn {
+  flex-shrink: 0;
   height: 42px;
-  margin-left: 30px;
-  padding: 0 30px;
+  padding: 0 40px;
   border-radius: 10px;
   border: none;
   background: #12b886;
