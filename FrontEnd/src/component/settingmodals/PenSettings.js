@@ -1,15 +1,15 @@
 
 import { HexColorPicker } from "react-colorful";
-import './PenSettings.css'
+import './ModalSettings.css'
 
-function PenSettings({color, setColor, width, setWidth, onClose}){
+function PenSettings({color, setColor, width, setWidth, onClose, top='0px'}){
     return (
         <>
             {/* 1. 화면 전체를 덮는 투명한 막 (여기 누르면 닫힘) */}
             <div className="modalBackdrop" onClick={onClose}></div>
 
             {/* 2. 안전 구역 (여기까지는 클릭해도 안 닫힘 - 융통성 영역) */}
-            <div className="modalSafeZone">
+            <div className="modalSafeZone" style={{top: top}}>
                 
                 {/* 3. 실제 눈에 보이는 모달창 */}
                 <div className="toolSettingsModal">
