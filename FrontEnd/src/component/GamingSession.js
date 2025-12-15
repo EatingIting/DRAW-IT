@@ -189,6 +189,15 @@ function GamingSession(){
     ctx.putImageData(imageData, 0, 0);
   };
 
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    const ctx = contextRef.current;
+    if (canvas && ctx) {
+      // 캔버스 영역 전체를 깨끗하게 지움
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
   return(
     <div className="wrapper">
       
@@ -200,8 +209,9 @@ function GamingSession(){
           zIndex: 9999,
           transform: 'translate(-50%, -50%)', // 중앙 정렬
           borderRadius: '50%',
-          // [변경 4] 커서 테두리 색상도 현재 도구 색상 따라가게 설정
-          border: activeTool === 'eraser' ? '1px solid rgba(0,0,0,0.5)' : `1px solid ${getCurrentCursorColor()}`,
+          border: '1px solid #000000', 
+          // 흰색 그림자를 1px 추가 (검은팬일 경우 대비)
+          boxShadow: '0 0 0 1px rgba(255, 255, 255, 0.5)',
           // [변경 5] 커서 배경색도 현재 도구 색상 사용
           backgroundColor: activeTool === 'eraser' ? 'rgba(255,255,255,0.5)' : getCurrentCursorColor(), 
           // 펜 색상이 너무 투명하면 안보일 수 있으므로 최소한의 불투명도 처리 필요할 수 있음
@@ -282,6 +292,18 @@ function GamingSession(){
             alt="eraser" 
             className={`tool-icon ${activeTool === 'eraser' ? 'active' : ''}`}
             onClick={() => handleToolClick('eraser')} />
+
+          <div 
+            className="tool-icon" 
+            onClick={clearCanvas} 
+            style={{ marginTop: '60px', cursor: 'pointer' }} // 간격 조정
+            title="전체 지우기"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" height="40" viewBox="0 96 960 960" width="40" fill="#000000ff">
+              <path d="M280 936q-33 0-56.5-23.5T200 856V336h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680 936H280Zm400-600H280v520h400V336ZM360 776h80V416h-80v360Zm160 0h80V416h-80v360ZM280 336v520-520Z"/>
+            </svg>
+          </div>
+            
         </div>
 
       </div>
