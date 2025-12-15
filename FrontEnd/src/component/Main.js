@@ -1,17 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import CreateRoomModal from './CreateRoomModal';
 import './Main.css';
 
-const ROOM_ID_REGEX = /^[a-zA-Z0-9]+$/; //참여링크 영어, 숫자만 허용
-const ROOM_ID_LENGTH = 8; //참여링크 8글자 제한
+const ROOM_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
+const ROOM_ID_LENGTH = 8;
 
 function Main() {
   const navigate = useNavigate();
-  const [nickname, setNickname] = useState(() => {
-    return sessionStorage.getItem('nickname') || '';
-  });
+
+  const [nickname, setNickname] = useState(
+    () => sessionStorage.getItem('nickname') || ''
+  );
   const [joinLink, setJoinLink] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -22,6 +23,11 @@ function Main() {
     return value;
   };
 
+  const roomId = useMemo(
+    () => extractRoomId(joinLink.trim()),
+    [joinLink]
+  );
+
   useEffect(() => {
     if (nickname.trim()) {
       sessionStorage.setItem('nickname', nickname);
@@ -30,15 +36,13 @@ function Main() {
     }
   }, [nickname]);
 
+  const isJoinDisabled =
+    !roomId ||
+    roomId.length !== ROOM_ID_LENGTH ||
+    !ROOM_ID_REGEX.test(roomId);
+
   const handleJoinRoom = async () => {
-    if (!joinLink.trim()) return;
-
-    const roomId = extractRoomId(joinLink.trim());
-
-    if (!ROOM_ID_REGEX.test(roomId)) {
-      alert('올바른 참여 링크를 입력해주세요.');
-      return;
-    }
+    if (isJoinDisabled) return;
 
     try {
       await axios.get(`http://localhost:8080/lobby/${roomId}`);
@@ -52,22 +56,17 @@ function Main() {
     }
   };
 
-  const isJoinDisabled =
-    !joinLink.trim() || !ROOM_ID_REGEX.test(joinLink);
-
   return (
     <div className="main-wrapper">
-      {/* 상단 로고 */}
       <div className="hero">
         <img src="/img/logo.png" className="logo" alt="draw-it!" />
         <div className="title">그림으로 소통하는 실시간 게임!</div>
       </div>
 
-      {/* 메인 패널 */}
       <div className="rectangle">
         <div className="start-text">게임 시작하기</div>
 
-        {/* 닉네임 입력 */}
+        {/* 닉네임 */}
         <div className="nickname-group">
           <span className="nickname-label">닉네임</span>
           <input
@@ -79,18 +78,12 @@ function Main() {
           />
         </div>
 
-        {/* 방 생성 / 참여 */}
+        {/* 버튼 */}
         <div className="btn-group">
-          <button
-            type="button"
-            onClick={() => setIsCreateModalOpen(true)}
-          >
+          <button type="button" onClick={() => setIsCreateModalOpen(true)}>
             방만들기
           </button>
-          <button
-            type="button"
-            onClick={() => navigate('/join')}
-          >
+          <button type="button" onClick={() => navigate('/join')}>
             참여하기
           </button>
         </div>
@@ -100,14 +93,9 @@ function Main() {
           <span className="join-label">참여링크 :</span>
           <input
             type="text"
+            placeholder="8자리 코드"
             value={joinLink}
-            placeholder="영문/숫자 8자리 코드"
-            onChange={(e) => {
-              const value = e.target.value;
-              if (/^[a-zA-Z0-9]*$/.test(value) && value.length <= ROOM_ID_LENGTH) {
-                setJoinLink(value);
-              }
-            }}
+            onChange={(e) => setJoinLink(e.target.value)}
           />
           <button
             type="button"
@@ -120,11 +108,8 @@ function Main() {
         </div>
       </div>
 
-      {/* 방 생성 모달 */}
       {isCreateModalOpen && (
-        <CreateRoomModal
-          onClose={() => setIsCreateModalOpen(false)}
-        />
+        <CreateRoomModal onClose={() => setIsCreateModalOpen(false)} />
       )}
     </div>
   );

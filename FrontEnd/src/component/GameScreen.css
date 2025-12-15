@@ -1,0 +1,155 @@
+.wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 100px;
+  box-sizing: border-box;
+}
+
+.play-area {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  gap: 20px;
+}
+
+.drawingBoard {
+  width: 900px;
+  max-width: 1000px;
+  aspect-ratio: 4 / 3;
+  
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+
+  position: relative; 
+}
+
+.canvas {
+  width: 746px;
+  height: 603px;
+
+  position: absolute;
+  
+  top: 38px;
+  right: 101px;
+
+  margin: 0;
+  
+  /* background-color: rgba(0, 0, 0, 0.39); */
+  border-radius: 21px;
+}
+
+.tool-box {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  
+  margin-left: -60px;
+  margin-top: 50px;
+
+  position: relative;
+  z-index: 10;
+}
+
+.tool-icon {
+  width: 40px; 
+  height: 40px;
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+
+  opacity: 0.7; /* 비활성화 표시 */
+}
+
+.tool-icon.active {
+  transform: scale(1.3) !important;
+  opacity: 1;
+  
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.8));
+
+}
+
+.tool-icon:hover {
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+/* =========================
+   유저 패널 (좌 / 우 확장)
+========================= */
+.user-list {
+  position: absolute;
+  top: 120px;
+  width: 220px;
+  height: 70%;
+
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+
+  padding: 20px 14px;
+  box-sizing: border-box;
+
+  z-index: 5;
+}
+
+.user-list.left {
+  left: 110px;
+}
+
+.user-list.right {
+  right: 110px;
+}
+
+.user-slot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  padding: 10px 14px;
+  border-radius: 14px;
+
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.user-slot .nickname {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* =========================
+   채팅 입력 바
+========================= */
+.chat-bar {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 420px;
+  z-index: 20;
+}
+
+.chat-input {
+  width: 100%;
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 23px;
+  border: none;
+  outline: none;
+
+  font-size: 14px;
+  box-sizing: border-box;
+
+  background: rgba(255, 255, 255, 0.9);
+}

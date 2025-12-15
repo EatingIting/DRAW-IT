@@ -1,0 +1,237 @@
+/* =========================================
+   :root - 변수
+   ========================================= */
+:root {
+  --game-bg-color: #2b8a3e;
+  --game-border-color: #2c2c2c;
+  --game-border-width: 4px;
+  --font-family-game: 'Jua', sans-serif;
+}
+
+/* =========================================
+   전체 레이아웃 (스크롤 원천 차단)
+   ========================================= */
+.lobby-wrapper {
+  width: 100vw;
+  height: 100vh; /* 화면 높이에 딱 맞춤 */
+  background-color: var(--game-bg-color);
+  
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 스크롤바 숨김 */
+  
+  font-family: var(--font-family-game);
+}
+
+/* =========================================
+   [1] 메인 플레이 영역 (상단)
+   ========================================= */
+.play-area {
+  flex: 1; /* 남은 높이 차지 */
+  width: 100%;
+  
+  /* 내부 내용물을 화면 정중앙에 배치 */
+  display: flex;
+  align-items: center; 
+  justify-content: center;
+  
+  padding: 0 20px; /* 좌우 여백 */
+  box-sizing: border-box;
+}
+
+/* ★ 핵심 수정: 그리드 컨테이너 ★ 
+   화면이 아무리 넓어도 요소들이 가운데로 모이게 함 */
+.play-grid {
+  display: grid;
+  /* 좌측(240px) - 중앙(340px) - 우측(240px) : 고정 크기로 모으기 */
+  grid-template-columns: 240px 340px 240px;
+  gap: 30px; /* 컬럼 사이 간격 */
+  
+  align-items: center;
+}
+
+/* ----- 유저 컬럼 (좌/우) ----- */
+.user-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* 카드 사이 간격 조금 줄임 (12px -> 10px) */
+  width: 100%;
+}
+
+.user-column.left { align-items: flex-end; }   /* 왼쪽 그룹은 오른쪽 정렬(중앙 쪽으로) */
+.user-column.right { align-items: flex-start; } /* 오른쪽 그룹은 왼쪽 정렬(중앙 쪽으로) */
+
+/* ----- 유저 카드 디자인 ----- */
+.user-card {
+  width: 100%;
+  max-width: 220px;
+  height: 52px; /* 높이 줄임 (60px -> 52px) */
+  
+  background: #fff;
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  
+  transition: transform 0.2s;
+}
+
+.user-card:hover {
+  transform: scale(1.05);
+  z-index: 10;
+}
+
+.avatar {
+  width: 32px; /* 아바타 약간 축소 */
+  height: 32px;
+  background-color: #eee;
+  border: 2px solid var(--game-border-color);
+  border-radius: 50%;
+}
+
+.username {
+  font-size: 16px; /* 폰트 약간 축소 */
+  font-weight: 700;
+  color: #333;
+}
+
+/* ----- 중앙 정보 영역 ----- */
+.lobby-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px; /* 간격 축소 */
+  width: 100%;
+}
+
+.logo-placeholder {
+  width: 180px; /* 로고 박스 크기 축소 */
+  height: 90px;
+  background: rgba(0,0,0,0.2);
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 16px;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  color: #fff;
+  font-size: 22px;
+  font-weight: bold;
+  box-shadow: 6px 6px 0 rgba(0,0,0,0.2);
+}
+
+.room-info-box {
+  text-align: center;
+  color: #fff;
+  text-shadow: 2px 2px 0 var(--game-border-color);
+}
+
+.room-title {
+  font-size: 24px;
+  margin: 0 0 6px 0;
+}
+
+.room-detail {
+  font-size: 18px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+/* ----- START 버튼 ----- */
+.start-btn {
+  width: 200px;
+  height: 70px; /* 버튼 높이 축소 */
+  margin-top: 10px;
+  
+  background: linear-gradient(180deg, #ff6b6b 0%, #fa5252 100%);
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 18px;
+  box-shadow: 0 6px 0 #c92a2a;
+  
+  color: #fff;
+  font-family: var(--font-family-game);
+  font-size: 24px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.start-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.start-btn:active {
+  transform: translateY(6px);
+  box-shadow: 0 0 0 #c92a2a, inset 0 4px 0 rgba(0,0,0,0.2);
+}
+
+/* =========================================
+   [2] 하단 채팅 영역
+   ========================================= */
+.chat-area {
+  height: 80px; /* 채팅 영역 고정 높이 */
+  width: 100%;
+  flex-shrink: 0; /* 화면이 줄어도 채팅창 크기는 유지 */
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  background: rgba(0,0,0,0.2);
+  border-top: var(--game-border-width) solid var(--game-border-color);
+}
+
+.chat-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 800px; /* 최대 너비 제한 (가운데 정렬 효과) */
+  max-width: 95%;
+}
+
+.chat-input-wrapper input {
+  flex: 1;
+  height: 46px; /* 입력창 높이 약간 축소 */
+  padding: 0 20px;
+  
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: inset 0 4px 0 #eee;
+  
+  font-family: var(--font-family-game);
+  font-size: 16px;
+  outline: none;
+}
+
+.chat-input-wrapper input:focus {
+  border-color: #ffec99;
+}
+
+.send-btn {
+  height: 46px;
+  padding: 0 20px;
+  
+  background: #ffc107;
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  box-shadow: 0 4px 0 #e67700;
+  
+  font-family: var(--font-family-game);
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.send-btn:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}

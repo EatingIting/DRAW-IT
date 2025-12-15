@@ -22,7 +22,8 @@ public class LobbyController {
                 dto.getId(),
                 dto.getName(),
                 dto.getMode(),
-                dto.getPassword()
+                dto.getPassword(),
+                dto.getHostNickname()
                 );
         return ResponseEntity
                 .status(HttpStatus.CREATED)

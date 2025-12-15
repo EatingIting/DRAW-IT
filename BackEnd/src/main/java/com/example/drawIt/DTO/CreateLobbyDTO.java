@@ -10,4 +10,5 @@ public class CreateLobbyDTO {
     private String name;
     private String mode;
     private String password;
+    private String hostNickname;
 }

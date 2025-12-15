@@ -22,12 +22,24 @@ function CreateRoomModal({ onClose }) {
     })
   }
 
+  const hostNickname = sessionStorage.getItem("nickname");
+
+
   const handleCreateRoom = async () => {
     console.log("임시 방 생성 (백엔드 로직 구현)");
     console.log("로비 이름: ", lobbyName);
     console.log("모드 : ", mode);
     console.log("비밀번호 : ", password || "(없음)");
+    console.log("닉네임 : ", hostNickname);
+    
     if(lobbyName.trim() === "") return;
+
+    if (!hostNickname || hostNickname.trim() === "") {
+      alert("닉네임을 먼저 입력해주세요.");
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
 
     const lobbyId = nanoid(8);
@@ -36,16 +48,15 @@ function CreateRoomModal({ onClose }) {
       id: lobbyId,
       name: lobbyName,
       mode,
-      password: isPasswordOn ? password : null
+      password: isPasswordOn ? password : null,
+      hostNickname: hostNickname
     };
 
     try {
-      const response = await axios.post(
+      await axios.post(
         "http://localhost:8080/lobby",
         payload
       );
-
-      console.log("방 생성 성공" , response.data.id, response.data.name, response.data.mode, response.data.password);
       onClose();
       navigate(`/lobby/${lobbyId}`);
     } catch (error) {

@@ -23,4 +23,7 @@ public class Lobby {
 
     @Column(length = 100)
     private String password;
+
+    @Column(length = 50)
+    private String hostNickname; // 방장 닉네임
 }
