@@ -14,7 +14,14 @@ import '../layout/Fragment.css'; // 공통 레이아웃 스타일
 import './Join.css';           // 현재 페이지 전용 스타일
 
 function Join() {
+    // 훅 초기화 진행
     const navigate = useNavigate();
+
+    // room.js 이동경로 지정
+    const handleJoinRoom = (roomId) => {
+            navigate(`/room/${roomId}`);
+    };
+    
 
     // [TODO] 백엔드 연동 전 UI 테스트를 위한 더미 데이터
     // 추후 axios/fetch를 통해 Spring Boot API에서 받아올 예정
@@ -81,7 +88,7 @@ function Join() {
                                 <button 
                                     className={`room-join-btn ${isFull ? 'disabled' : ''}`} 
                                     disabled={isFull} // HTML 버튼 비활성화 속성
-                                    onClick={() => !isFull && alert(`${room.title} 입장!`)}
+                                    onClick={() => handleJoinRoom(room.id)} // room.js로 이동
                                 >
                                     {isFull ? '만원' : '입장하기'}
                                 </button>
