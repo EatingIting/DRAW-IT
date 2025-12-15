@@ -24,7 +24,7 @@ function Join() {
     // 백엔드에서 데이터 가져오기
     useEffect(() => {
         //백엔드 API 호출
-        axios.get('http://172.30.1.250:3306/api/lobbies')
+        axios.get('http://localhost:8080/api/lobbies')
             .then((response) => {
                 console.log("서버에서 받은 데이터 확인 : ", response.data);
                 setRooms(response.data); // 받아온 데이터를 state에 저장
@@ -109,7 +109,7 @@ function Join() {
                         const isFull = current >= max;
 
 
-                        
+
                         return (
                             <div 
                                 key={room.id} 
@@ -118,24 +118,24 @@ function Join() {
                             >
                                 {/* 카드 상단: 방 제목 및 인원수 */}
                                 <div className='room-card-top'>
-                                    <span className='room-name'>{room.title}</span>
+                                    <span className='room-name'>{title}</span>
                                     {/* 만원일 경우 'full' 클래스 추가하여 빨간 글씨 처리 */}
                                     <span className={`room-status ${isFull ? 'full' : ''}`}>
-                                        {room.current} / {room.max}
+                                        {current} / {max}
                                     </span>
                                 </div>
                                 
                                 {/* 카드 중단: 방장 및 설명 */}
                                 <div className='room-card-middle'>
-                                    <div className='owner-name'>방장: {room.owner}</div>
-                                    <div className='room-desc'>{room.desc}</div>
+                                    <div className='owner-name'>방장: {owner}</div>
+                                    <div className='room-desc'>{desc}</div>
                                 </div>
 
                                 {/* 카드 하단: 입장 버튼 */}
                                 <button 
                                     className={`room-join-btn ${isFull ? 'disabled' : ''}`} 
                                     disabled={isFull} // HTML 버튼 비활성화 속성
-                                    onClick={() => handleJoinRoom(room.id)} // room.js로 이동
+                                    onClick={() => handleJoinRoom(room.id)} // 준비하기 전 로비로 이동하기 구현해야됌
                                 >
                                     {isFull ? '만원' : '입장하기'}
                                 </button>

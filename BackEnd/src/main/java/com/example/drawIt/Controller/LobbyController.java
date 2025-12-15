@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
@@ -34,5 +35,10 @@ public class LobbyController {
     public ResponseEntity<LobbyResponseDTO> getLobby(@PathVariable String lobbyId) {
         Lobby lobby = lobbyService.getLobby(lobbyId);
         return ResponseEntity.ok(new LobbyResponseDTO(lobby));
+    }
+
+    @GetMapping("/api/lobbies")
+    public List<Lobby> getLobbyList() {
+        return lobbyService.getAllRooms();
     }
 }
