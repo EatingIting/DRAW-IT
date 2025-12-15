@@ -120,6 +120,10 @@ function Main() {
         </div>
       </div>
 
+      <div className='monthlyRanking'>
+        <img src="/img/monRank.png" className="rankLogo" alt="MonthlyRanking"/>
+      </div>
+
       {/* 방 생성 모달 */}
       {isCreateModalOpen && (
         <CreateRoomModal

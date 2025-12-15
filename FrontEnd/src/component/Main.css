@@ -277,3 +277,27 @@
   transform: translateY(4px);
   box-shadow: 0 0 0 #e67700;
 }
+
+.monthlyRanking {
+  position: absolute; /* 부모(.main-wrapper)를 기준으로 배치 */
+  bottom: 30px;       /* 바닥에서 30px 띄움 */
+  right: 30px;        /* 우측에서 30px 띄움 */
+  z-index: 50;        /* 다른 요소들보다 위에 보이도록 설정 */
+  cursor: pointer;    /* 클릭 가능한 커서 */
+}
+
+/* 랭킹 이미지 스타일 */
+.rankLogo {
+  width: 140px;       /* 적절한 크기 (조절 가능) */
+  height: auto;
+  
+  /* 게임 테마에 맞춘 진한 그림자 */
+  filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.3)); 
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 통통 튀는 애니메이션 */
+}
+
+/* 마우스 올렸을 때 효과 */
+.monthlyRanking:hover .rankLogo {
+  transform: scale(1.15) rotate(-5deg); /* 살짝 커지면서 기울기 */
+  filter: drop-shadow(6px 6px 0 rgba(0,0,0,0.2));
+}
