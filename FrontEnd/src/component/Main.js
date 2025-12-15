@@ -14,6 +14,12 @@ function Main() {
       </div>
       <div className='rectangle'>
         <div className="start-text">게임 시작하기</div>
+
+        <div className="nickname-group">
+          <span className="nickname-label">닉네임</span>
+          <input type="text" className="nickname-input" placeholder="닉네임 입력" />
+        </div>
+        
         <div className='btn-group'>
           <button
             type='button'

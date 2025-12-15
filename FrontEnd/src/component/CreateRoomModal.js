@@ -118,7 +118,7 @@ function CreateRoomModal({ onClose }) {
 
         {/* 비밀번호 */}
         <div className="form-group">
-          <label className="label">비밀번호</label>
+          <label className="password-label">비밀번호</label>
 
           <div className="password-group">
             <input
@@ -139,8 +139,9 @@ function CreateRoomModal({ onClose }) {
             >
               <span className="toggle-knob" />
             </button>
-            {/* 방 생성 버튼 */}
-            <button
+          </div>
+          {/* 방 생성 버튼 */}
+          <button
               type="button"
               className="create-room-btn"
               onClick={handleCreateRoom}
@@ -148,7 +149,6 @@ function CreateRoomModal({ onClose }) {
             >
               {isLoading ? "생성 중..." : "방 생성"}
             </button>
-          </div>
         </div>
 
       </div>
