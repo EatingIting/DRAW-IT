@@ -4,7 +4,9 @@ import com.example.drawIt.Entity.Lobby;
 import com.example.drawIt.Handler.GlobalExceptionHandler;
 import com.example.drawIt.Repository.LobbyRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import java.util.*; // util에 있는 모든 서비스
 
 @Service
 @RequiredArgsConstructor
@@ -30,4 +32,11 @@ public class LobbyService {
                         )
                 );
     }
+
+    // join service
+    // 모든 방 목록을 가지고 오는 메서드
+    public List<Lobby> getAllRooms() {
+        return lobbyRepository.findAll(); //DB에 모든 데이터 들고오기
+    }
+
 }

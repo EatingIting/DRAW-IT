@@ -135,7 +135,7 @@ function Join() {
                                 <button 
                                     className={`room-join-btn ${isFull ? 'disabled' : ''}`} 
                                     disabled={isFull} // HTML 버튼 비활성화 속성
-                                    onClick={() => handleJoinRoom(room.id)} // room.js로 이동
+                                    onClick={() => handleJoinRoom(room.id)} // 준비하기 전 로비로 이동하기 구현해야됌
                                 >
                                     {isFull ? '만원' : '입장하기'}
                                 </button>
