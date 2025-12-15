@@ -120,7 +120,7 @@ function Main() {
         </div>
       </div>
 
-      <div className='monthlyRanking'>
+      <div className='monthlyRanking' onClick={() => navigate('/ranking')}>
         <img src="/img/monRank.png" className="rankLogo" alt="MonthlyRanking"/>
       </div>
 
