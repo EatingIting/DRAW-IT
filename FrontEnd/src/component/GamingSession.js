@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, use, act } from 'react';
 import PenSettings from './settingmodals/PenSettings';
+import EraserSettings from './settingmodals/EraserSettings';
 import PenIcon from './icons/PenIcon';
 import './GamingSession.css'
 
@@ -8,6 +9,9 @@ function GamingSession(){
 
   const [penColor, setPenColor] = useState('#000000ff');
   const [penWidth, setPenWidth] = useState(5);
+
+  const [eraserWidth, setEraserWidth] = useState(20);
+  
   const [showModal, setShowModal] = useState(false);
 
   const [isHovering, setIsHovering] = useState(false);
@@ -34,7 +38,7 @@ function GamingSession(){
       if (activeTool === 'eraser') {
         // 1. 지우개 모드: 겹치는 부분을 투명하게 만듦 ('destination-out')
         contextRef.current.globalCompositeOperation = 'destination-out';
-        contextRef.current.lineWidth = 20; // 지우개 크기 (원하는 크기로 조절)
+        contextRef.current.lineWidth = eraserWidth; // 지우개 크기 (원하는 크기로 조절)
       } else {
         // 2. 펜 모드: 정상적으로 위에 그림 ('source-over')
         contextRef.current.globalCompositeOperation = 'source-over';
@@ -42,16 +46,12 @@ function GamingSession(){
         contextRef.current.lineWidth = penWidth;
       }
     }
-  }, [activeTool, penColor, penWidth]);
+  }, [activeTool, penColor, penWidth, eraserWidth]);
 
   const handleToolClick = (toolName) => {
-    if(toolName === 'pen'){
-      if(activeTool === 'pen'){ // 토글 열림
-        console.log("펜 세팅 모달");
+    if(activeTool === toolName){
+      if(toolName === 'pen' || toolName === 'eraser'){ // 토글 열림
         setShowModal(true);
-      }else{
-        setActiveTool('pen');
-        setShowModal(false);
       }
     }else{
       setActiveTool(toolName);
@@ -84,7 +84,7 @@ function GamingSession(){
 
   // 현재 도구에 따른 커서 크기
   const getCursorSize = () => {
-    if (activeTool === 'eraser') return 20; // 지우개 크기 고정 (코드 로직과 맞춤)
+    if (activeTool === 'eraser') return eraserWidth; // 지우개 크기 고정 (코드 로직과 맞춤)
     return penWidth; // 펜 크기
   };
 
@@ -125,7 +125,7 @@ function GamingSession(){
                   ref={canvasRef}>
           </canvas>
         </div>
-        <div className="tool-box">
+        <div className="tool-box" style={{ position: 'relative' }}>
           { 
             showModal && activeTool === 'pen' && (
               <PenSettings 
@@ -134,6 +134,17 @@ function GamingSession(){
                 width={penWidth}
                 setWidth={setPenWidth}
                 onClose={() => setShowModal(false)}
+                top='-20px'
+              />
+            )
+          }
+          {
+            showModal && activeTool === 'eraser' && (
+              <EraserSettings
+                width={eraserWidth}
+                setWidth={setEraserWidth}
+                onClose={() => setShowModal(false)}
+                top='100px'
               />
             )
           }
