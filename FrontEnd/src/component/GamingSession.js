@@ -245,7 +245,7 @@ function GamingSession(){
               color={fillColor}
               setColor={setFillColor}
               onClose={() => setShowModal(false)}
-              top='60px'
+              top='35px'
               />
           )}
           {
