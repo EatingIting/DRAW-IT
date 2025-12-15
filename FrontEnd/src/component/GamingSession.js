@@ -7,14 +7,13 @@ function GamingSession(){
   const [isGameStarted, setIsGameStarted] = useState(false);
 
   return(
-    <div className="wrapper">
-      
+    <>
       {isGameStarted ? (
         <GameScreen />
       ) : (
         <LobbyScreen onStartGame={() => setIsGameStarted(true)} />
       )}
-    </div>
+    </>
   );
 }
 

@@ -1,4 +1,5 @@
-import { useRef, useState, useEffect, use, act } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // 뒤로가기용 hook
 import PenSettings from './settingmodals/PenSettings';
 import FillSettings from './settingmodals/FillSettings';
 import EraserSettings from './settingmodals/EraserSettings';
@@ -6,47 +7,68 @@ import PenIcon from './icons/PenIcon';
 import './GameScreen.css'
 
 // 색상 문자열(Hex)을 [r, g, b, a] 배열로 변환하는 함수
-    const hexToRgba = (hex) => {
-      let c;
-      if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
-          c = hex.substring(1).split('');
-          if(c.length === 3){
-              c= [c[0], c[0], c[1], c[1], c[2], c[2]];
-          }
-          c = '0x'+c.join('');
-          return [(c>>16)&255, (c>>8)&255, c&255, 255];
+const hexToRgba = (hex) => {
+  let c;
+  if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+      c = hex.substring(1).split('');
+      if(c.length === 3){
+          c= [c[0], c[0], c[1], c[1], c[2], c[2]];
       }
-      // #RRGGBBAA 형식인 경우
-      if (/^#([A-Fa-f0-9]{8})$/.test(hex)) {
-            c = parseInt(hex.substring(1), 16);
-            return [(c>>24)&255, (c>>16)&255, (c>>8)&255, c&255];
-        }
-        return [0, 0, 0, 255]; // 기본값 검정
+      c = '0x'+c.join('');
+      return [(c>>16)&255, (c>>8)&255, c&255, 255];
+  }
+  // #RRGGBBAA 형식인 경우
+  if (/^#([A-Fa-f0-9]{8})$/.test(hex)) {
+        c = parseInt(hex.substring(1), 16);
+        return [(c>>24)&255, (c>>16)&255, (c>>8)&255, c&255];
     }
+    return [0, 0, 0, 255]; // 기본값 검정
+}
 
-function GameScreen() {
+function GameScreen({ 
+  players = [], // 실제 유저 리스트 (Lobby와 동일하게 받음)
+  maxPlayers = 10 
+}) {
+  const navigate = useNavigate();
+
   const [activeTool, setActiveTool] = useState('pen');
-
   const [penColor, setPenColor] = useState('#000000ff');
   const [penWidth, setPenWidth] = useState(5);
-
-  const [fillColor, setFillColor] = useState('#ff000ff');
-
+  const [fillColor, setFillColor] = useState('#ff0000ff'); // 오타 수정: #ff000ff -> #ff0000ff
   const [eraserWidth, setEraserWidth] = useState(20);
   
   const [showModal, setShowModal] = useState(false);
-
   const [isHovering, setIsHovering] = useState(false);
 
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
   const isDrawing = useRef(false);
-
   const cursorRef = useRef(null);
 
   const [isGameStarted, setIsGameStarted] = useState(false);
 
+  // =========================================================
+  // [추가] 유저 슬롯 로직 (LobbyScreen과 완전 동일)
+  // =========================================================
+  const playerSlots = Array.from({ length: maxPlayers }, (_, i) => {
+    return players[i] ? players[i] : null;
+  });
+  const halfCount = Math.ceil(maxPlayers / 2);
+  const leftSlots = playerSlots.slice(0, halfCount);
+  const rightSlots = playerSlots.slice(halfCount, maxPlayers);
 
+  const renderUserCard = (user, index) => {
+    const isEmpty = user === null;
+    return (
+      <div key={index} className={`user-card ${isEmpty ? 'empty' : ''}`}>
+        <div className="avatar" />
+        <span className="username">
+          {isEmpty ? "Empty" : (user.nickname || user)} 
+        </span>
+      </div>
+    );
+  };
+  // =========================================================
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -203,8 +225,9 @@ function GameScreen() {
   };
 
   return(
-    <div className="wrapper">
+    <div className="game-wrapper">
       
+      {/* 커스텀 커서 */}
       <div 
         ref={cursorRef}
         style={{
@@ -226,90 +249,92 @@ function GameScreen() {
         }}
       />
 
-      <div className="play-area">
+      {/* 뒤로가기 버튼 */}
+      <button className="back-btn" onClick={() => navigate(-1)}>
+        <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
 
-        <div className="drawingBoard" style={{ backgroundImage: "url('/img/board.png')" }}>
-          <canvas className="canvas"
-                  width={746}
-                  height={603}
-                  style={{cursor: 'none'}}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={finishDrawing}
-                  onMouseEnter={() => setIsHovering(true)} // 마우스 진입 감지
-                  onMouseLeave={() => setIsHovering(false)} // 마우스 이탈 감지
-                  ref={canvasRef}>
-          </canvas>
+      {/* 메인 게임 영역 (Grid Layout 적용) */}
+      <div className="game-area">
+        <div className="game-grid">
+
+           {/* 왼쪽 유저 리스트 */}
+           <div className="user-column left">
+             {leftSlots.map((user, index) => renderUserCard(user, `left-${index}`))}
+           </div>
+
+           {/* 중앙: 스케치북 + 툴박스 */}
+           <div className="center-board-area">
+              <div className="drawingBoard" style={{ backgroundImage: "url('/img/board.png')" }}>
+                <canvas className="canvas"
+                        width={746}
+                        height={603}
+                        style={{cursor: 'none'}}
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={finishDrawing}
+                        onMouseEnter={() => setIsHovering(true)} // 마우스 진입 감지
+                        onMouseLeave={() => setIsHovering(false)} // 마우스 이탈 감지
+                        ref={canvasRef}>
+                </canvas>
+              </div>
+
+              {/* 툴박스 디자인 변경 (패널형) */}
+              <div className="tool-box">
+                { 
+                  showModal && activeTool === 'pen' && (
+                    <PenSettings color={penColor} setColor={setPenColor} width={penWidth} setWidth={setPenWidth} onClose={() => setShowModal(false)} top='-10px' />
+                  )
+                }
+                {showModal && activeTool === 'fill' && (
+                  <FillSettings color={fillColor} setColor={setFillColor} onClose={() => setShowModal(false)} top='50px' />
+                )}
+                {
+                  showModal && activeTool === 'eraser' && (
+                    <EraserSettings width={eraserWidth} setWidth={setEraserWidth} onClose={() => setShowModal(false)} top='110px' />
+                  )
+                }
+                
+                {/* 각 도구를 버튼 형태로 감쌈 */}
+                <div className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`} onClick={() => handleToolClick('pen')}>
+                  <PenIcon color={penColor} />
+                </div>
+
+                <div className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`} onClick={() => handleToolClick('fill')}>
+                   <img src="/svg/fill.svg" alt="fill" style={{ width:'28px', height:'28px' }}/>
+                   {/* 현재 선택된 페인트통 색상 표시 (선택사항) */}
+                   <div style={{ position: 'absolute', right: 5, bottom: 5, width: 10, height: 10, borderRadius: '50%', backgroundColor: fillColor, border: '1px solid #fff' }}/>
+                </div>
+
+                <div className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} onClick={() => handleToolClick('eraser')}>
+                   <img src="/svg/eraser.svg" alt="eraser" style={{ width:'28px', height:'28px' }}/>
+                </div>
+
+                <div className="tool-btn delete-btn" onClick={clearCanvas} title="전체 지우기">
+                  <svg xmlns="http://www.w3.org/2000/svg" height="28" viewBox="0 96 960 960" width="28" fill="#fff">
+                    <path d="M280 936q-33 0-56.5-23.5T200 856V336h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680 936H280Zm400-600H280v520h400V336ZM360 776h80V416h-80v360Zm160 0h80V416h-80v360ZM280 336v520-520Z"/>
+                  </svg>
+                </div>
+                  
+              </div>
+           </div>
+
+           {/* 오른쪽 유저 리스트 */}
+           <div className="user-column right">
+             {rightSlots.map((user, index) => renderUserCard(user, `right-${index}`))}
+           </div>
+
         </div>
-        <div className="tool-box" style={{ position: 'relative' }}>
-          { 
-            showModal && activeTool === 'pen' && (
-              <PenSettings 
-                color={penColor} 
-                setColor={setPenColor}
-                width={penWidth}
-                setWidth={setPenWidth}
-                onClose={() => setShowModal(false)}
-                top='-20px'
-              />
-            )
-          }
-          {showModal && activeTool === 'fill' && (
-            <FillSettings
-              color={fillColor}
-              setColor={setFillColor}
-              onClose={() => setShowModal(false)}
-              top='35px'
-              />
-          )}
-          {
-            showModal && activeTool === 'eraser' && (
-              <EraserSettings
-                width={eraserWidth}
-                setWidth={setEraserWidth}
-                onClose={() => setShowModal(false)}
-                top='100px'
-              />
-            )
-          }
-          <PenIcon 
-            color={penColor}
-            className={`tool-icon ${activeTool === 'pen' ? 'active' : ''}`}
-            onClick={() => handleToolClick('pen')}
-          />
-          <div style={{ position: 'relative' }}>
-             <img 
-               src="/svg/fill.svg" 
-               alt="fill" 
-               className={`tool-icon ${activeTool === 'fill' ? 'active' : ''}`}
-               onClick={() => handleToolClick('fill')} 
-             />
-             {/* 현재 선택된 페인트통 색상 표시 (선택사항) */}
-             <div style={{
-                 position: 'absolute', right: 5, bottom: 5, 
-                 width: 10, height: 10, borderRadius: '50%', 
-                 backgroundColor: fillColor, border: '1px solid #fff'
-             }}/>
-          </div>
-          <img 
-            src="/svg/eraser.svg" 
-            alt="eraser" 
-            className={`tool-icon ${activeTool === 'eraser' ? 'active' : ''}`}
-            onClick={() => handleToolClick('eraser')} />
-
-          <div 
-            className="tool-icon" 
-            onClick={clearCanvas} 
-            style={{ marginTop: '60px', cursor: 'pointer' }} // 간격 조정
-            title="전체 지우기"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" height="40" viewBox="0 96 960 960" width="40" fill="#000000ff">
-              <path d="M280 936q-33 0-56.5-23.5T200 856V336h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680 936H280Zm400-600H280v520h400V336ZM360 776h80V416h-80v360Zm160 0h80V416h-80v360ZM280 336v520-520Z"/>
-            </svg>
-          </div>
-            
+      </div>
+      
+      {/* 하단 채팅 바 */}
+      <div className="chat-area">
+        <div className="chat-input-wrapper">
+          <input type="text" placeholder="정답을 입력하세요!" />
+          <button className="send-btn">전송</button>
         </div>
-
       </div>
 
     </div>
