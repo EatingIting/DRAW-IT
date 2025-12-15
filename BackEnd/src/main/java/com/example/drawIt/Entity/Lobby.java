@@ -1,26 +1,26 @@
 package com.example.drawIt.Entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor
 public class Lobby {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(length = 20)
+    private String id;
 
+    @Column(nullable = false, length = 50)
     private String name;
+
+    @Column(nullable = false, length = 20)
     private String mode;
 
-    public Lobby(String name, String mode) {
-        this.name = name;
-        this.mode = mode;
-    }
+    @Column(length = 100)
+    private String password;
 }

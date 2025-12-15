@@ -18,14 +18,20 @@ public class LobbyController {
 
     @PostMapping("/lobby")
     public ResponseEntity<LobbyResponseDTO> createLobby(@RequestBody CreateLobbyDTO dto) {
-        Lobby lobby = lobbyService.createLobby(dto.getName(), dto.getMode());
+        Lobby lobby = lobbyService.createLobby(
+                dto.getId(),
+                dto.getName(),
+                dto.getMode(),
+                dto.getPassword()
+                );
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(new LobbyResponseDTO(lobby));
     }
 
     @GetMapping("/lobby/{lobbyId}")
-    public Lobby getLobby(@PathVariable Long lobbyId) {
-        return lobbyService.getLobby(lobbyId);
+    public ResponseEntity<LobbyResponseDTO> getLobby(@PathVariable String lobbyId) {
+        Lobby lobby = lobbyService.getLobby(lobbyId);
+        return ResponseEntity.ok(new LobbyResponseDTO(lobby));
     }
 }

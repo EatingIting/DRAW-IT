@@ -2,6 +2,7 @@ import axios from "axios";
 import { useState } from "react";
 import "./CreateRoomModal.css";
 import { useNavigate } from "react-router-dom";
+import { nanoid } from "nanoid";
 
 function CreateRoomModal({ onClose }) {
   const [lobbyName, setLobbyName] = useState('');
@@ -29,7 +30,10 @@ function CreateRoomModal({ onClose }) {
     if(lobbyName.trim() === "") return;
     setIsLoading(true);
 
+    const lobbyId = nanoid(8);
+
     const payload = {
+      id: lobbyId,
       name: lobbyName,
       mode,
       password: isPasswordOn ? password : null
@@ -41,10 +45,9 @@ function CreateRoomModal({ onClose }) {
         payload
       );
 
-      console.log("방 생성 성공" , response.data);
-      const { id } = response.data;
+      console.log("방 생성 성공" , response.data.id, response.data.name, response.data.mode, response.data.password);
       onClose();
-      navigate(`/lobby/${id}`);
+      navigate(`/lobby/${lobbyId}`);
     } catch (error) {
       console.log(error);
       if(error.response?.status === 409) {

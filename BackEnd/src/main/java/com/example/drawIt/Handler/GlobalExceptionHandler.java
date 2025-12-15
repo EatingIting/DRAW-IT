@@ -1,4 +1,4 @@
-package Handler;
+package com.example.drawIt.Handler;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
