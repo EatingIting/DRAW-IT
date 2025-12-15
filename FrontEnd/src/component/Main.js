@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import CreateRoomModal from './CreateRoomModal';
@@ -9,7 +9,9 @@ const ROOM_ID_LENGTH = 8; //참여링크 8글자 제한
 
 function Main() {
   const navigate = useNavigate();
-  const [nickname, setNickname] = useState('');
+  const [nickname, setNickname] = useState(() => {
+    return sessionStorage.getItem('nickname') || '';
+  });
   const [joinLink, setJoinLink] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -19,6 +21,14 @@ function Main() {
     }
     return value;
   };
+
+  useEffect(() => {
+    if (nickname.trim()) {
+      sessionStorage.setItem('nickname', nickname);
+    } else {
+      sessionStorage.removeItem('nickname');
+    }
+  }, [nickname]);
 
   const handleJoinRoom = async () => {
     if (!joinLink.trim()) return;
