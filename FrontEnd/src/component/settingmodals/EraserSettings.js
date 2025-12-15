@@ -15,7 +15,7 @@ const EraserSettings = ({ width, setWidth, onClose, top='0px' }) => {
           {/* 헤더 */}
           <div className="modalHeader">
             <p>지우개 크기</p>
-            <button className="closeBtn" onClick={onClose}>&times;</button>
+            <button className="closeBtn" onClick={onClose}>X</button>
           </div>
           
           {/* 슬라이더 영역 (미리보기 + 슬라이더) */}
