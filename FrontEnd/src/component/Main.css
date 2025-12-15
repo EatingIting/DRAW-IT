@@ -1,14 +1,11 @@
-/* =========================================
-   :root - 게임 테마 변수 (이전과 동일하게 유지)
-   ========================================= */
 :root {
   --game-border-color: #2c2c2c;
   --game-border-width: 4px;
-  --font-family-game: 'Jua', sans-serif; /* 폰트가 없다면 기본 sans-serif */
+  --font-family-game: 'Jua', sans-serif;
 }
 
 /* =========================================
-   Layout & Background
+   메인
    ========================================= */
 .main-wrapper {
   position: relative;
@@ -27,13 +24,12 @@
 }
 
 /* =========================================
-   Logo & Title Area
+   로고 & 타이틀
    ========================================= */
 .hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* [축소] 로고와 제목 그룹 내부 간격 10px -> 5px */
   gap: 5px; 
   z-index: 10;
 }
@@ -46,7 +42,7 @@
 }
 
 .logo:hover {
-  transform: scale(1.05) rotate(-2deg); /* 마우스 올리면 살짝 움직임 */
+  transform: scale(1.05) rotate(-2deg); 
 }
 
 .title {
@@ -54,10 +50,9 @@
   margin-bottom: 30px;
   color: #fff;
   font-family: var(--font-family-game);
-  font-size: 26px; /* 폰트 크기 살짝 줄임 */
+  font-size: 26px;
   text-align: center;
   
-  /* 글자 테두리 효과 (유지) */
   text-shadow: 
     3px 3px 0 var(--game-border-color),
     -1px -1px 0 var(--game-border-color),  
@@ -67,7 +62,7 @@
 }
 
 /* =========================================
-   Game Panel (.rectangle)
+   네모 칸
    ========================================= */
 .rectangle {
   width: 620px;
@@ -104,20 +99,19 @@
 }
 
 /* =========================================
-   nickname Group
+   닉네임
    ========================================= */
-
 .nickname-group {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
   width: 100%;
-  margin-bottom: 10px; /* 버튼 그룹과의 간격 */
+  margin-bottom: 10px;
 }
 
 .nickname-label {
-  color: #fff; /* 노란색(#ffc107) 또는 흰색(#fff) 추천 */
+  color: #fff;
   font-family: var(--font-family-game);
   font-size: 20px;
   text-shadow: 2px 2px 0 rgba(0,0,0,0.5);
@@ -125,7 +119,7 @@
 }
 
 .nickname-input {
-  width: 300px; /* 버튼들보다 살짝 넓거나 비슷하게 */
+  width: 300px;
   height: 54px;
   padding: 0 20px;
   
@@ -133,12 +127,11 @@
   border-radius: 14px;
   background-color: #fff;
   
-  /* 안쪽 그림자로 파인 느낌 (Slot 느낌) */
   box-shadow: inset 0 4px 0 #e9ecef;
   
   font-size: 20px;
   font-family: var(--font-family-game);
-  text-align: center; /* 닉네임은 중앙 정렬이 예쁨 */
+  text-align: center;
   color: #333;
   outline: none;
   transition: all 0.2s;
@@ -149,13 +142,13 @@
 }
 
 .nickname-input:focus {
-  border-color: #ffc107; /* 포커스 시 노란색 테두리 */
-  transform: translateY(-3px); /* 살짝 떠오름 */
-  box-shadow: 0 6px 0 rgba(0,0,0,0.1), inset 0 4px 0 #fff; /* 안쪽 그림자 제거하고 바깥 그림자 추가 */
+  border-color: #ffc107;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 0 rgba(0,0,0,0.1), inset 0 4px 0 #fff;
 }
 
 /* =========================================
-   Buttons Group
+   버튼
    ========================================= */
 .btn-group {
   display: flex;
@@ -183,36 +176,35 @@
   position: relative;
 }
 
-/* 1. 방 만들기 버튼 (주황색) */
+/* 방 만들기 버튼 */
 .btn-group button:nth-child(1) {
   background: #ff8787; /* 파스텔 톤 붉은색/주황색 */
-  box-shadow: 0 8px 0 #c92a2a, 0 12px 10px rgba(0,0,0,0.3); /* 짙은 빨강 그림자 */
+  box-shadow: 0 8px 0 #c92a2a, 0 12px 10px rgba(0,0,0,0.3);
   text-shadow: 2px 2px 0 #c92a2a;
   margin-top: 40px;
 }
 
-/* 2. 참여하기 버튼 (노란색) */
+/* 참여하기 버튼 */
 .btn-group button:nth-child(2) {
   background: #ffec99; /* 밝은 노랑 */
   color: #2c2c2c; /* 글자색 검정 */
-  box-shadow: 0 8px 0 #f08c00, 0 12px 10px rgba(0,0,0,0.3); /* 짙은 오렌지 그림자 */
+  box-shadow: 0 8px 0 #f08c00, 0 12px 10px rgba(0,0,0,0.3);
   text-shadow: none;
   margin-top: 40px;
 }
 
-/* 버튼 공통 인터랙션 */
 .btn-group button:hover {
   transform: translateY(-4px);
   filter: brightness(1.1);
 }
 
 .btn-group button:active {
-  transform: translateY(8px); /* 꾹 눌리는 효과 */
+  transform: translateY(8px);
   box-shadow: 0 0 0 rgba(0,0,0,0), inset 0 4px 0 rgba(0,0,0,0.1);
 }
 
 /* =========================================
-   Join Input Area
+   링크로 참가하기 버튼
    ========================================= */
 .join-link-group {
   margin-top: auto;
@@ -243,7 +235,6 @@
   border-radius: 12px;
   background-color: #fff;
   
-  /* 안쪽 그림자로 파인 느낌 */
   box-shadow: inset 0 4px 0 #e9ecef;
   
   font-size: 16px;
@@ -257,7 +248,6 @@
   transform: translateY(-2px);
 }
 
-/* 작은 '참가하기' 버튼 */
 .join-btn {
   width: auto;
   min-width: 100px;
@@ -273,7 +263,6 @@
   border: 3px solid var(--game-border-color);
   border-radius: 12px;
   
-  /* 3D 효과 */
   box-shadow: 0 4px 0 #e67700; 
   cursor: pointer;
   transition: all 0.1s;
