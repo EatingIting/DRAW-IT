@@ -11,8 +11,6 @@ public interface LobbyRepository extends JpaRepository<Lobby, String> {
     List<Lobby> findAllByMode(String mode); //게임 모드로 방 목록 조회
     Optional<Lobby> findByNameAndMode(String name, String mode); //이름 + 모드로 방 목록 조회
     boolean existsByName(String name); //방 존재 여부 확인
-    List<Lobby> findAllByModeAndName(
-            String mode, // 게임 모드
-            String name // 방이름
-    );
+
+    List<Lobby> findAllByModeAndNameAndHostUserId(String mode, String name, String hostUserId);
 }

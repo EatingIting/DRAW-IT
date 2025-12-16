@@ -77,13 +77,12 @@ public class LobbyUserStore {
        유저 연결 해제 (즉시 삭제 ❌)
     ========================= */
     public synchronized void removeSession(String sessionId) {
-        userRepository.findBySessionId(sessionId)
-                .ifPresent(u -> {
-                    // ❌ store/DB에서 제거하지 않음
-                    // → 재접속 가능
-                    u.setSessionId(null);
-                    userRepository.save(u);
-                });
+        // 🔥 disconnect에서는 DB를 절대 건드리지 않는다
+        store.values().forEach(users ->
+                users.values().forEach(dto -> {
+                    // 아무 작업도 하지 않음
+                })
+        );
     }
 
     /* =========================
@@ -96,23 +95,17 @@ public class LobbyUserStore {
         if (users == null) return;
 
         UserResponseDTO removed = users.remove(userId);
+
+        // ✅ DB 삭제는 여기서만
         userRepository.deleteByRoomIdAndUserId(roomId, userId);
 
         if (removed != null && removed.isHost() && !users.isEmpty()) {
-            // 방장 위임
             UserResponseDTO next = users.values().iterator().next();
             next.setHost(true);
 
             lobbyRepository.findById(roomId).ifPresent(lobby -> {
-                lobbyRepository.save(
-                        Lobby.builder()
-                                .id(lobby.getId())
-                                .name(lobby.getName())
-                                .mode(lobby.getMode())
-                                .password(lobby.getPassword())
-                                .hostUserId(next.getUserId())
-                                .build()
-                );
+                lobby.setHostUserId(next.getUserId());
+                lobbyRepository.save(lobby);
             });
         }
 

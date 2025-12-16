@@ -27,6 +27,7 @@ public class LobbyService {
                         .name(name)
                         .mode(mode)
                         .password(password)
+                        .hostNickname(hostNickname)
                         .hostUserId(hostUserId)
                         .build()
         );

@@ -24,7 +24,7 @@ function Join() {
     // 백엔드에서 데이터 가져오기
     useEffect(() => {
         //백엔드 API 호출
-        axios.get('http://localhost:8080/api/lobbies')
+        axios.get('http://172.30.1.250:8080/api/lobbies')
             .then((response) => {
                 console.log("서버에서 받은 데이터 확인 : ", response.data);
                 setRooms(response.data); // 받아온 데이터를 state에 저장
@@ -101,7 +101,7 @@ function Join() {
                         // DB에 없는 값들 기본값 처리
                         const current = 1;                   // 현재 인원 (DB 미구현으로 1 고정)
                         const max = 10;                      // 최대 인원 (10 고정)
-                        const owner = "알 수 없음";          // 방장 정보 없음
+                        const owner = room.hostNickname;          // 방장 정보 없음
                         const desc = `모드: ${mode}`;        // 설명 대신 게임 모드 표시
 
                         // 계산 로직

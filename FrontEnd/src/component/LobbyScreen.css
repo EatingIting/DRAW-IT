@@ -12,7 +12,7 @@
    1. 전체 레이아웃 (화면 고정 & 스크롤 방지)
    ========================================= */
 .lobby-wrapper {
-  position: relative; /* 뒤로가기 버튼 절대 위치 기준 */
+  position: relative;
   width: 100vw;
   height: 100vh;
   background-color: var(--game-bg-color);
@@ -296,64 +296,83 @@
 }
 
 /* =========================================
-   6. 하단 채팅 영역
+   6. 하단 채팅 영역 (카툰 스타일)
    ========================================= */
 .chat-area {
-  height: 80px;
+  height: 90px;
   width: 100%;
-  flex-shrink: 0; /* 화면 크기 줄어도 채팅창 높이 유지 */
+  flex-shrink: 0;
   
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px; /* 입력창과 버튼 사이 간격 */
   
   background: rgba(0,0,0,0.2);
   border-top: var(--game-border-width) solid var(--game-border-color);
-}
-
-.chat-input-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 800px;
-  max-width: 95%;
-}
-
-.chat-input-wrapper input {
-  flex: 1;
-  height: 46px;
-  padding: 0 20px;
   
-  border: 3px solid var(--game-border-color);
-  border-radius: 12px;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+/* 채팅 입력창 */
+.chat-area input {
+  width: 800px;
+  max-width: 80%;
+  height: 54px; /* 높이를 키워 볼륨감 줌 */
+  padding: 0 24px;
+  
+  border: 4px solid var(--game-border-color);
+  border-radius: 16px;
   background: #fff;
-  box-shadow: inset 0 4px 0 #eee;
+  
+  /* 안쪽 그림자를 진하게 주어 파인 느낌 강조 */
+  box-shadow: inset 0 6px 0 #e9ecef;
   
   font-family: var(--font-family-game);
-  font-size: 16px;
+  font-size: 18px;
+  color: #333;
   outline: none;
+  transition: all 0.2s;
 }
 
-.chat-input-wrapper input:focus {
-  border-color: #ffec99;
+.chat-area input::placeholder {
+  color: #adb5bd;
 }
 
-.send-btn {
-  height: 46px;
-  padding: 0 20px;
+.chat-area input:focus {
+  background-color: #fffdeb; /* 포커스시 아주 연한 노랑 */
+  border-color: #000;
+  transform: translateY(-2px);
+  box-shadow: inset 0 6px 0 #e9ecef, 0 4px 0 rgba(0,0,0,0.1);
+}
+
+/* 전송 버튼 */
+.chat-area button {
+  height: 54px;
+  padding: 0 32px;
   
   background: #ffc107;
-  border: 3px solid var(--game-border-color);
-  border-radius: 12px;
-  box-shadow: 0 4px 0 #e67700;
+  border: 4px solid var(--game-border-color);
+  border-radius: 16px;
+  
+  /* 버튼 아래 굵은 그림자로 3D 효과 */
+  box-shadow: 0 6px 0 #e67700;
   
   font-family: var(--font-family-game);
-  font-size: 16px;
-  font-weight: bold;
+  font-size: 20px;
+  font-weight: 700;
+  color: #000;
   cursor: pointer;
+  transition: all 0.1s;
 }
 
-.send-btn:active {
-  transform: translateY(4px);
-  box-shadow: none;
+.chat-area button:hover {
+  transform: translateY(-2px);
+  background: #ffd43b;
+}
+
+.chat-area button:active {
+  transform: translateY(6px); /* 눌리는 느낌 */
+  box-shadow: 0 0 0 #e67700;
 }

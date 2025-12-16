@@ -64,7 +64,7 @@ function LobbyScreen() {
           if (data.type === "USER_UPDATE") {
             setPlayers(data.users);
 
-            // ✅ 방장 판정 (userId 기준)
+            // 방장 판정 (userId 기준)
             setIsHost(
               data.users.some(
                 u => u.host === true && u.userId === userIdRef.current
@@ -82,7 +82,7 @@ function LobbyScreen() {
           }
         });
 
-        /* ===== 채팅 구독 (선택) ===== */
+        /* ===== 채팅 구독 ===== */
         client.subscribe(`/topic/lobby/${roomId}/chat`, () => {});
 
         /* ===== 입장 / 재접속 ===== */
@@ -115,6 +115,19 @@ function LobbyScreen() {
   /* =========================
      핸들러
   ========================= */
+
+  const handleLeaveRoom = () => {
+    if (clientRef.current?.connected) {
+      clientRef.current.publish({
+        destination: `/app/lobby/${roomId}/leave`,
+        body: JSON.stringify({
+          userId: userIdRef.current
+        })
+      });
+    }
+    navigate(-1);
+  };
+
   const handleStartGame = () => {
     if (!isHost) return;
     if (!clientRef.current?.connected) return;
@@ -166,8 +179,8 @@ function LobbyScreen() {
 
   return (
     <div className="lobby-wrapper">
-      {/* 뒤로가기 */}
-      <button className="back-btn" onClick={() => navigate(-1)}>
+      {/* 뒤로가기 (진짜 나가기) */}
+      <button className="back-btn" onClick={handleLeaveRoom}>
         <svg
           viewBox="0 0 24 24"
           width="32"

@@ -130,7 +130,7 @@ function CreateRoomModal({ onClose }) {
               onClick={() => setMode("POKEMON")}
             >
               <img
-                src="/img/pokemon mode.png"
+                src="/img/pokemon_mode.png"
                 alt="monster-ball"
                 className="mode-icon"
               />

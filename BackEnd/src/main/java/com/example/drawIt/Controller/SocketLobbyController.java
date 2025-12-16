@@ -72,4 +72,23 @@ public class SocketLobbyController {
                 Map.of("type", "ROOM_DESTROYED")
         );
     }
+
+    @MessageMapping("/lobby/{roomId}/leave")
+    public void leave(
+            @DestinationVariable String roomId,
+            @Payload Map<String, String> payload
+    ) {
+        String userId = payload.get("userId");
+
+        lobbyUserStore.leaveRoom(roomId, userId);
+
+        // 🔥 나간 후 반드시 전체 갱신 브로드캐스트
+        messagingTemplate.convertAndSend(
+                "/topic/lobby/" + roomId,
+                Map.of(
+                        "type", "USER_UPDATE",
+                        "users", lobbyUserStore.getUsers(roomId)
+                )
+        );
+    }
 }
