@@ -1,31 +1,29 @@
 package com.example.drawIt.Socket;
 
-import com.example.drawIt.DTO.UserResponseDTO;
-import com.example.drawIt.Entity.Lobby;
-import com.example.drawIt.Entity.User;
 import com.example.drawIt.Repository.LobbyRepository;
-import com.example.drawIt.Repository.UserRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @RequiredArgsConstructor
 public class LobbyUserStore {
 
-    private final UserRepository userRepository;
     private final LobbyRepository lobbyRepository;
 
-    // roomId → userId → UserResponseDTO
-    private final Map<String, Map<String, UserResponseDTO>> store = new ConcurrentHashMap<>();
+    // roomId -> (userId -> UserSessionState)
+    private final Map<String, Map<String, UserSessionState>> rooms = new ConcurrentHashMap<>();
+
+    // sessionId -> (roomId, userId)
+    private final Map<String, String[]> sessionIndex = new ConcurrentHashMap<>();
+
+    private static final long GRACE_MS = 5000; // F5 보호 시간 (5초)
 
     /* =========================
-       유저 입장 / 재접속
+       입장 / 재접속
     ========================= */
     @Transactional
     public synchronized void addUser(
@@ -34,89 +32,136 @@ public class LobbyUserStore {
             String userId,
             String nickname
     ) {
-
-        store.putIfAbsent(roomId, new ConcurrentHashMap<>());
-        Map<String, UserResponseDTO> users = store.get(roomId);
-
-        Lobby lobby = lobbyRepository.findById(roomId)
-                .orElseThrow(() -> new IllegalStateException("방 없음"));
-
-        boolean isHost = userId.equals(lobby.getHostUserId());
-
-        // ✅ 이미 존재하는 userId면 "재접속"
-        UserResponseDTO dto = users.get(userId);
-        if (dto == null) {
-            dto = new UserResponseDTO(userId, nickname, isHost);
-            users.put(userId, dto);
-        } else {
-            dto.setNickname(nickname);
+        if (userId == null || nickname == null) {
+            throw new IllegalArgumentException("❌ userId 또는 nickname 이 null 입니다");
         }
 
-        // DB 업데이트
-        userRepository.findByRoomIdAndUserId(roomId, userId)
-                .ifPresentOrElse(
-                        u -> {
-                            u.setSessionId(sessionId);
-                            u.setNickname(nickname);
-                            u.setHost(isHost);
-                            userRepository.save(u);
-                        },
-                        () -> userRepository.save(
-                                User.builder()
-                                        .roomId(roomId)
-                                        .userId(userId)
-                                        .sessionId(sessionId)
-                                        .nickname(nickname)
-                                        .host(isHost)
-                                        .build()
-                        )
-                );
+        rooms.putIfAbsent(roomId, new ConcurrentHashMap<>());
+        Map<String, UserSessionState> users = rooms.get(roomId);
+
+        UserSessionState state = users.get(userId);
+
+        if (state == null) {
+            boolean isFirst = users.isEmpty();
+            state = new UserSessionState(userId, nickname, isFirst);
+            users.put(userId, state);
+
+            if (isFirst) {
+                lobbyRepository.updateHost(roomId, state.userId, state.nickname);
+            }
+        } else {
+            state.nickname = nickname;
+        }
+
+        state.sessionId = sessionId;
+        state.disconnectAt = 0;
+
+        sessionIndex.put(sessionId, new String[]{roomId, userId});
     }
 
     /* =========================
-       유저 연결 해제 (즉시 삭제 ❌)
-    ========================= */
-    public synchronized void removeSession(String sessionId) {
-        // 🔥 disconnect에서는 DB를 절대 건드리지 않는다
-        store.values().forEach(users ->
-                users.values().forEach(dto -> {
-                    // 아무 작업도 하지 않음
-                })
-        );
-    }
-
-    /* =========================
-       진짜 방 나가기 (버튼)
+       명시적 나가기 (뒤로가기 버튼)
     ========================= */
     @Transactional
     public synchronized void leaveRoom(String roomId, String userId) {
-
-        Map<String, UserResponseDTO> users = store.get(roomId);
+        Map<String, UserSessionState> users = rooms.get(roomId);
         if (users == null) return;
 
-        UserResponseDTO removed = users.remove(userId);
-
-        // ✅ DB 삭제는 여기서만
-        userRepository.deleteByRoomIdAndUserId(roomId, userId);
-
-        if (removed != null && removed.isHost() && !users.isEmpty()) {
-            UserResponseDTO next = users.values().iterator().next();
-            next.setHost(true);
-
-            lobbyRepository.findById(roomId).ifPresent(lobby -> {
-                lobby.setHostUserId(next.getUserId());
-                lobbyRepository.save(lobby);
-            });
-        }
+        UserSessionState removed = users.remove(userId);
 
         if (users.isEmpty()) {
-            store.remove(roomId);
             lobbyRepository.deleteById(roomId);
-            userRepository.deleteByRoomId(roomId);
+            rooms.remove(roomId);
+            return;
+        }
+
+        // 나간 사람이 방장이면 위임
+        if (removed != null && removed.host) {
+            UserSessionState next = users.values().iterator().next();
+            next.host = true;
+            lobbyRepository.updateHost(roomId, next.userId, next.nickname);
         }
     }
 
-    public List<UserResponseDTO> getUsers(String roomId) {
-        return new ArrayList<>(store.getOrDefault(roomId, Map.of()).values());
+    /* =========================
+       WebSocket 끊김 감지 (탭 닫기 / 브라우저 종료 / 링크 이동 등)
+       -> F5는 GRACE_MS 이내 재접속하면 살아있음
+    ========================= */
+    public synchronized void removeSession(String sessionId) {
+        String[] info = sessionIndex.remove(sessionId);
+        if (info == null) return;
+
+        String roomId = info[0];
+        String userId = info[1];
+
+        Map<String, UserSessionState> users = rooms.get(roomId);
+        if (users == null) return;
+
+        UserSessionState state = users.get(userId);
+        if (state != null) {
+            state.disconnectAt = System.currentTimeMillis();
+        }
+    }
+
+    /* =========================
+       주기적 정리 (스케줄러)
+       - GRACE_MS 이후에도 재접속 안하면 유저 제거
+       - 제거 결과 0명이면 방 삭제
+       - 제거된 유저가 방장이면 남아있는 사람 중 1명에게 위임
+    ========================= */
+    @Transactional
+    public synchronized void cleanup() {
+        long now = System.currentTimeMillis();
+
+        Iterator<Map.Entry<String, Map<String, UserSessionState>>> roomIt = rooms.entrySet().iterator();
+
+        while (roomIt.hasNext()) {
+            Map.Entry<String, Map<String, UserSessionState>> roomEntry = roomIt.next();
+            String roomId = roomEntry.getKey();
+            Map<String, UserSessionState> users = roomEntry.getValue();
+
+            Iterator<UserSessionState> userIt = users.values().iterator();
+
+            while (userIt.hasNext()) {
+                UserSessionState state = userIt.next();
+
+                if (state.disconnectAt > 0 && now - state.disconnectAt > GRACE_MS) {
+                    boolean wasHost = state.host;
+                    userIt.remove();
+
+                    // 0명이면 즉시 방 삭제
+                    if (users.isEmpty()) {
+                        lobbyRepository.deleteById(roomId);
+                        roomIt.remove();
+                        break;
+                    }
+
+                    // 방장이 나갔으면 위임
+                    if (wasHost) {
+                        UserSessionState next = users.values().iterator().next();
+                        next.host = true;
+                        lobbyRepository.updateHost(roomId, next.userId, next.nickname);
+                    }
+                }
+            }
+        }
+    }
+
+    /* =========================
+       프론트 전달용
+    ========================= */
+    public List<Map<String, Object>> getUsers(String roomId) {
+        Map<String, UserSessionState> users = rooms.get(roomId);
+        if (users == null) return List.of();
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (UserSessionState u : users.values()) {
+            result.add(Map.of(
+                    "userId", u.userId,
+                    "nickname", u.nickname,
+                    "host", u.host
+            ));
+        }
+        return result;
     }
 }

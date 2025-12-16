@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import '../layout/Fragment.css'; // 공통 레이아웃 스타일
 import './Join.css';           // 현재 페이지 전용 스타일
+import { API_BASE_URL } from "../api/config";
 
 function Join() {
     // 훅 초기화 진행
@@ -24,7 +25,7 @@ function Join() {
     // 백엔드에서 데이터 가져오기
     useEffect(() => {
         //백엔드 API 호출
-        axios.get('http://172.30.1.250:8080/api/lobbies')
+        axios.get(`${API_BASE_URL}/api/lobbies`)
             .then((response) => {
                 console.log("서버에서 받은 데이터 확인 : ", response.data);
                 setRooms(response.data); // 받아온 데이터를 state에 저장

@@ -1,6 +1,8 @@
 package com.example.drawIt.Controller;
 
 import com.example.drawIt.DTO.SocketJoinDTO;
+import com.example.drawIt.Entity.Lobby;
+import com.example.drawIt.Service.LobbyService;
 import com.example.drawIt.Socket.LobbyUserStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -17,10 +19,11 @@ import java.util.Map;
 public class SocketLobbyController {
 
     private final LobbyUserStore lobbyUserStore;
+    private final LobbyService lobbyService;
     private final SimpMessagingTemplate messagingTemplate;
 
     /* =========================
-       입장 / 재접속 (userId 기반)
+       입장 / 재접속
     ========================= */
     @MessageMapping("/lobby/{roomId}/join")
     public void join(
@@ -30,7 +33,6 @@ public class SocketLobbyController {
     ) {
         String sessionId = accessor.getSessionId();
 
-        // ✅ userId 기반 입장 / 재접속 처리
         lobbyUserStore.addUser(
                 roomId,
                 sessionId,
@@ -38,41 +40,46 @@ public class SocketLobbyController {
                 dto.getNickname()
         );
 
-        // ✅ 유저 목록 브로드캐스트
+        Lobby lobby = lobbyService.getLobby(roomId);
+
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId,
                 Map.of(
                         "type", "USER_UPDATE",
+                        "roomId", lobby.getId(),
+                        "roomName", lobby.getName(),
                         "users", lobbyUserStore.getUsers(roomId)
                 )
         );
+        System.out.println("🔥 JOIN RECEIVED");
     }
 
     /* =========================
-       게임 시작 (방장만)
+       게임 시작
     ========================= */
     @MessageMapping("/lobby/{roomId}/start")
     public void startGame(@DestinationVariable String roomId) {
-
-        // 권한 체크는 LobbyUserStore / 프론트에서 이미 보장
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId,
                 Map.of("type", "GAME_START")
         );
+        System.out.println("🔥 게임방 입장");
     }
 
     /* =========================
-       방 삭제 (방장만, 진짜 퇴장)
+       방 삭제
     ========================= */
     @MessageMapping("/lobby/{roomId}/destroy")
     public void destroyRoom(@DestinationVariable String roomId) {
-
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId,
                 Map.of("type", "ROOM_DESTROYED")
         );
     }
 
+    /* =========================
+       나가기
+    ========================= */
     @MessageMapping("/lobby/{roomId}/leave")
     public void leave(
             @DestinationVariable String roomId,
@@ -82,11 +89,14 @@ public class SocketLobbyController {
 
         lobbyUserStore.leaveRoom(roomId, userId);
 
-        // 🔥 나간 후 반드시 전체 갱신 브로드캐스트
+        Lobby lobby = lobbyService.getLobby(roomId);
+
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId,
                 Map.of(
                         "type", "USER_UPDATE",
+                        "roomId", lobby.getId(),
+                        "roomName", lobby.getName(),
                         "users", lobbyUserStore.getUsers(roomId)
                 )
         );

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import CreateRoomModal from './CreateRoomModal';
 import './Main.css';
+import { API_BASE_URL } from '../api/config';
 
 const ROOM_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 const ROOM_ID_LENGTH = 8;
@@ -54,7 +55,7 @@ function Main() {
 
     try {
       // 방 존재 여부 확인
-      await axios.get(`http://localhost:8080/lobby/${roomId}`);
+      await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
       
       // 3. 방으로 이동하면서 닉네임 정보를 state로도 전달 (안전장치)
       navigate(`/lobby/${roomId}`, { state: { nickname: nickname.trim() } });

@@ -1,30 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
-import { nanoid } from 'nanoid';
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
+import { nanoid } from "nanoid";
 import "./LobbyScreen.css";
+import { API_BASE_URL } from "../api/config";
+import axios from "axios";
+import CreateRoomModal from "./CreateRoomModal";
 
 function LobbyScreen() {
   const navigate = useNavigate();
   const { lobbyId: roomId } = useParams();
   const location = useLocation();
 
-  /* =========================
-     userId (재접속 핵심)
-  ========================= */
   const userIdRef = useRef(
     sessionStorage.getItem("userId") ||
-    (() => {
-      const id = nanoid(12);
-      sessionStorage.setItem("userId", id);
-      return id;
-    })()
+      (() => {
+        const id = nanoid(12);
+        sessionStorage.setItem("userId", id);
+        return id;
+      })()
   );
 
-  /* =========================
-     nickname (표시용)
-  ========================= */
   const myNickname = (
     location.state?.nickname ||
     sessionStorage.getItem("nickname") ||
@@ -34,42 +31,63 @@ function LobbyScreen() {
   const [players, setPlayers] = useState([]);
   const [isHost, setIsHost] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
-  const maxPlayers = 10;
 
+  const [roomInfo, setRoomInfo] = useState(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+
+  const maxPlayers = 10;
   const clientRef = useRef(null);
 
-  /* =========================
-     WebSocket 연결
-  ========================= */
+  // ✅ 방 정보(제목/모드/비번여부) REST로 1회 로드
+  const fetchRoomInfo = async () => {
+    const res = await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
+    // 백엔드가 LobbyResponseDTO로 감싸면 res.data 안에 필드가 있을 수 있어요.
+    // 여기서는 둘 다 대응:
+    const data = res.data?.lobby ?? res.data;
+    setRoomInfo(data);
+  };
+
   useEffect(() => {
     if (!myNickname) {
       alert("닉네임 정보가 없습니다.");
       navigate("/");
       return;
     }
+    fetchRoomInfo().catch(() => {});
+    // eslint-disable-next-line
+  }, [roomId]);
 
-    // React StrictMode 중복 연결 방지
+  useEffect(() => {
+    if (!myNickname) return;
     if (clientRef.current?.active) return;
 
     const client = new Client({
-      webSocketFactory: () => new SockJS("http://172.30.1.250:8080/ws-stomp"),
+      webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
 
       onConnect: () => {
         console.log("✅ STOMP CONNECTED");
 
-        /* ===== 로비 구독 ===== */
         client.subscribe(`/topic/lobby/${roomId}`, (message) => {
           const data = JSON.parse(message.body);
 
           if (data.type === "USER_UPDATE") {
             setPlayers(data.users);
 
-            // 방장 판정 (userId 기준)
             setIsHost(
               data.users.some(
-                u => u.host === true && u.userId === userIdRef.current
+                (u) => u.host === true && u.userId === userIdRef.current
               )
             );
+          }
+
+          if (data.type === "ROOM_UPDATED") {
+            // ✅ 방 설정 실시간 반영
+            setRoomInfo((prev) => ({
+              ...(prev || {}),
+              id: data.roomId ?? prev?.id,
+              name: data.roomName ?? prev?.name,
+              mode: data.mode ?? prev?.mode,
+            }));
           }
 
           if (data.type === "GAME_START") {
@@ -77,28 +95,25 @@ function LobbyScreen() {
           }
 
           if (data.type === "ROOM_DESTROYED") {
-            alert("방장이 방을 삭제했습니다.");
+            alert("방이 삭제되었습니다.");
             navigate("/");
           }
         });
 
-        /* ===== 채팅 구독 ===== */
         client.subscribe(`/topic/lobby/${roomId}/chat`, () => {});
 
-        /* ===== 입장 / 재접속 ===== */
+        localStorage.setItem("userId", userIdRef.current);
+        localStorage.setItem("nickname", myNickname);
+
+        // join
         client.publish({
           destination: `/app/lobby/${roomId}/join`,
           body: JSON.stringify({
             roomId,
             userId: userIdRef.current,
-            nickname: myNickname
-          })
+            nickname: myNickname,
+          }),
         });
-      },
-
-      onStompError: (frame) => {
-        console.error("STOMP ERROR:", frame.headers["message"]);
-        console.error(frame.body);
       },
     });
 
@@ -106,23 +121,15 @@ function LobbyScreen() {
     clientRef.current = client;
 
     return () => {
-      if (clientRef.current) {
-        clientRef.current.deactivate();
-      }
+      client.deactivate();
     };
   }, [roomId, myNickname, navigate]);
-
-  /* =========================
-     핸들러
-  ========================= */
 
   const handleLeaveRoom = () => {
     if (clientRef.current?.connected) {
       clientRef.current.publish({
         destination: `/app/lobby/${roomId}/leave`,
-        body: JSON.stringify({
-          userId: userIdRef.current
-        })
+        body: JSON.stringify({ userId: userIdRef.current }),
       });
     }
     navigate(-1);
@@ -134,7 +141,7 @@ function LobbyScreen() {
 
     clientRef.current.publish({
       destination: `/app/lobby/${roomId}/start`,
-      body: JSON.stringify({ roomId })
+      body: JSON.stringify({ roomId }),
     });
   };
 
@@ -148,8 +155,8 @@ function LobbyScreen() {
         roomId,
         userId: userIdRef.current,
         nickname: myNickname,
-        content: chatMessage
-      })
+        content: chatMessage,
+      }),
     });
 
     setChatMessage("");
@@ -159,9 +166,6 @@ function LobbyScreen() {
     if (e.key === "Enter") handleSendMessage();
   };
 
-  /* =========================
-     렌더링
-  ========================= */
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const half = Math.ceil(maxPlayers / 2);
   const leftSlots = slots.slice(0, half);
@@ -177,37 +181,32 @@ function LobbyScreen() {
     </div>
   );
 
+  // ✅ 모달 닫힌 뒤 최신 방 정보 다시 로드(REST + ws)
+  const closeEditModal = async () => {
+    setIsEditOpen(false);
+    await fetchRoomInfo().catch(() => {});
+  };
+
   return (
     <div className="lobby-wrapper">
-      {/* 뒤로가기 (진짜 나가기) */}
       <button className="back-btn" onClick={handleLeaveRoom}>
-        <svg
-          viewBox="0 0 24 24"
-          width="32"
-          height="32"
-          stroke="currentColor"
-          strokeWidth="4"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
         </svg>
       </button>
 
       <div className="play-area">
         <div className="play-grid">
-          <div className="user-column left">
-            {leftSlots.map(renderUserCard)}
-          </div>
+          <div className="user-column left">{leftSlots.map(renderUserCard)}</div>
 
           <div className="lobby-center">
             <div className="logo-placeholder">LOGO</div>
 
             <div className="room-info-box">
-              <h2>즐거운 그림 그리기!</h2>
+              {/* ✅ 방 제목 */}
+              <h2>{roomInfo?.name ?? "로비"}</h2>
               <div className="room-detail">
-                <span>모드: RANDOM</span>
+                <span>모드: {roomInfo?.mode ?? "RANDOM"}</span>
                 <span>•</span>
                 <span>{players.length} / {maxPlayers} 명</span>
               </div>
@@ -218,7 +217,10 @@ function LobbyScreen() {
                 <button className="start-btn" onClick={handleStartGame}>
                   GAME START
                 </button>
-                <button className="modify-btn">방 설정</button>
+
+                <button className="modify-btn" onClick={() => setIsEditOpen(true)}>
+                  방 설정
+                </button>
               </div>
             ) : (
               <div className="waiting-text">
@@ -228,9 +230,7 @@ function LobbyScreen() {
             )}
           </div>
 
-          <div className="user-column right">
-            {rightSlots.map(renderUserCard)}
-          </div>
+          <div className="user-column right">{rightSlots.map(renderUserCard)}</div>
         </div>
       </div>
 
@@ -244,6 +244,14 @@ function LobbyScreen() {
         />
         <button onClick={handleSendMessage}>전송</button>
       </div>
+
+      {isEditOpen && isHost && roomInfo && (
+        <CreateRoomModal
+          mode="edit"
+          roomData={roomInfo}
+          onClose={closeEditModal}
+        />
+      )}
     </div>
   );
 }
