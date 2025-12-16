@@ -13,20 +13,30 @@ GRANT ALL PRIVILEGES ON drawit.* TO 'drawit'@'%';
 -- 4) 권한 적용
 FLUSH PRIVILEGES;
 
--- 5) 유저 테이블 생성
+-- 5) 로비 테이블 생성
+CREATE TABLE lobby (
+    id VARCHAR(20) NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    mode VARCHAR(20) NOT NULL,
+    password VARCHAR(100),
+    host_user_id VARCHAR(50) NOT NULL,
+    host_nickname VARCHAR(50) NOT NULL,
+    game_started BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 6) 유저 테이블 생성
 CREATE TABLE users (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    room_id VARCHAR(50) NOT NULL,
+    id VARCHAR(50) NOT NULL,
+    room_id VARCHAR(20) NOT NULL,
     nickname VARCHAR(50) NOT NULL,
     is_host BOOLEAN NOT NULL DEFAULT FALSE,
     session_id VARCHAR(100) NOT NULL,
-
+    PRIMARY KEY (id),
+    UNIQUE (room_id, nickname),
     CONSTRAINT fk_users_lobby
         FOREIGN KEY (room_id)
         REFERENCES lobby(id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT uq_room_nickname
-        UNIQUE (room_id, nickname)
-);
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import SockJS from 'sockjs-client';
@@ -13,7 +13,7 @@ import './GameScreen.css';
 import { API_BASE_URL } from '../api/config';
 
 /* =========================
-   HEX → RGBA (유지)
+   HEX → RGBA
 ========================= */
 const hexToRgba = (hex) => {
   let c;
@@ -39,37 +39,70 @@ function GameScreen({ maxPlayers = 10 }) {
   ========================= */
   const [players, setPlayers] = useState([]);
   const stompRef = useRef(null);
+  const leftingRef = useRef(false);
+
+  const userId = localStorage.getItem('userId');
+  const nickname = localStorage.getItem('nickname');
+
+  const publishLeave = useCallback(() => {
+    const client = stompRef.current;
+    if (!client?.connected) return;
+    if (!userId) return;
+    if (leftingRef.current) return;
+
+    leftingRef.current = true;
+
+    client.publish({
+      destination: `/app/lobby/${lobbyId}/leave`,
+      body: JSON.stringify({ userId }),
+    });
+  }, [lobbyId, userId]);
 
   useEffect(() => {
-    console.log('🧪 GameScreen localStorage 체크');
-    console.log('userId:', localStorage.getItem('userId'));
-    console.log('nickname:', localStorage.getItem('nickname'));
+    // 유저 정보 없으면 Join으로
+    if (!userId || !nickname) {
+      navigate('/join');
+      return;
+    }
+
     const client = new Client({
       webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
-      reconnectDelay: 5000,
+      reconnectDelay: 3000,
+      onConnect: () => {
+        // ✅ 로비와 같은 topic을 구독해야 USER_UPDATE를 받습니다.
+        client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
+          const data = JSON.parse(msg.body);
+
+          if (data.type === 'USER_UPDATE') {
+            setPlayers(data.users || []);
+          }
+
+          if (data.type === 'ROOM_DESTROYED') {
+            alert('방이 삭제되었습니다.');
+            navigate('/join');
+          }
+        });
+
+        // ✅ 게임 화면에서도 join (새로고침/직접 진입 대비)
+        client.publish({
+          destination: `/app/lobby/${lobbyId}/join`,
+          body: JSON.stringify({
+            userId,
+            nickname,
+          }),
+        });
+      },
     });
-
-    client.onConnect = () => {
-      client.subscribe(`/topic/lobby/${lobbyId}/users`, (msg) => {
-        const users = JSON.parse(msg.body);
-        setPlayers(users);
-        console.log('users from socket:', users);
-      });
-
-      client.publish({
-        destination: `/app/lobby/${lobbyId}/join`,
-        body: JSON.stringify({
-          userId: localStorage.getItem('userId'),
-          nickname: localStorage.getItem('nickname'),
-        }),
-      });
-    };
 
     client.activate();
     stompRef.current = client;
 
-    return () => client.deactivate();
-  }, [lobbyId]);
+    // ✅ 게임 화면에서 나갈 때 leave를 확실히 보냅니다.
+    return () => {
+      publishLeave();
+      client.deactivate();
+    };
+  }, [lobbyId, navigate, publishLeave, userId, nickname]);
 
   /* =========================
      도구 상태
@@ -122,21 +155,21 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [activeTool, penColor, penWidth, eraserWidth]);
 
   const floodFill = (startX, startY, fillColorHex) => {
-  const canvas = canvasRef.current;
-  const ctx = ctxRef.current;
-  const width = canvas.width;
-  const height = canvas.height;
+    const canvas = canvasRef.current;
+    const ctx = ctxRef.current;
+    const width = canvas.width;
+    const height = canvas.height;
 
-  const imageData = ctx.getImageData(0, 0, width, height);
-  const pixelData = imageData.data;
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const pixelData = imageData.data;
 
-  const startPos = (startY * width + startX) * 4;
-  const startR = pixelData[startPos];
-  const startG = pixelData[startPos + 1];
-  const startB = pixelData[startPos + 2];
-  const startA = pixelData[startPos + 3];
+    const startPos = (startY * width + startX) * 4;
+    const startR = pixelData[startPos];
+    const startG = pixelData[startPos + 1];
+    const startB = pixelData[startPos + 2];
+    const startA = pixelData[startPos + 3];
 
-  const [fillR, fillG, fillB, fillA] = hexToRgba(fillColorHex);
+    const [fillR, fillG, fillB, fillA] = hexToRgba(fillColorHex);
 
     if (
       startR === fillR &&
@@ -179,7 +212,6 @@ function GameScreen({ maxPlayers = 10 }) {
 
     ctx.putImageData(imageData, 0, 0);
   };
-
 
   const startDraw = (e) => {
     const x = Math.floor(e.nativeEvent.offsetX);
@@ -227,7 +259,7 @@ function GameScreen({ maxPlayers = 10 }) {
       : `rgba(${r},${g},${b},${a / 255})`;
 
   /* =========================
-     유저 슬롯
+     유저 슬롯 (방장 별 표시)
   ========================= */
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const half = Math.ceil(maxPlayers / 2);
@@ -235,9 +267,44 @@ function GameScreen({ maxPlayers = 10 }) {
   const renderUser = (u, i) => (
     <div key={i} className={`user-card ${!u ? 'empty' : ''}`}>
       <div className="avatar" />
-      <span className="username">{u ? u.nickname : 'Empty'}</span>
+      <span className="username">
+        {u ? u.nickname : 'Empty'}
+        {/* ✅ LobbyScreen처럼 방장 별 표시 */}
+        {u?.host && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
+      </span>
     </div>
   );
+
+  /* =========================
+     뒤로가기: Join.js로 이동
+  ========================= */
+  const handleBackToJoin = () => {
+    publishLeave();
+    navigate('/join');
+  };
+
+  /* =========================
+     채팅창
+     =========================
+  */
+  const [chatMessage, setChatMessage] = useState("");
+
+  const handleSendMessage = () => {
+    if (!chatMessage.trim()) return;
+    if (!stompRef.current?.connected) return;
+
+    stompRef.current.publish({
+      destination: `/app/lobby/${lobbyId}/chat`,
+      body: JSON.stringify({
+        userId,
+        nickname,
+        content: chatMessage,
+      }),
+    });
+
+    setChatMessage("");
+  };
+
 
   /* =========================
      렌더링
@@ -262,7 +329,7 @@ function GameScreen({ maxPlayers = 10 }) {
         }}
       />
 
-      <button className="back-btn" onClick={() => navigate(-1)}>
+      <button className="back-btn" onClick={handleBackToJoin}>
         <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="4" fill="none">
           <polyline points="15 18 9 12 15 6" />
         </svg>
@@ -318,22 +385,28 @@ function GameScreen({ maxPlayers = 10 }) {
                 />
               )}
 
-              <div className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
-                   onClick={() => handleToolClick('pen')}>
+              <div
+                className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
+                onClick={() => handleToolClick('pen')}
+              >
                 <PenIcon color={penColor} />
               </div>
 
-              <div className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`}
-                   onClick={() => handleToolClick('fill')}>
+              <div
+                className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`}
+                onClick={() => handleToolClick('fill')}
+              >
                 <img src="/svg/fill.svg" alt="fill" />
               </div>
 
-              <div className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
-                   onClick={() => handleToolClick('eraser')}>
+              <div
+                className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+                onClick={() => handleToolClick('eraser')}
+              >
                 <img src="/svg/eraser.svg" alt="eraser" />
               </div>
 
-              {/* ✅ 전체 삭제 버튼 복구 */}
+              {/* 전체 삭제 버튼 */}
               <div className="tool-btn delete-btn" onClick={clearCanvas} title="전체 지우기">
                 🗑
               </div>
@@ -343,6 +416,22 @@ function GameScreen({ maxPlayers = 10 }) {
 
           <div className="user-column right">{slots.slice(half).map(renderUser)}</div>
 
+        </div>
+      </div>
+      <div className="chat-area">
+        <div className="chat-input-wrapper">
+          <input
+            type="text"
+            placeholder="메시지를 입력하세요..."
+            value={chatMessage}
+            onChange={(e) => setChatMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSendMessage();
+            }}
+          />
+          <button className="send-btn" onClick={handleSendMessage}>
+            전송
+          </button>
         </div>
       </div>
     </div>

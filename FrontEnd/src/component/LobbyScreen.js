@@ -3,9 +3,10 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import { nanoid } from "nanoid";
+import axios from "axios";
+
 import "./LobbyScreen.css";
 import { API_BASE_URL } from "../api/config";
-import axios from "axios";
 import CreateRoomModal from "./CreateRoomModal";
 
 function LobbyScreen() {
@@ -13,6 +14,7 @@ function LobbyScreen() {
   const { lobbyId: roomId } = useParams();
   const location = useLocation();
 
+  // 1. 유저 ID 및 닉네임 설정
   const userIdRef = useRef(
     sessionStorage.getItem("userId") ||
       (() => {
@@ -28,23 +30,28 @@ function LobbyScreen() {
     ""
   ).trim();
 
+  // 2. State 정의
   const [players, setPlayers] = useState([]);
   const [isHost, setIsHost] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
-
   const [roomInfo, setRoomInfo] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+
+  // ✅ [수정] 소켓 콜백 내에서 최신 상태를 참조하기 위한 Ref
+  const playersRef = useRef([]);
 
   const maxPlayers = 10;
   const clientRef = useRef(null);
 
-  // ✅ 방 정보(제목/모드/비번여부) REST로 1회 로드
+  // 3. 방 정보 1회 로드
   const fetchRoomInfo = async () => {
-    const res = await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
-    // 백엔드가 LobbyResponseDTO로 감싸면 res.data 안에 필드가 있을 수 있어요.
-    // 여기서는 둘 다 대응:
-    const data = res.data?.lobby ?? res.data;
-    setRoomInfo(data);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
+      const data = res.data?.lobby ?? res.data;
+      setRoomInfo(data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
@@ -53,35 +60,39 @@ function LobbyScreen() {
       navigate("/");
       return;
     }
-    fetchRoomInfo().catch(() => {});
-    // eslint-disable-next-line
-  }, [roomId]);
+    fetchRoomInfo();
+  }, [roomId, myNickname, navigate]);
 
+  // 4. 소켓 연결 및 구독
   useEffect(() => {
     if (!myNickname) return;
     if (clientRef.current?.active) return;
 
     const client = new Client({
       webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
+      reconnectDelay: 5000,
 
       onConnect: () => {
-        console.log("✅ STOMP CONNECTED");
+        console.log("✅ STOMP CONNECTED (Lobby)");
 
+        // 구독: /topic/lobby/{roomId} (Controller와 일치)
         client.subscribe(`/topic/lobby/${roomId}`, (message) => {
           const data = JSON.parse(message.body);
 
+          // (1) 유저 업데이트 (입장/퇴장)
           if (data.type === "USER_UPDATE") {
             setPlayers(data.users);
+            playersRef.current = data.users; // ✅ Ref 동기화
 
-            setIsHost(
-              data.users.some(
-                (u) => u.host === true && u.userId === userIdRef.current
-              )
+            // 내가 방장인지 확인
+            const amIHost = data.users.some(
+              (u) => u.host === true && u.userId === userIdRef.current
             );
+            setIsHost(amIHost);
           }
 
+          // (2) 방 설정 변경
           if (data.type === "ROOM_UPDATED") {
-            // ✅ 방 설정 실시간 반영
             setRoomInfo((prev) => ({
               ...(prev || {}),
               id: data.roomId ?? prev?.id,
@@ -90,22 +101,28 @@ function LobbyScreen() {
             }));
           }
 
+          // (3) 게임 시작
           if (data.type === "GAME_START") {
-            navigate(`/gaming/${roomId}`);
+            // ✅ [수정] 화면 전환 시 현재 플레이어 리스트(Ref)를 함께 전달
+            navigate(`/gaming/${roomId}`, {
+              state: { players: playersRef.current },
+            });
           }
 
+          // (4) 방 삭제
           if (data.type === "ROOM_DESTROYED") {
             alert("방이 삭제되었습니다.");
             navigate("/");
           }
         });
 
+        // (5) 채팅 구독 (별도 로직이 있다면 추가)
         client.subscribe(`/topic/lobby/${roomId}/chat`, () => {});
 
         localStorage.setItem("userId", userIdRef.current);
         localStorage.setItem("nickname", myNickname);
 
-        // join
+        // 입장 메시지 전송
         client.publish({
           destination: `/app/lobby/${roomId}/join`,
           body: JSON.stringify({
@@ -125,6 +142,7 @@ function LobbyScreen() {
     };
   }, [roomId, myNickname, navigate]);
 
+  // 5. 핸들러 함수들
   const handleLeaveRoom = () => {
     if (clientRef.current?.connected) {
       clientRef.current.publish({
@@ -158,7 +176,6 @@ function LobbyScreen() {
         content: chatMessage,
       }),
     });
-
     setChatMessage("");
   };
 
@@ -166,6 +183,12 @@ function LobbyScreen() {
     if (e.key === "Enter") handleSendMessage();
   };
 
+  const closeEditModal = async () => {
+    setIsEditOpen(false);
+    await fetchRoomInfo();
+  };
+
+  // 6. UI 렌더링 준비
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const half = Math.ceil(maxPlayers / 2);
   const leftSlots = slots.slice(0, half);
@@ -181,16 +204,19 @@ function LobbyScreen() {
     </div>
   );
 
-  // ✅ 모달 닫힌 뒤 최신 방 정보 다시 로드(REST + ws)
-  const closeEditModal = async () => {
-    setIsEditOpen(false);
-    await fetchRoomInfo().catch(() => {});
-  };
-
   return (
     <div className="lobby-wrapper">
       <button className="back-btn" onClick={handleLeaveRoom}>
-        <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          viewBox="0 0 24 24"
+          width="32"
+          height="32"
+          stroke="currentColor"
+          strokeWidth="4"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <polyline points="15 18 9 12 15 6" />
         </svg>
       </button>
@@ -203,12 +229,13 @@ function LobbyScreen() {
             <div className="logo-placeholder">LOGO</div>
 
             <div className="room-info-box">
-              {/* ✅ 방 제목 */}
               <h2>{roomInfo?.name ?? "로비"}</h2>
               <div className="room-detail">
                 <span>모드: {roomInfo?.mode ?? "RANDOM"}</span>
                 <span>•</span>
-                <span>{players.length} / {maxPlayers} 명</span>
+                <span>
+                  {players.length} / {maxPlayers} 명
+                </span>
               </div>
             </div>
 
@@ -217,14 +244,17 @@ function LobbyScreen() {
                 <button className="start-btn" onClick={handleStartGame}>
                   GAME START
                 </button>
-
-                <button className="modify-btn" onClick={() => setIsEditOpen(true)}>
+                <button
+                  className="modify-btn"
+                  onClick={() => setIsEditOpen(true)}
+                >
                   방 설정
                 </button>
               </div>
             ) : (
               <div className="waiting-text">
-                방장이 게임을 시작할 때까지<br />
+                방장이 게임을 시작할 때까지
+                <br />
                 기다려 주세요!
               </div>
             )}
@@ -235,14 +265,20 @@ function LobbyScreen() {
       </div>
 
       <div className="chat-area">
-        <input
-          type="text"
-          placeholder="메시지를 입력하세요..."
-          value={chatMessage}
-          onChange={(e) => setChatMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <button onClick={handleSendMessage}>전송</button>
+        <div className="chat-input-wrapper">
+          <input
+            type="text"
+            placeholder="메시지를 입력하세요..."
+            value={chatMessage}
+            onChange={(e) => setChatMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSendMessage();
+            }}
+          />
+          <button className="send-btn" onClick={handleSendMessage}>
+            전송
+          </button>
+        </div>
       </div>
 
       {isEditOpen && isHost && roomInfo && (

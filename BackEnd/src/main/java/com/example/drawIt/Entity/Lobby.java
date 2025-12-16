@@ -29,4 +29,7 @@ public class Lobby {
 
     @Column(nullable = false, length = 100)
     private String hostNickname;
+
+    @Column(nullable = false)
+    private boolean gameStarted;
 }

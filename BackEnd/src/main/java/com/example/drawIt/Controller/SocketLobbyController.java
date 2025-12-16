@@ -59,11 +59,13 @@ public class SocketLobbyController {
     ========================= */
     @MessageMapping("/lobby/{roomId}/start")
     public void startGame(@DestinationVariable String roomId) {
+
+        lobbyService.markGameStarted(roomId);
+
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId,
                 Map.of("type", "GAME_START")
         );
-        System.out.println("🔥 게임방 입장");
     }
 
     /* =========================

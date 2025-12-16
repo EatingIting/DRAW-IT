@@ -1,5 +1,6 @@
 package com.example.drawIt.Service;
 
+import com.example.drawIt.DTO.CreateLobbyDTO;
 import com.example.drawIt.DTO.UpdateLobbyDTO;
 import com.example.drawIt.Entity.Lobby;
 import com.example.drawIt.Repository.LobbyRepository;
@@ -16,20 +17,19 @@ public class LobbyService {
     private final LobbyRepository lobbyRepository;
 
     @Transactional
-    public Lobby createLobby(String id, String name, String mode, String password,
-                             String hostUserId, String hostNickname) {
+    public Lobby createLobby(CreateLobbyDTO dto) {
 
-        if (lobbyRepository.existsById(id)) {
+        if (lobbyRepository.existsById(dto.getId())) {
             throw new IllegalArgumentException("이미 존재하는 방");
         }
 
         Lobby lobby = new Lobby();
-        lobby.setId(id);
-        lobby.setName(name);
-        lobby.setMode(mode);
-        lobby.setPassword(password);
-        lobby.setHostUserId(hostUserId);
-        lobby.setHostNickname(hostNickname);
+        lobby.setId(dto.getId());
+        lobby.setName(dto.getName());
+        lobby.setMode(dto.getMode());
+        lobby.setPassword(dto.getPassword());
+        lobby.setHostUserId(dto.getHostUserId());
+        lobby.setHostNickname(dto.getHostNickname());
 
         return lobbyRepository.save(lobby);
     }
@@ -58,5 +58,12 @@ public class LobbyService {
         lobby.setPassword(dto.getPassword());
 
         return lobby; // @Transactional이라 dirty checking으로 자동 update
+    }
+
+    @Transactional
+    public void markGameStarted(String lobbyId) {
+        Lobby lobby = lobbyRepository.findById(lobbyId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 방"));
+        lobby.setGameStarted(true);
     }
 }

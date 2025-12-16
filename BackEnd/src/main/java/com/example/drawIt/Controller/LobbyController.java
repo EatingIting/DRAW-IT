@@ -23,15 +23,28 @@ public class LobbyController {
     private final SimpMessagingTemplate messagingTemplate;
 
     @PostMapping("/lobby")
-    public ResponseEntity<LobbyResponseDTO> createLobby(@RequestBody CreateLobbyDTO dto) {
-        Lobby lobby = lobbyService.createLobby(
-                dto.getId(),
-                dto.getName(),
-                dto.getMode(),
-                dto.getPassword(),
-                dto.getHostUserId(),
-                dto.getHostNickname()
-        );
+    public ResponseEntity<LobbyResponseDTO> createLobby(
+            @RequestBody CreateLobbyDTO dto
+    ) {
+        // 필수값 방어 (선택 사항이지만 권장)
+        if (dto.getId() == null || dto.getId().isBlank()) {
+            throw new IllegalArgumentException("방 ID는 필수입니다.");
+        }
+        if (dto.getName() == null || dto.getName().isBlank()) {
+            throw new IllegalArgumentException("방 이름은 필수입니다.");
+        }
+        if (dto.getMode() == null || dto.getMode().isBlank()) {
+            throw new IllegalArgumentException("게임 모드는 필수입니다.");
+        }
+        if (dto.getHostUserId() == null || dto.getHostUserId().isBlank()) {
+            throw new IllegalArgumentException("방장 ID는 필수입니다.");
+        }
+        if (dto.getHostNickname() == null || dto.getHostNickname().isBlank()) {
+            throw new IllegalArgumentException("방장 닉네임은 필수입니다.");
+        }
+
+        // ✅ DTO 그대로 넘긴다 (핵심)
+        Lobby lobby = lobbyService.createLobby(dto);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -45,8 +58,16 @@ public class LobbyController {
     }
 
     @GetMapping("/api/lobbies")
-    public List<Lobby> getLobbyList() {
-        return lobbyService.getAllRooms();
+    public List<LobbyResponseDTO> getLobbyList() {
+        return lobbyService.getAllRooms()
+                .stream()
+                .map(lobby -> {
+                    System.out.println(
+                            "DB gameStarted = " + lobby.isGameStarted()
+                    );
+                    return new LobbyResponseDTO(lobby);
+                })
+                .toList();
     }
 
     @PutMapping("/lobby/{lobbyId}")
