@@ -35,21 +35,25 @@ function GameScreen({ maxPlayers = 10 }) {
   const { lobbyId } = useParams();
 
   /* =========================
-     WebSocket 유저
+     WebSocket / User
   ========================= */
-  const [players, setPlayers] = useState([]);
   const stompRef = useRef(null);
   const leftingRef = useRef(false);
 
   const userId = localStorage.getItem('userId');
   const nickname = localStorage.getItem('nickname');
 
+  const [players, setPlayers] = useState([]);
+  const [isDrawer, setIsDrawer] = useState(false);
+
+  const alertedRef = useRef(false);
+
+  /* =========================
+     Leave
+  ========================= */
   const publishLeave = useCallback(() => {
     const client = stompRef.current;
-    if (!client?.connected) return;
-    if (!userId) return;
-    if (leftingRef.current) return;
-
+    if (!client?.connected || leftingRef.current) return;
     leftingRef.current = true;
 
     client.publish({
@@ -58,54 +62,15 @@ function GameScreen({ maxPlayers = 10 }) {
     });
   }, [lobbyId, userId]);
 
-  useEffect(() => {
-    // 유저 정보 없으면 Join으로
-    if (!userId || !nickname) {
-      navigate('/join');
-      return;
-    }
-
-    const client = new Client({
-      webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
-      reconnectDelay: 3000,
-      onConnect: () => {
-        // ✅ 로비와 같은 topic을 구독해야 USER_UPDATE를 받습니다.
-        client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
-          const data = JSON.parse(msg.body);
-
-          if (data.type === 'USER_UPDATE') {
-            setPlayers(data.users || []);
-          }
-
-          if (data.type === 'ROOM_DESTROYED') {
-            alert('방이 삭제되었습니다.');
-            navigate('/join');
-          }
-        });
-
-        // ✅ 게임 화면에서도 join (새로고침/직접 진입 대비)
-        client.publish({
-          destination: `/app/lobby/${lobbyId}/join`,
-          body: JSON.stringify({
-            userId,
-            nickname,
-          }),
-        });
-      },
-    });
-
-    client.activate();
-    stompRef.current = client;
-
-    // ✅ 게임 화면에서 나갈 때 leave를 확실히 보냅니다.
-    return () => {
-      publishLeave();
-      client.deactivate();
-    };
-  }, [lobbyId, navigate, publishLeave, userId, nickname]);
+  /* =========================
+     Canvas
+  ========================= */
+  const canvasRef = useRef(null);
+  const ctxRef = useRef(null);
+  const drawing = useRef(false);
 
   /* =========================
-     도구 상태
+     Tool State
   ========================= */
   const [activeTool, setActiveTool] = useState('pen');
   const [showModal, setShowModal] = useState(false);
@@ -125,15 +90,96 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   /* =========================
-     캔버스 / 그리기
+     WebSocket Connect
   ========================= */
-  const canvasRef = useRef(null);
-  const ctxRef = useRef(null);
-  const drawing = useRef(false);
+  useEffect(() => {
+    if (!userId || !nickname) {
+      navigate('/join');
+      return;
+    }
 
-  const cursorRef = useRef(null);
-  const [hovering, setHovering] = useState(false);
+    const client = new Client({
+      webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
+      reconnectDelay: 3000,
+      onConnect: () => {
+        client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
+          const data = JSON.parse(msg.body);
 
+          const applyDrawer = (drawerUserId) => {
+            if (!drawerUserId) return;
+
+            const me = String(drawerUserId) === String(userId);
+            setIsDrawer(me);
+
+            if (me && !alertedRef.current) {
+              alertedRef.current = true;
+              setTimeout(() => {
+                alert('주제어에 맞는 그림을 그려주세요!');
+              }, 0);
+            }
+          };
+
+          if (data.type === 'USER_UPDATE') {
+            const hostId = data.hostUserId;
+
+            // ✅ 여기서 mappedUsers를 직접 생성
+            const mappedUsers = (data.users || []).map(u => ({
+              ...u,
+              host: String(u.userId) === String(hostId),
+            }));
+
+            setPlayers(mappedUsers);
+
+            if (data.gameStarted && data.drawerUserId) {
+              applyDrawer(data.drawerUserId);
+            }
+          }
+
+          if (data.type === 'GAME_START') {
+            alertedRef.current = false;
+            applyDrawer(data.drawerUserId);
+          }
+
+          if (data.type === 'DRAWER_CHANGED') {
+            alertedRef.current = false;
+            applyDrawer(data.drawerUserId);
+          }
+
+          if (data.type === 'ROOM_DESTROYED') {
+            alert('방이 삭제되었습니다.');
+            navigate('/join');
+          }
+        });
+
+        client.subscribe(`/topic/lobby/${lobbyId}/draw`, (msg) => {
+          const evt = JSON.parse(msg.body);
+          applyRemoteDraw(evt);
+        });
+
+        client.subscribe(`/user/queue/draw/history`, (msg) => {
+          const history = JSON.parse(msg.body);
+          history.forEach(applyRemoteDraw);
+        });
+
+        client.publish({
+          destination: `/app/lobby/${lobbyId}/join`,
+          body: JSON.stringify({ userId, nickname }),
+        });
+      },
+    });
+
+    client.activate();
+    stompRef.current = client;
+
+    return () => {
+      publishLeave();
+      client.deactivate();
+    };
+  }, [lobbyId, navigate, publishLeave, userId, nickname]);
+
+  /* =========================
+     Canvas Init
+  ========================= */
   useEffect(() => {
     const ctx = canvasRef.current.getContext('2d');
     ctx.lineCap = 'round';
@@ -154,112 +200,177 @@ function GameScreen({ maxPlayers = 10 }) {
     }
   }, [activeTool, penColor, penWidth, eraserWidth]);
 
-  const floodFill = (startX, startY, fillColorHex) => {
-    const canvas = canvasRef.current;
+  /* =========================
+     Draw Sync
+  ========================= */
+  const publishDraw = (evt) => {
+    stompRef.current?.publish({
+      destination: `/app/draw/${lobbyId}`,
+      body: JSON.stringify({ ...evt, userId }),
+    });
+  };
+
+  const applyRemoteDraw = (evt) => {
+    if (String(evt.userId) === String(userId)) return;
+
     const ctx = ctxRef.current;
-    const width = canvas.width;
-    const height = canvas.height;
+    const canvas = canvasRef.current;
+    if (!ctx || !canvas) return;
 
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const pixelData = imageData.data;
-
-    const startPos = (startY * width + startX) * 4;
-    const startR = pixelData[startPos];
-    const startG = pixelData[startPos + 1];
-    const startB = pixelData[startPos + 2];
-    const startA = pixelData[startPos + 3];
-
-    const [fillR, fillG, fillB, fillA] = hexToRgba(fillColorHex);
-
-    if (
-      startR === fillR &&
-      startG === fillG &&
-      startB === fillB &&
-      startA === fillA
-    ) {
+    if (evt.type === 'CLEAR') {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
 
-    const stack = [[startX, startY]];
-
-    while (stack.length > 0) {
-      const [x, y] = stack.pop();
-      if (x < 0 || x >= width || y < 0 || y >= height) continue;
-
-      const pos = (y * width + x) * 4;
-
-      if (
-        pixelData[pos] === startR &&
-        pixelData[pos + 1] === startG &&
-        pixelData[pos + 2] === startB &&
-        pixelData[pos + 3] === startA
-      ) {
-        pixelData[pos] = fillR;
-        pixelData[pos + 1] = fillG;
-        pixelData[pos + 2] = fillB;
-        pixelData[pos + 3] = fillA;
-
-        stack.push([x + 1, y]);
-        stack.push([x - 1, y]);
-        stack.push([x, y + 1]);
-        stack.push([x, y - 1]);
-        stack.push([x + 1, y + 1]);
-        stack.push([x - 1, y - 1]);
-        stack.push([x - 1, y + 1]);
-        stack.push([x + 1, y - 1]);
-      }
+    if (evt.type === 'FILL') {
+      floodFill(evt.x, evt.y, evt.color);
+      return;
     }
 
-    ctx.putImageData(imageData, 0, 0);
+    if (evt.tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = evt.color;
+    }
+    ctx.lineWidth = evt.width;
+
+    if (evt.type === 'START') {
+      ctx.beginPath();
+      ctx.moveTo(evt.x, evt.y);
+    }
+
+    if (evt.type === 'MOVE') {
+      ctx.lineTo(evt.x, evt.y);
+      ctx.stroke();
+    }
+
+    if (evt.type === 'END') {
+      ctx.closePath();
+    }
   };
 
+  /* =========================
+     Local Draw
+  ========================= */
   const startDraw = (e) => {
-    const x = Math.floor(e.nativeEvent.offsetX);
-    const y = Math.floor(e.nativeEvent.offsetY);
+    if (!isDrawer) return;
+
+    const x = e.nativeEvent.offsetX;
+    const y = e.nativeEvent.offsetY;
 
     if (activeTool === 'fill') {
       floodFill(x, y, fillColor);
+      publishDraw({
+        type: 'FILL',
+        x,
+        y,
+        color: fillColor,
+      });
       return;
     }
 
+    drawing.current = true;
     ctxRef.current.beginPath();
     ctxRef.current.moveTo(x, y);
-    drawing.current = true;
+
+    publishDraw({
+      type: 'START',
+      x,
+      y,
+      tool: activeTool,
+      color: penColor,
+      width: activeTool === 'eraser' ? eraserWidth : penWidth,
+    });
   };
 
   const draw = (e) => {
-    if (cursorRef.current) {
-      cursorRef.current.style.left = `${e.clientX}px`;
-      cursorRef.current.style.top = `${e.clientY}px`;
-    }
+    if (!isDrawer || !drawing.current) return;
 
-    if (!drawing.current) return;
-    ctxRef.current.lineTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+    const x = e.nativeEvent.offsetX;
+    const y = e.nativeEvent.offsetY;
+
+    ctxRef.current.lineTo(x, y);
     ctxRef.current.stroke();
+
+    publishDraw({
+      type: 'MOVE',
+      x,
+      y,
+      tool: activeTool,
+      color: penColor,
+      width: activeTool === 'eraser' ? eraserWidth : penWidth,
+    });
   };
 
   const endDraw = () => {
-    ctxRef.current.closePath();
+    if (!drawing.current) return;
     drawing.current = false;
+    ctxRef.current.closePath();
+    publishDraw({ type: 'END' });
   };
 
   const clearCanvas = () => {
-    const c = canvasRef.current;
-    ctxRef.current.clearRect(0, 0, c.width, c.height);
+    if (!isDrawer) return;
+
+    // 로컬 캔버스 즉시 삭제
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+    if (ctx && canvas) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // 서버로 CLEAR 이벤트 전송
+    stompRef.current?.publish({
+      destination: `/app/draw/${lobbyId}/clear`,
+      body: JSON.stringify({ userId }),
+    });
   };
 
   /* =========================
-     커스텀 커서
+     Flood Fill
   ========================= */
-  const cursorSize = activeTool === 'eraser' ? eraserWidth : penWidth;
-  const [r, g, b, a] = hexToRgba(activeTool === 'fill' ? fillColor : penColor);
-  const cursorColor =
-    activeTool === 'eraser'
-      ? 'rgba(255,255,255,0.6)'
-      : `rgba(${r},${g},${b},${a / 255})`;
+  const floodFill = (x, y, color) => {
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = img.data;
+    const [r, g, b, a] = hexToRgba(color);
+
+    const idx = (y * canvas.width + x) * 4;
+    const target = data.slice(idx, idx + 4);
+    if (
+      target[0] === r &&
+      target[1] === g &&
+      target[2] === b &&
+      target[3] === a
+    )
+      return;
+
+    const stack = [[x, y]];
+    while (stack.length) {
+      const [cx, cy] = stack.pop();
+      if (cx < 0 || cy < 0 || cx >= canvas.width || cy >= canvas.height)
+        continue;
+      const i = (cy * canvas.width + cx) * 4;
+      if (
+        data[i] === target[0] &&
+        data[i + 1] === target[1] &&
+        data[i + 2] === target[2] &&
+        data[i + 3] === target[3]
+      ) {
+        data[i] = r;
+        data[i + 1] = g;
+        data[i + 2] = b;
+        data[i + 3] = a;
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  };
 
   /* =========================
-     유저 슬롯 (방장 별 표시)
+     Render
   ========================= */
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const half = Math.ceil(maxPlayers / 2);
@@ -269,96 +380,51 @@ function GameScreen({ maxPlayers = 10 }) {
       <div className="avatar" />
       <span className="username">
         {u ? u.nickname : 'Empty'}
-        {/* ✅ LobbyScreen처럼 방장 별 표시 */}
         {u?.host && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
       </span>
     </div>
   );
 
-  /* =========================
-     뒤로가기: Join.js로 이동
-  ========================= */
-  const handleBackToJoin = () => {
-    publishLeave();
-    navigate('/join');
-  };
-
-  /* =========================
-     채팅창
-     =========================
-  */
-  const [chatMessage, setChatMessage] = useState("");
-
-  const handleSendMessage = () => {
-    if (!chatMessage.trim()) return;
-    if (!stompRef.current?.connected) return;
-
-    stompRef.current.publish({
-      destination: `/app/lobby/${lobbyId}/chat`,
-      body: JSON.stringify({
-        userId,
-        nickname,
-        content: chatMessage,
-      }),
-    });
-
-    setChatMessage("");
-  };
-
-
-  /* =========================
-     렌더링
-  ========================= */
   return (
     <div className="game-wrapper">
-
-      {/* 원형 커서 */}
-      <div
-        ref={cursorRef}
-        style={{
-          position: 'fixed',
-          pointerEvents: 'none',
-          zIndex: 9999,
-          transform: 'translate(-50%, -50%)',
-          width: cursorSize,
-          height: cursorSize,
-          borderRadius: '50%',
-          border: '1px solid #000',
-          backgroundColor: cursorColor,
-          display: hovering ? 'block' : 'none',
-        }}
-      />
-
-      <button className="back-btn" onClick={handleBackToJoin}>
-        <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="4" fill="none">
+      <button className="back-btn" onClick={() => navigate('/join')}>
+        <svg
+          viewBox="0 0 24 24"
+          width="32"
+          height="32"
+          stroke="currentColor"
+          strokeWidth="4"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <polyline points="15 18 9 12 15 6" />
         </svg>
       </button>
 
       <div className="game-area">
         <div className="game-grid">
-
-          <div className="user-column left">{slots.slice(0, half).map(renderUser)}</div>
+          <div className="user-column left">
+            {slots.slice(0, half).map(renderUser)}
+          </div>
 
           <div className="center-board-area">
-
-            <div className="drawingBoard" style={{ backgroundImage: "url('/img/board.png')" }}>
+            <div
+              className="drawingBoard"
+              style={{ backgroundImage: "url('/img/board.png')" }}
+            >
               <canvas
                 ref={canvasRef}
                 className="canvas"
                 width={746}
                 height={603}
-                style={{ cursor: 'none' }}
                 onMouseDown={startDraw}
                 onMouseMove={draw}
                 onMouseUp={endDraw}
-                onMouseEnter={() => setHovering(true)}
-                onMouseLeave={() => setHovering(false)}
               />
             </div>
 
             <div className="tool-box">
-
               {showModal && activeTool === 'pen' && (
                 <PenSettings
                   color={penColor}
@@ -368,7 +434,6 @@ function GameScreen({ maxPlayers = 10 }) {
                   onClose={() => setShowModal(false)}
                 />
               )}
-
               {showModal && activeTool === 'fill' && (
                 <FillSettings
                   color={fillColor}
@@ -376,7 +441,6 @@ function GameScreen({ maxPlayers = 10 }) {
                   onClose={() => setShowModal(false)}
                 />
               )}
-
               {showModal && activeTool === 'eraser' && (
                 <EraserSettings
                   width={eraserWidth}
@@ -385,53 +449,24 @@ function GameScreen({ maxPlayers = 10 }) {
                 />
               )}
 
-              <div
-                className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
-                onClick={() => handleToolClick('pen')}
-              >
+              <div className="tool-btn" onClick={() => handleToolClick('pen')}>
                 <PenIcon color={penColor} />
               </div>
-
-              <div
-                className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`}
-                onClick={() => handleToolClick('fill')}
-              >
+              <div className="tool-btn" onClick={() => handleToolClick('fill')}>
                 <img src="/svg/fill.svg" alt="fill" />
               </div>
-
-              <div
-                className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
-                onClick={() => handleToolClick('eraser')}
-              >
+              <div className="tool-btn" onClick={() => handleToolClick('eraser')}>
                 <img src="/svg/eraser.svg" alt="eraser" />
               </div>
-
-              {/* 전체 삭제 버튼 */}
-              <div className="tool-btn delete-btn" onClick={clearCanvas} title="전체 지우기">
+              <div className="tool-btn delete-btn" onClick={clearCanvas}>
                 🗑
               </div>
-
             </div>
           </div>
 
-          <div className="user-column right">{slots.slice(half).map(renderUser)}</div>
-
-        </div>
-      </div>
-      <div className="chat-area">
-        <div className="chat-input-wrapper">
-          <input
-            type="text"
-            placeholder="메시지를 입력하세요..."
-            value={chatMessage}
-            onChange={(e) => setChatMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSendMessage();
-            }}
-          />
-          <button className="send-btn" onClick={handleSendMessage}>
-            전송
-          </button>
+          <div className="user-column right">
+            {slots.slice(half).map(renderUser)}
+          </div>
         </div>
       </div>
     </div>
