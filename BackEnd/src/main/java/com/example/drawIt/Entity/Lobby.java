@@ -2,6 +2,7 @@ package com.example.drawIt.Entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -9,6 +10,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Lobby {
 
     @Id
@@ -24,6 +26,6 @@ public class Lobby {
     @Column(length = 100)
     private String password;
 
-    @Column(length = 50)
-    private String hostNickname; // 방장 닉네임
+    @Column(nullable = false, length = 50)
+    private String hostUserId;
 }

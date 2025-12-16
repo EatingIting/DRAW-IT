@@ -1,6 +1,12 @@
 package com.example.drawIt.Socket;
 
 import com.example.drawIt.DTO.UserResponseDTO;
+import com.example.drawIt.Entity.Lobby;
+import com.example.drawIt.Entity.User;
+import com.example.drawIt.Repository.LobbyRepository;
+import com.example.drawIt.Repository.UserRepository;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -9,53 +15,115 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
+@RequiredArgsConstructor
 public class LobbyUserStore {
 
-    // roomId -> (sessionId -> UserResponseDTO)
-    private final Map<String, Map<String, UserResponseDTO>> lobbyMap = new ConcurrentHashMap<>();
+    private final UserRepository userRepository;
+    private final LobbyRepository lobbyRepository;
 
-    /* 유저 입장 */
-    public synchronized void addUser(String roomId, String sessionId, String nickname) {
-        lobbyMap.putIfAbsent(roomId, new ConcurrentHashMap<>());
+    // roomId → userId → UserResponseDTO
+    private final Map<String, Map<String, UserResponseDTO>> store = new ConcurrentHashMap<>();
 
-        Map<String, UserResponseDTO> roomUsers = lobbyMap.get(roomId);
+    /* =========================
+       유저 입장 / 재접속
+    ========================= */
+    @Transactional
+    public synchronized void addUser(
+            String roomId,
+            String sessionId,
+            String userId,
+            String nickname
+    ) {
 
-        // 방장이 없으면 첫 입장자를 방장으로
-        boolean hasHost = roomUsers.values().stream().anyMatch(UserResponseDTO::isHost);
-        boolean isHost = !hasHost;
+        store.putIfAbsent(roomId, new ConcurrentHashMap<>());
+        Map<String, UserResponseDTO> users = store.get(roomId);
 
-        roomUsers.put(sessionId, new UserResponseDTO(nickname, isHost));
-    }
+        Lobby lobby = lobbyRepository.findById(roomId)
+                .orElseThrow(() -> new IllegalStateException("방 없음"));
 
-    /* 유저 퇴장 */
-    public synchronized void removeUser(String sessionId) {
-        String emptyRoomId = null;
+        boolean isHost = userId.equals(lobby.getHostUserId());
 
-        for (Map.Entry<String, Map<String, UserResponseDTO>> entry : lobbyMap.entrySet()) {
-            Map<String, UserResponseDTO> users = entry.getValue();
-
-            if (users.remove(sessionId) != null) {
-                // 방장이 나갔다면 새 방장 지정
-                users.values().stream().findFirst()
-                        .ifPresent(u -> u.setHost(true));
-            }
-
-            if (users.isEmpty()) {
-                emptyRoomId = entry.getKey();
-            }
+        // ✅ 이미 존재하는 userId면 "재접속"
+        UserResponseDTO dto = users.get(userId);
+        if (dto == null) {
+            dto = new UserResponseDTO(userId, nickname, isHost);
+            users.put(userId, dto);
+        } else {
+            dto.setNickname(nickname);
         }
 
-        // 방에 아무도 없으면 방 삭제
-        if (emptyRoomId != null) {
-            lobbyMap.remove(emptyRoomId);
+        // DB 업데이트
+        userRepository.findByRoomIdAndUserId(roomId, userId)
+                .ifPresentOrElse(
+                        u -> {
+                            u.setSessionId(sessionId);
+                            u.setNickname(nickname);
+                            u.setHost(isHost);
+                            userRepository.save(u);
+                        },
+                        () -> userRepository.save(
+                                User.builder()
+                                        .roomId(roomId)
+                                        .userId(userId)
+                                        .sessionId(sessionId)
+                                        .nickname(nickname)
+                                        .host(isHost)
+                                        .build()
+                        )
+                );
+    }
+
+    /* =========================
+       유저 연결 해제 (즉시 삭제 ❌)
+    ========================= */
+    public synchronized void removeSession(String sessionId) {
+        userRepository.findBySessionId(sessionId)
+                .ifPresent(u -> {
+                    // ❌ store/DB에서 제거하지 않음
+                    // → 재접속 가능
+                    u.setSessionId(null);
+                    userRepository.save(u);
+                });
+    }
+
+    /* =========================
+       진짜 방 나가기 (버튼)
+    ========================= */
+    @Transactional
+    public synchronized void leaveRoom(String roomId, String userId) {
+
+        Map<String, UserResponseDTO> users = store.get(roomId);
+        if (users == null) return;
+
+        UserResponseDTO removed = users.remove(userId);
+        userRepository.deleteByRoomIdAndUserId(roomId, userId);
+
+        if (removed != null && removed.isHost() && !users.isEmpty()) {
+            // 방장 위임
+            UserResponseDTO next = users.values().iterator().next();
+            next.setHost(true);
+
+            lobbyRepository.findById(roomId).ifPresent(lobby -> {
+                lobbyRepository.save(
+                        Lobby.builder()
+                                .id(lobby.getId())
+                                .name(lobby.getName())
+                                .mode(lobby.getMode())
+                                .password(lobby.getPassword())
+                                .hostUserId(next.getUserId())
+                                .build()
+                );
+            });
+        }
+
+        if (users.isEmpty()) {
+            store.remove(roomId);
+            lobbyRepository.deleteById(roomId);
+            userRepository.deleteByRoomId(roomId);
         }
     }
 
     public List<UserResponseDTO> getUsers(String roomId) {
-        return new ArrayList<>(lobbyMap.getOrDefault(roomId, Map.of()).values());
-    }
-
-    public boolean roomExists(String roomId) {
-        return lobbyMap.containsKey(roomId);
+        return new ArrayList<>(store.getOrDefault(roomId, Map.of()).values());
     }
 }

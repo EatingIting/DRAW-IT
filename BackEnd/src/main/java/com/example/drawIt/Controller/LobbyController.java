@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class LobbyController {
 
@@ -24,6 +24,7 @@ public class LobbyController {
                 dto.getName(),
                 dto.getMode(),
                 dto.getPassword(),
+                dto.getHostUserId(),
                 dto.getHostNickname()
                 );
         return ResponseEntity

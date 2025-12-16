@@ -44,21 +44,32 @@ function CreateRoomModal({ onClose }) {
 
     const lobbyId = nanoid(8);
 
+    const userId =
+      sessionStorage.getItem("userId") ||
+      (() => {
+        const id = nanoid(12);
+        sessionStorage.setItem("userId", id);
+        return id;
+      })();
+
     const payload = {
       id: lobbyId,
       name: lobbyName,
       mode,
       password: isPasswordOn ? password : null,
+      hostUserId: userId,
       hostNickname: hostNickname
     };
 
     try {
       await axios.post(
-        "http://localhost:8080/lobby",
+        "http://172.30.1.250:8080/lobby",
         payload
       );
       onClose();
-      navigate(`/lobby/${lobbyId}`);
+      navigate(`/lobby/${lobbyId}`, {
+        state: {nickname: hostNickname }
+      });
     } catch (error) {
       console.log(error);
       if(error.response?.status === 409) {

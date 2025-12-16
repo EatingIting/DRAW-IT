@@ -2,7 +2,6 @@ package com.example.drawIt.Socket;
 
 import com.example.drawIt.Repository.LobbyRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
@@ -16,9 +15,9 @@ public class WebSocketDisconnectListener {
 
     @EventListener
     public void handleDisconnect(SessionDisconnectEvent event) {
-        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
-        String sessionId = accessor.getSessionId();
+        String sessionId =
+                StompHeaderAccessor.wrap(event.getMessage()).getSessionId();
 
-        lobbyUserStore.removeUser(sessionId);
+        lobbyUserStore.removeSession(sessionId);
     }
 }

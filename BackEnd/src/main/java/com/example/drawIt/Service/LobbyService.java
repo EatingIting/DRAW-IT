@@ -14,14 +14,22 @@ public class LobbyService {
 
     private final LobbyRepository lobbyRepository;
 
-    public Lobby createLobby(String id, String name, String mode, String password, String hostNickname) {
+    public Lobby createLobby(String id, String name, String mode, String password, String hostUserId, String hostNickname) {
         if (lobbyRepository.existsByName(name)) {
             throw new GlobalExceptionHandler.RoomAlreadyExistsException(
                     "이미 같은 이름의 방이 존재합니다."
             );
         }
 
-        return lobbyRepository.save(new Lobby(id, name, mode, password, hostNickname));
+        return lobbyRepository.save(
+                Lobby.builder()
+                        .id(id)
+                        .name(name)
+                        .mode(mode)
+                        .password(password)
+                        .hostUserId(hostUserId)
+                        .build()
+        );
     }
 
     public Lobby getLobby(String lobbyId) {
