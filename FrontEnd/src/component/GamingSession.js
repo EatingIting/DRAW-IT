@@ -30,7 +30,7 @@ function GamingSession(){
   const [penColor, setPenColor] = useState('#000000ff');
   const [penWidth, setPenWidth] = useState(5);
 
-  const [fillColor, setFillColor] = useState('#ff000ff');
+  const [fillColor, setFillColor] = useState('#000000ff');
 
   const [eraserWidth, setEraserWidth] = useState(20);
   
