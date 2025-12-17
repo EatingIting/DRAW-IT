@@ -213,3 +213,23 @@
 .click-locked * {
   pointer-events: none; /* 클릭, 호버 등 마우스 이벤트 무시 */
 }
+
+/* =========================================
+   ✨ 인터랙션 효과 (호버 & 클릭)
+   ========================================= */
+
+/* 1. 기본 상태: 부드러운 전환을 위해 transition 설정 */
+.ranking-img, .list-avatar {
+  /* transform 관련 transition 제거 */
+  transition: filter 0.3s ease, border-color 0.6s ease; 
+  /* transform-origin은 남겨두셔도 됩니다 */
+  transform-origin: center center; 
+}
+
+/* 2. 마우스 올렸을 때 (Hover): 커지면서 살짝 기울기 */
+.ranking-img:hover, 
+.list-avatar:hover {
+  /* transform: scale(1.15) rotate(-5deg);  <-- 삭제 */
+  filter: drop-shadow(6px 6px 0 rgba(0,0,0,0.2)); 
+  z-index: 50; 
+}

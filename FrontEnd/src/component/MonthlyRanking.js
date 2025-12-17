@@ -114,6 +114,13 @@ const MonthlyRanking = () => {
                     alt={img.topic} 
                     className="ranking-img"
                     onClick={() => handleClick(img.id)}
+
+                    whileHover={{ scale: 1.15, rotate: -5 }} 
+                    whileTap={{ 
+                      scale: 1.15, 
+                      rotate: [0, -5, 5, -5, 0], // CSS @keyframes paperShake 효과를 배열로 구현
+                      transition: { duration: 0.4 }
+                    }}
                     style={{
                         cursor: 'pointer',
                         width: isFirst ? '240px' : '200px',
@@ -152,12 +159,19 @@ const MonthlyRanking = () => {
               exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} 
             >
                <motion.img 
-                 layoutId={img.id}
-                 src={img.url} 
-                 alt={img.topic} 
-                 className="list-avatar" 
-                 onClick={() => handleClick(img.id)} 
-                 style={{cursor: "pointer"}}
+                  layoutId={img.id}
+                  src={img.url} 
+                  alt={img.topic} 
+                  className="list-avatar" 
+                  onClick={() => handleClick(img.id)} 
+                  style={{cursor: "pointer"}}
+
+                  whileHover={{ scale: 1.15, rotate: -5 }}
+                  whileTap={{ 
+                    scale: 1.15, 
+                    rotate: [0, -5, 5, -5, 0],
+                    transition: { duration: 0.4 }
+                  }}
                />
                <div className="list-topic">{img.topic}</div>
                <div className="list-rec">{img.rec}</div>
