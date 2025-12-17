@@ -67,7 +67,7 @@ function Join() {
         <div className='join-wrapper'>
 
             {/* 상단 뒤로가기 */}
-            <button className='back-btn-top' onClick={() => navigate(-1)}>
+            <button className='back-btn-top' onClick={() => navigate("/")}>
                 &lt; 뒤로가기
             </button>
 

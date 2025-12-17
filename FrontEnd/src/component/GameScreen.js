@@ -68,6 +68,7 @@ function GameScreen({ maxPlayers = 10 }) {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
   const drawing = useRef(false);
+  const lastPointRef = useRef(null);
 
   /* =========================
      Tool State
@@ -88,6 +89,37 @@ function GameScreen({ maxPlayers = 10 }) {
       setShowModal(true);
     }
   };
+
+  /* =========================
+     Chat Bubble
+  ========================= */
+  const [chatBubbles, setChatBubbles] = useState({});
+  const userCardRefs = useRef({});
+  const [chatMessage, setChatMessage] = useState('');
+
+  const handleSendChat = () => {
+    if (!chatMessage.trim()) return;
+
+    stompRef.current?.publish({
+      destination: '/app/chat/bubble',
+      body: JSON.stringify({
+        lobbyId,
+        userId,
+        message: chatMessage,
+      }),
+    });
+
+    setChatMessage('');
+  };
+
+  /* ========================
+      History Buffer
+     ========================*/
+
+  const pendingHistoryRef = useRef([]);
+  const canvasReadyRef = useRef(false);
+
+  
 
   /* =========================
      WebSocket Connect
@@ -156,14 +188,40 @@ function GameScreen({ maxPlayers = 10 }) {
           applyRemoteDraw(evt);
         });
 
-        client.subscribe(`/user/queue/draw/history`, (msg) => {
+        client.subscribe('/user/queue/draw/history', msg => {
           const history = JSON.parse(msg.body);
-          history.forEach(applyRemoteDraw);
+
+          history.forEach(evt => {
+            applyRemoteDraw(evt, true);
+          });
+        });
+
+        client.publish({
+          destination: `/app/draw/${lobbyId}/history`,
         });
 
         client.publish({
           destination: `/app/lobby/${lobbyId}/join`,
           body: JSON.stringify({ userId, nickname }),
+        });
+        client.subscribe('/topic/chat/bubble', (msg) => {
+          const data = JSON.parse(msg.body);
+          if (data.type !== 'CHAT_BUBBLE') return;
+
+          const uid = data.userId;
+
+          setChatBubbles(prev => ({
+            ...prev,
+            [uid]: data.message,
+          }));
+
+          setTimeout(() => {
+            setChatBubbles(prev => {
+              const copy = { ...prev };
+              delete copy[uid];
+              return copy;
+            });
+          }, 3000);
         });
       },
     });
@@ -185,7 +243,14 @@ function GameScreen({ maxPlayers = 10 }) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctxRef.current = ctx;
-  }, []);
+
+    canvasReadyRef.current = true;
+
+     if (pendingHistoryRef.current.length > 0) {
+        pendingHistoryRef.current.forEach(applyRemoteDraw);
+        pendingHistoryRef.current = [];
+      }
+    }, []);
 
   useEffect(() => {
     if (!ctxRef.current) return;
@@ -210,8 +275,8 @@ function GameScreen({ maxPlayers = 10 }) {
     });
   };
 
-  const applyRemoteDraw = (evt) => {
-    if (String(evt.userId) === String(userId)) return;
+  const applyRemoteDraw = (evt, isHistory = false) => {
+    if (!isHistory && String(evt.userId) === String(userId)) return;
 
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
@@ -219,6 +284,7 @@ function GameScreen({ maxPlayers = 10 }) {
 
     if (evt.type === 'CLEAR') {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      lastPointRef.current = null;
       return;
     }
 
@@ -227,26 +293,34 @@ function GameScreen({ maxPlayers = 10 }) {
       return;
     }
 
-    if (evt.tool === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out';
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = evt.color;
-    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = evt.color;
     ctx.lineWidth = evt.width;
 
     if (evt.type === 'START') {
       ctx.beginPath();
       ctx.moveTo(evt.x, evt.y);
+      lastPointRef.current = { x: evt.x, y: evt.y };
+      return;
     }
 
     if (evt.type === 'MOVE') {
-      ctx.lineTo(evt.x, evt.y);
-      ctx.stroke();
+      // 🔥 START 누락 방어
+      if (!lastPointRef.current) {
+        ctx.beginPath();
+        ctx.moveTo(evt.x, evt.y);
+      } else {
+        ctx.lineTo(evt.x, evt.y);
+        ctx.stroke();
+      }
+
+      lastPointRef.current = { x: evt.x, y: evt.y };
+      return;
     }
 
     if (evt.type === 'END') {
       ctx.closePath();
+      lastPointRef.current = null;
     }
   };
 
@@ -376,7 +450,12 @@ function GameScreen({ maxPlayers = 10 }) {
   const half = Math.ceil(maxPlayers / 2);
 
   const renderUser = (u, i) => (
-    <div key={i} className={`user-card ${!u ? 'empty' : ''}`}>
+    <div
+      key={i}
+      className={`user-card ${!u ? 'empty' : ''}`}
+      ref={(el) => {
+        if (u && el) userCardRefs.current[u.userId] = el;
+      }}>
       <div className="avatar" />
       <span className="username">
         {u ? u.nickname : 'Empty'}
@@ -468,6 +547,48 @@ function GameScreen({ maxPlayers = 10 }) {
             {slots.slice(half).map(renderUser)}
           </div>
         </div>
+      </div>
+
+      {/* =========================
+          FLOAT CHAT BUBBLES (추가된 부분)
+      ========================= */}
+      {Object.entries(chatBubbles).map(([uid, msg]) => {
+        const el = userCardRefs.current[uid];
+        if (!el) return null;
+
+        const rect = el.getBoundingClientRect();
+
+        return (
+          <div
+            key={uid}
+            className="chat-bubble-float"
+            style={{
+              position: 'fixed',
+              top: rect.top + rect.height / 2,
+              left: rect.right + 12,
+              transform: 'translateY(-50%)',
+              zIndex: 9999,
+              maxWidth: '220px',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              pointerEvents: 'none',
+            }}
+          >
+            {msg}
+          </div>
+        );
+      })}
+      <div className="chat-area">
+        <input
+          type="text"
+          placeholder="메시지를 입력하세요..."
+          value={chatMessage}
+          onChange={(e) => setChatMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSendChat();
+          }}
+        />
+        <button onClick={handleSendChat}>전송</button>
       </div>
     </div>
   );

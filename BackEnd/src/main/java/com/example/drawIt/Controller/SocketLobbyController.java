@@ -1,6 +1,7 @@
 package com.example.drawIt.Controller;
 
 import com.example.drawIt.DTO.SocketJoinDTO;
+import com.example.drawIt.Domain.DrawEvent;
 import com.example.drawIt.Domain.GameState;
 import com.example.drawIt.Domain.GameStateManager;
 import com.example.drawIt.Entity.Lobby;
@@ -14,7 +15,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Controller
 @RequiredArgsConstructor
@@ -34,9 +36,15 @@ public class SocketLobbyController {
             @Payload SocketJoinDTO dto,
             StompHeaderAccessor accessor
     ) {
+
+        String sessionId = Objects.requireNonNull(
+                accessor.getSessionId(),
+                "STOMP sessionId is null"
+        );
+
         lobbyUserStore.addUser(
                 roomId,
-                accessor.getSessionId(),
+                sessionId,
                 dto.getUserId(),
                 dto.getNickname()
         );
@@ -48,23 +56,39 @@ public class SocketLobbyController {
         boolean gameStarted = (state != null);
         String drawerUserId = (state != null) ? state.getDrawerUserId() : null;
 
-        Map<String, Object> payload = new java.util.HashMap<>();
+        Map<String, Object> payload = new HashMap<>();
         payload.put("type", "USER_UPDATE");
         payload.put("users", lobbyUserStore.getUsers(roomId));
-        payload.put("hostUserId", hostUserId);      // null 가능
-        payload.put("gameStarted", gameStarted);    // false 가능
-        payload.put("drawerUserId", drawerUserId);  // null 가능
+        payload.put("hostUserId", hostUserId);
+        payload.put("gameStarted", gameStarted);
+        payload.put("drawerUserId", drawerUserId);
 
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId,
                 payload
         );
 
+        // ✅ 중간 입장 히스토리 전송 (완전한 정답)
         if (state != null && !state.getDrawEvents().isEmpty()) {
+
+            List<Map<String, Object>> historyPayload = new ArrayList<>();
+
+            for (DrawEvent evt : state.getDrawEvents()) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("type", evt.getType());
+                map.put("x", evt.getX());
+                map.put("y", evt.getY());
+                map.put("color", evt.getColor());
+                map.put("width", evt.getLineWidth());
+                map.put("userId", evt.getUserId());
+
+                historyPayload.add(map);
+            }
+
             messagingTemplate.convertAndSendToUser(
-                    accessor.getSessionId(),
+                    sessionId,
                     "/queue/draw/history",
-                    state.getDrawEvents()
+                    historyPayload
             );
         }
     }
@@ -137,32 +161,54 @@ public class SocketLobbyController {
     /* =========================
        그림 그리기
     ========================= */
+    /* =========================
+   그림 그리기 (단일 메서드)
+========================= */
     @MessageMapping("/draw/{roomId}")
-    public void draw(
+    public void handleDraw(
             @DestinationVariable String roomId,
-            @Payload Map<String, Object> payload
+            @Payload DrawEvent evt
     ) {
         GameState state = gameStateManager.getGame(roomId);
         if (state == null) return;
 
-        Object userIdObj = payload.get("userId");
-        if (userIdObj == null) return;
+        // drawer 검증
+        if (!evt.getUserId().equals(state.getDrawerUserId())) return;
 
-        String userId = userIdObj.toString();
-        if (!userId.equals(state.getDrawerUserId())) return;
+        // CLEAR 처리
+        if ("CLEAR".equals(evt.getType())) {
+            state.getDrawEvents().clear();
 
-        // 🔹 히스토리 제한
+            messagingTemplate.convertAndSend(
+                    "/topic/lobby/" + roomId + "/draw",
+                    Map.of("type", "CLEAR")
+            );
+            return;
+        }
+
+        // 히스토리 제한
         if (state.getDrawEvents().size() > 10_000) {
             state.getDrawEvents().clear();
         }
 
-        state.getDrawEvents().add(payload);
+        // 히스토리 저장 (DrawEvent)
+        state.getDrawEvents().add(evt);
+
+        // ✅ 프론트 호환 Map으로 변환해서 브로드캐스트
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", evt.getType());
+        payload.put("x", evt.getX());
+        payload.put("y", evt.getY());
+        payload.put("color", evt.getColor());
+        payload.put("width", evt.getLineWidth()); // 🔥 핵심
+        payload.put("userId", evt.getUserId());
 
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId + "/draw",
                 payload
         );
     }
+
 
     /* =========================
        전체 지우기
@@ -185,6 +231,34 @@ public class SocketLobbyController {
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId + "/draw",
                 Map.of("type", "CLEAR")
+        );
+    }
+
+    @MessageMapping("/draw/{roomId}/history")
+    public void sendHistory(
+            @DestinationVariable String roomId,
+            StompHeaderAccessor accessor) {
+        GameState state = gameStateManager.getGame(roomId);
+        if (state == null || state.getDrawEvents().isEmpty()) return;
+
+        String sessionId = Objects.requireNonNull(accessor.getSessionId());
+
+        List<Map<String, Object>> historyPayload = new ArrayList<>();
+        for (DrawEvent evt : state.getDrawEvents()) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("type", evt.getType());
+            map.put("x", evt.getX());
+            map.put("y", evt.getY());
+            map.put("color", evt.getColor());
+            map.put("width", evt.getLineWidth());
+            map.put("userId", evt.getUserId());
+            historyPayload.add(map);
+        }
+
+        messagingTemplate.convertAndSendToUser(
+                sessionId,
+                "/queue/draw/history",
+                historyPayload
         );
     }
 }

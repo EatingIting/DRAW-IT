@@ -10,11 +10,10 @@ import java.util.concurrent.ThreadLocalRandom;
 @Component
 public class GameStateManager {
 
-    // roomId -> GameState
     private final Map<String, GameState> games = new ConcurrentHashMap<>();
 
     public GameState createGame(String roomId, String drawerUserId) {
-        GameState state = new GameState(roomId, drawerUserId);
+        GameState state = new GameState(drawerUserId);
         games.put(roomId, state);
         return state;
     }

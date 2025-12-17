@@ -299,3 +299,40 @@
   transform: translateY(4px);
   box-shadow: none;
 }
+
+/* 말풍선 */
+
+.chat-bubble-float {
+  background: white;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+
+  /* ✅ 핵심 */
+  max-width: 200px;          /* 말풍선 최대 너비 */
+  white-space: normal;       /* 자동 줄바꿈 */
+  word-break: break-word;    /* 긴 단어 강제 개행 */
+  line-height: 1.4;
+
+  pointer-events: none;
+  position: fixed;
+}
+
+.chat-bubble-float::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: transparent white transparent transparent;
+}
+
+@keyframes bubbleFloat {
+  0% { opacity: 0; transform: translateY(6px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}

@@ -13,12 +13,11 @@ import java.util.Map;
 @Setter
 public class GameState {
 
-    private String roomId;
+//    private String roomId;
     private String drawerUserId;
-    private final List<Map<String, Object>> drawEvents = new ArrayList<>();
+    private List<DrawEvent> drawEvents = new ArrayList<>();
 
-    public GameState(String roomId, String drawerUserId) {
-        this.roomId = roomId;
+    public GameState(String drawerUserId) {
         this.drawerUserId = drawerUserId;
     }
 }
