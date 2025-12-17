@@ -146,10 +146,12 @@
     font-size: 1.2rem;
     font-weight: 800;
     color: #333;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis; /* 긴 제목 ... 처리 */
-    white-space: nowrap;
-    max-width: 70%;
+    flex: 1;
+    min-width: 0;
+    margin-right: 5px;
 }
 
 .room-status {
@@ -216,4 +218,12 @@
     cursor: not-allowed;         /* 금지 커서 */
     color: #636e72;
     transform: none;
+}
+
+/* 자물쇠 아이콘 스타일 */
+.lock-icon {
+    font-size: 1.1rem;
+    margin-left: 8px;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+    cursor: help;
 }

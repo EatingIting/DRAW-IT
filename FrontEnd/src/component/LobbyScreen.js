@@ -12,6 +12,7 @@ function LobbyScreen() {
   const navigate = useNavigate();
   const { lobbyId: roomId } = useParams();
   const location = useLocation();
+  const myPassword = location.state?.password || null;
 
   // 1. 유저 ID 관리 (세션 스토리지에 확실히 저장)
   const userIdRef = useRef(
@@ -46,6 +47,16 @@ function LobbyScreen() {
       // 백엔드 응답 구조에 따라 유연하게 처리
       const data = res.data?.lobby ?? res.data; 
       setRoomInfo(data);
+
+      if (data.users) {
+         setPlayers(data.users);
+         
+         // 내가 방장인지 체크
+         const amIHost = data.users.some(
+             (u) => u.userId === userIdRef.current && u.host === true
+         );
+         setIsHost(amIHost);
+      }
     } catch (err) {
       console.error("방 정보 로드 실패:", err);
       alert("존재하지 않는 방이거나 연결할 수 없습니다.");
@@ -154,6 +165,7 @@ function LobbyScreen() {
             roomId,
             userId: userIdRef.current,
             nickname: myNickname,
+            password: myPassword
           }),
         });
       },

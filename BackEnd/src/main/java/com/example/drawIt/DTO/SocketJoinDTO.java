@@ -11,4 +11,5 @@ public class SocketJoinDTO {
     private String roomId;
     private String userId;
     private String nickname;
+    private String password;
 }
