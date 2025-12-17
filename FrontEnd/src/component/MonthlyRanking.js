@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const MonthlyRanking = () => {
   const [imgs, setImgs] = useState([]);
+  const [isLocked, setIsLocked] = useState(false); // 애니메이션 중 클릭 방지 상태
   
   const top3Data = imgs.slice(0, 3).filter(item => item);
   const restImgs = imgs.length > 3 ? imgs.slice(3) : [];
@@ -30,21 +31,47 @@ const MonthlyRanking = () => {
   }, []);
 
   const handleClick = async (id) => {
+    // 1. 이미 락이 걸려있다면(순위 변동 애니메이션 중) 클릭 무시
+    if (isLocked) return;
+
     try{
-      // await axios.post(`http://localhost:8080/monRnk/increaseRec/${id}`);
-      setImgs((prev) => {
-        const newImgs = prev.map((img) =>
-          img.id === id ? { ...img, rec: img.rec + 1} : img
-        );
-        return [...newImgs].sort((a, b) => b.rec - a.rec);
-      });
-    }catch(error){
+      // ✨ [수정 핵심] 무조건 락을 거는 것이 아니라, 미리 계산 후 판단
+      
+      // A. 현재 상태 복사 및 점수 증가 시뮬레이션
+      const nextImgs = imgs.map((img) =>
+        img.id === id ? { ...img, rec: img.rec + 1} : img
+      );
+
+      // B. 점수 순으로 정렬 시뮬레이션
+      const sortedNextImgs = [...nextImgs].sort((a, b) => b.rec - a.rec);
+
+      // C. 순위 변동 여부 확인
+      // 현재 순서(ID 배열)와 바뀔 순서(ID 배열)를 비교
+      const currentOrder = imgs.map(img => img.id).join(',');
+      const nextOrder = sortedNextImgs.map(img => img.id).join(',');
+      const isRankChanged = currentOrder !== nextOrder;
+
+      // D. 순위가 바뀔 때만 락을 걸고 타임아웃 설정
+      if (isRankChanged) {
+        setIsLocked(true);
+        setTimeout(() => {
+          setIsLocked(false);
+        }, 1000); // 애니메이션 시간(약 1초) 동안 클릭 방지
+      }
+      // 서버 업데이트
+      await axios.post(`http://localhost:8080/monRnk/increaseRec/${id}`);
+
+      // E. 상태 업데이트 (순위가 안 바뀌면 즉시 반영, 바뀌면 락 걸린 상태로 반영)
+      setImgs(sortedNextImgs);
+
+    } catch(error){
       console.log("추천 업데이트 실패: ", error);
     }
   }
 
   return (
-    <div className="ranking-container">
+    // 락이 걸렸을 때만 'click-locked' 클래스 추가 (CSS에서 pointer-events: none 처리)
+    <div className={`ranking-container ${isLocked ? 'click-locked' : ''}`}>
       <AnimatePresence>
       <motion.div className="podium-section" layout>
         {top3Data.map((img, index) => {
@@ -53,8 +80,6 @@ const MonthlyRanking = () => {
           let rankClass = '';
           let rankNum = index + 1;
 
-          // ✨ 1등과 나머지의 크기(너비)를 변수로 설정
-          // 1등은 좀 더 넓게(320px), 나머지는 기본(280px)
           const isFirst = index === 0;
           const itemWidth = isFirst ? 320 : 280;
 
@@ -68,28 +93,21 @@ const MonthlyRanking = () => {
           return (
             <motion.div 
               key={img.id}
-              layout // layout 속성 유지 (위치 이동 애니메이션용)
+              layout 
               className={`podium-item ${positionClass} ${rankClass}`}
-              
-              // ✨ [핵심 수정 1] scale 애니메이션 제거하고 실제 스타일(width) 변경
-              // marginLeft를 width의 절반으로 설정하여 항상 정확한 중앙 정렬 유지
               style={{ 
                 width: `${itemWidth}px`, 
                 marginLeft: `-${itemWidth / 2}px`,
-                zIndex: isFirst ? 10 : 5 // 1등이 앞으로 오게
+                zIndex: isFirst ? 10 : 5 
               }}
-              
-              // ✨ [핵심 수정 2] animate에서 scale 제거 (이제 width가 변하므로 필요 없음)
               initial={{ opacity: 0, y: 50 }} 
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
-              
               transition={{ 
                 type: "spring", stiffness: 300, damping: 25 
               }}
             >
               <div className="img-wrapper">
-                  {/* ✨ 중요 수정 2: 이미지가 날아오도록 여기에 layoutId 추가 */}
                   <motion.img 
                     layoutId={img.id} 
                     src={img.url} 
@@ -98,7 +116,6 @@ const MonthlyRanking = () => {
                     onClick={() => handleClick(img.id)}
                     style={{
                         cursor: 'pointer',
-                        // ✨ [핵심 수정 3] 이미지 크기도 1등일 때 실제 px로 키움
                         width: isFirst ? '240px' : '200px',
                         height: isFirst ? '240px' : '200px'
                     }}
@@ -109,7 +126,7 @@ const MonthlyRanking = () => {
               <motion.div 
                 className="pillar" 
                 style={{ height: `${calculatedHeight}px` }}
-                layout // 기둥 높이 변화 애니메이션
+                layout 
               >
                 <div className="snow-cap"><div className="img-topic">{img.topic}</div></div> 
                 <div className="ribbon"></div>
@@ -128,14 +145,12 @@ const MonthlyRanking = () => {
           {restImgs.map((img) => (
             <motion.div 
               key={img.id} 
-              /* 🚨 중요 수정 3: 여기서도 layoutId 삭제 */
               layout
               className="grid-item"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} 
             >
-               {/* ✨ 중요 수정 4: 리스트의 이미지에도 layoutId 추가 */}
                <motion.img 
                  layoutId={img.id}
                  src={img.url} 
