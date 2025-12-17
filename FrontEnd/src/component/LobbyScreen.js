@@ -44,6 +44,8 @@ function LobbyScreen() {
   const maxPlayers = 10;
   const clientRef = useRef(null);
 
+  const bubbleTimeoutRef = useRef({});
+
   // 방 정보 REST 로드
   const fetchRoomInfo = async () => {
     const res = await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
@@ -110,18 +112,25 @@ function LobbyScreen() {
           const data = JSON.parse(message.body);
           if (data.type !== "CHAT_BUBBLE") return;
 
+          const uid = data.userId;
+
           setChatBubbles((prev) => ({
             ...prev,
-            [data.userId]: data.message,
+            [uid]: data.message,
           }));
 
-          setTimeout(() => {
+          const timeoutId = setTimeout(() => {
             setChatBubbles((prev) => {
               const copy = { ...prev };
-              delete copy[data.userId];
+              delete copy[uid];
               return copy;
             });
+            // 타이머 완료 후 Ref에서도 제거 (메모리 관리)
+            delete bubbleTimeoutRef.current[uid]; 
           }, 3000);
+
+          // 저장해둬야 다음 메시지 올 때 취소 가능
+          bubbleTimeoutRef.current[uid] = timeoutId;
         });
 
         localStorage.setItem("userId", userIdRef.current);

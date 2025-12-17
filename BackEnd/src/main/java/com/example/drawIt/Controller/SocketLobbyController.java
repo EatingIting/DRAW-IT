@@ -79,15 +79,16 @@ public class SocketLobbyController {
                 map.put("x", evt.getX());
                 map.put("y", evt.getY());
                 map.put("color", evt.getColor());
-                map.put("width", evt.getLineWidth());
+                map.put("width", evt.getLineWidth()); // 지난번 답변의 굵기 이슈도 여기서 챙김
                 map.put("userId", evt.getUserId());
+                map.put("tool", evt.getTool()); // tool 정보도 포함하면 좋음
 
                 historyPayload.add(map);
             }
 
-            messagingTemplate.convertAndSendToUser(
-                    sessionId,
-                    "/queue/draw/history",
+            // 변경된 전송 방식: 유저 ID 기반의 고유 토픽 사용
+            messagingTemplate.convertAndSend(
+                    "/topic/history/" + dto.getUserId(),
                     historyPayload
             );
         }
@@ -200,7 +201,8 @@ public class SocketLobbyController {
         payload.put("x", evt.getX());
         payload.put("y", evt.getY());
         payload.put("color", evt.getColor());
-        payload.put("width", evt.getLineWidth()); // 🔥 핵심
+        payload.put("width", evt.getLineWidth());
+        payload.put("tool", evt.getTool());
         payload.put("userId", evt.getUserId());
 
         messagingTemplate.convertAndSend(

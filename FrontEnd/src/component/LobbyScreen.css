@@ -382,30 +382,62 @@
 .chat-bubble-float {
   background: white;
   padding: 10px 14px;
-  border-radius: 16px;
-  font-size: 14px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  border-radius: 12px;
+  
+  /* ✅ 게임 테마에 맞춘 테두리와 그림자 추가 */
+  border: 3px solid #2c2c2c;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2); 
 
-  max-width: 200px;          /* 말풍선 최대 너비 */
-  white-space: normal;       /* 자동 줄바꿈 */
-  word-break: break-word;    /* 긴 단어 강제 개행 */
+  font-size: 14px;
+  font-weight: 700; /* 폰트 굵게 */
+  color: #333;
+
+  max-width: 200px;
+  white-space: normal;
+  word-break: break-word;
   line-height: 1.4;
 
   pointer-events: none;
   position: fixed;
+  z-index: 9999;
 }
 
+/* ✅ 꺾인 꼬리 만들기 (테두리 부분) */
+.chat-bubble-float::before {
+  content: "";
+  position: absolute;
+  left: -10px; /* 위치 조정 */
+  top: 50%;
+  
+  width: 14px;
+  height: 14px;
+  background: #2c2c2c; /* 테두리 색상 */
+  
+  /* 회전(rotate)과 비틀기(skew)로 꺾인 모양 생성 */
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
+  
+  /* 꼬리 끝을 살짝 둥글게 */
+  border-bottom-left-radius: 4px;
+  z-index: -2; /* 말풍선 뒤로 */
+}
+
+/* ✅ 꺾인 꼬리 만들기 (흰색 채움 부분) */
 .chat-bubble-float::after {
   content: "";
   position: absolute;
-  left: -6px;
+  left: -6px; /* 테두리보다 살짝 안쪽으로 */
   top: 50%;
-  transform: translateY(-50%);
-  border-width: 6px;
-  border-style: solid;
-  border-color: transparent white transparent transparent;
+  
+  width: 14px;
+  height: 14px;
+  background: white; /* 말풍선 배경색 */
+  
+  /* before와 동일한 각도로 변형하여 덮어씌움 */
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
+  z-index: -1;
 }
 
+/* 등장 애니메이션 */
 @keyframes bubbleFloat {
   0% { opacity: 0; transform: translateY(6px); }
   10% { opacity: 1; transform: translateY(0); }

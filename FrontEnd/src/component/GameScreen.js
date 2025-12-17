@@ -35,7 +35,7 @@ function GameScreen({ maxPlayers = 10 }) {
   const { lobbyId } = useParams();
 
   /* =========================
-     WebSocket / User
+      WebSocket / User
   ========================= */
   const stompRef = useRef(null);
   const leftingRef = useRef(false);
@@ -49,7 +49,7 @@ function GameScreen({ maxPlayers = 10 }) {
   const alertedRef = useRef(false);
 
   /* =========================
-     Leave
+      Leave
   ========================= */
   const publishLeave = useCallback(() => {
     const client = stompRef.current;
@@ -63,15 +63,18 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [lobbyId, userId]);
 
   /* =========================
-     Canvas
+      Canvas Refs & Scales
   ========================= */
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
   const drawing = useRef(false);
   const lastPointRef = useRef(null);
 
+  // ✅ [수정] 화면 비율 저장용 (렉 방지)
+  const scaleRef = useRef({ x: 1, y: 1 });
+
   /* =========================
-     Tool State
+      Tool State
   ========================= */
   const [activeTool, setActiveTool] = useState('pen');
   const [showModal, setShowModal] = useState(false);
@@ -91,11 +94,12 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   /* =========================
-     Chat Bubble
+      Chat Bubble
   ========================= */
   const [chatBubbles, setChatBubbles] = useState({});
   const userCardRefs = useRef({});
   const [chatMessage, setChatMessage] = useState('');
+  const bubbleTimeoutRef = useRef({});
 
   const handleSendChat = () => {
     if (!chatMessage.trim()) return;
@@ -114,15 +118,12 @@ function GameScreen({ maxPlayers = 10 }) {
 
   /* ========================
       History Buffer
-     ========================*/
-
+  ========================*/
   const pendingHistoryRef = useRef([]);
   const canvasReadyRef = useRef(false);
 
-  
-
   /* =========================
-     WebSocket Connect
+      WebSocket Connect
   ========================= */
   useEffect(() => {
     if (!userId || !nickname) {
@@ -153,9 +154,7 @@ function GameScreen({ maxPlayers = 10 }) {
 
           if (data.type === 'USER_UPDATE') {
             const hostId = data.hostUserId;
-
-            // ✅ 여기서 mappedUsers를 직접 생성
-            const mappedUsers = (data.users || []).map(u => ({
+            const mappedUsers = (data.users || []).map((u) => ({
               ...u,
               host: String(u.userId) === String(hostId),
             }));
@@ -188,12 +187,17 @@ function GameScreen({ maxPlayers = 10 }) {
           applyRemoteDraw(evt);
         });
 
-        client.subscribe('/user/queue/draw/history', msg => {
+        // ✅ [수정] 히스토리 구독 (내 ID 전용 토픽 + 캔버스 준비 체크)
+        client.subscribe(`/topic/history/${userId}`, (msg) => {
           const history = JSON.parse(msg.body);
 
-          history.forEach(evt => {
-            applyRemoteDraw(evt, true);
-          });
+          if (canvasReadyRef.current) {
+            history.forEach((evt) => {
+              applyRemoteDraw(evt, true);
+            });
+          } else {
+            pendingHistoryRef.current = history;
+          }
         });
 
         client.publish({
@@ -204,24 +208,30 @@ function GameScreen({ maxPlayers = 10 }) {
           destination: `/app/lobby/${lobbyId}/join`,
           body: JSON.stringify({ userId, nickname }),
         });
+
         client.subscribe('/topic/chat/bubble', (msg) => {
           const data = JSON.parse(msg.body);
           if (data.type !== 'CHAT_BUBBLE') return;
 
           const uid = data.userId;
 
-          setChatBubbles(prev => ({
+          setChatBubbles((prev) => ({
             ...prev,
             [uid]: data.message,
           }));
 
-          setTimeout(() => {
-            setChatBubbles(prev => {
+          const timeoutId = setTimeout(() => {
+            setChatBubbles((prev) => {
               const copy = { ...prev };
               delete copy[uid];
               return copy;
             });
+            // 타이머 완료 후 Ref에서도 제거 (메모리 관리)
+            delete bubbleTimeoutRef.current[uid]; 
           }, 3000);
+
+          // 저장해둬야 다음 메시지 올 때 취소 가능
+          bubbleTimeoutRef.current[uid] = timeoutId;
         });
       },
     });
@@ -236,21 +246,27 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [lobbyId, navigate, publishLeave, userId, nickname]);
 
   /* =========================
-     Canvas Init
+      Canvas Init
   ========================= */
   useEffect(() => {
-    const ctx = canvasRef.current.getContext('2d');
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
     ctxRef.current = ctx;
 
+    // ✅ [수정] 캔버스 준비 완료 처리 및 대기 중인 히스토리 그리기
     canvasReadyRef.current = true;
 
-     if (pendingHistoryRef.current.length > 0) {
-        pendingHistoryRef.current.forEach(applyRemoteDraw);
-        pendingHistoryRef.current = [];
-      }
-    }, []);
+    if (pendingHistoryRef.current.length > 0) {
+      pendingHistoryRef.current.forEach((evt) => {
+        applyRemoteDraw(evt, true);
+      });
+      pendingHistoryRef.current = [];
+    }
+  }, []);
 
   useEffect(() => {
     if (!ctxRef.current) return;
@@ -266,7 +282,7 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [activeTool, penColor, penWidth, eraserWidth]);
 
   /* =========================
-     Draw Sync
+      Draw Sync
   ========================= */
   const publishDraw = (evt) => {
     stompRef.current?.publish({
@@ -276,6 +292,7 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   const applyRemoteDraw = (evt, isHistory = false) => {
+    // ✅ [수정] 히스토리는 내가 그렸던 것도 다시 그려야 함
     if (!isHistory && String(evt.userId) === String(userId)) return;
 
     const ctx = ctxRef.current;
@@ -293,9 +310,17 @@ function GameScreen({ maxPlayers = 10 }) {
       return;
     }
 
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = evt.color;
-    ctx.lineWidth = evt.width;
+    // 도구 설정 복원
+    if (evt.tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = evt.color;
+    }
+    // ✅ [확인] 백엔드에서 width로 줬다면 width, lineWidth라면 lineWidth (보통 통일하는게 좋음)
+    // 여기서는 백엔드가 주는 값 그대로 사용 (수신부는 유연하게)
+    ctx.lineWidth = evt.lineWidth || evt.width || 5;
 
     if (evt.type === 'START') {
       ctx.beginPath();
@@ -305,7 +330,7 @@ function GameScreen({ maxPlayers = 10 }) {
     }
 
     if (evt.type === 'MOVE') {
-      // 🔥 START 누락 방어
+      // START 유실 대비
       if (!lastPointRef.current) {
         ctx.beginPath();
         ctx.moveTo(evt.x, evt.y);
@@ -313,7 +338,6 @@ function GameScreen({ maxPlayers = 10 }) {
         ctx.lineTo(evt.x, evt.y);
         ctx.stroke();
       }
-
       lastPointRef.current = { x: evt.x, y: evt.y };
       return;
     }
@@ -325,13 +349,28 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   /* =========================
-     Local Draw
+      Local Draw (Optimized)
   ========================= */
+  
+  // ✅ [수정] 비율 계산 함수 (그리기 시작할 때 한 번만 호출)
+  const calculateScale = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    scaleRef.current = {
+      x: canvas.width / rect.width,
+      y: canvas.height / rect.height,
+    };
+  };
+
   const startDraw = (e) => {
     if (!isDrawer) return;
 
-    const x = e.nativeEvent.offsetX;
-    const y = e.nativeEvent.offsetY;
+    // ✅ 클릭 시점 비율 계산 (최적화)
+    calculateScale();
+
+    const x = e.nativeEvent.offsetX * scaleRef.current.x;
+    const y = e.nativeEvent.offsetY * scaleRef.current.y;
 
     if (activeTool === 'fill') {
       floodFill(x, y, fillColor);
@@ -354,15 +393,17 @@ function GameScreen({ maxPlayers = 10 }) {
       y,
       tool: activeTool,
       color: penColor,
-      width: activeTool === 'eraser' ? eraserWidth : penWidth,
+      // ✅ [수정] 변수명 width -> lineWidth 로 통일 (백엔드 호환)
+      lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth,
     });
   };
 
   const draw = (e) => {
     if (!isDrawer || !drawing.current) return;
 
-    const x = e.nativeEvent.offsetX;
-    const y = e.nativeEvent.offsetY;
+    // ✅ 저장된 비율 사용 (연산 최소화)
+    const x = e.nativeEvent.offsetX * scaleRef.current.x;
+    const y = e.nativeEvent.offsetY * scaleRef.current.y;
 
     ctxRef.current.lineTo(x, y);
     ctxRef.current.stroke();
@@ -373,7 +414,8 @@ function GameScreen({ maxPlayers = 10 }) {
       y,
       tool: activeTool,
       color: penColor,
-      width: activeTool === 'eraser' ? eraserWidth : penWidth,
+      // ✅ [수정] 변수명 width -> lineWidth 로 통일
+      lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth,
     });
   };
 
@@ -387,14 +429,12 @@ function GameScreen({ maxPlayers = 10 }) {
   const clearCanvas = () => {
     if (!isDrawer) return;
 
-    // 로컬 캔버스 즉시 삭제
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
     if (ctx && canvas) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    // 서버로 CLEAR 이벤트 전송
     stompRef.current?.publish({
       destination: `/app/draw/${lobbyId}/clear`,
       body: JSON.stringify({ userId }),
@@ -402,7 +442,7 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   /* =========================
-     Flood Fill
+      Flood Fill
   ========================= */
   const floodFill = (x, y, color) => {
     const ctx = ctxRef.current;
@@ -411,7 +451,7 @@ function GameScreen({ maxPlayers = 10 }) {
     const data = img.data;
     const [r, g, b, a] = hexToRgba(color);
 
-    const idx = (y * canvas.width + x) * 4;
+    const idx = (Math.floor(y) * canvas.width + Math.floor(x)) * 4;
     const target = data.slice(idx, idx + 4);
     if (
       target[0] === r &&
@@ -421,7 +461,7 @@ function GameScreen({ maxPlayers = 10 }) {
     )
       return;
 
-    const stack = [[x, y]];
+    const stack = [[Math.floor(x), Math.floor(y)]];
     while (stack.length) {
       const [cx, cy] = stack.pop();
       if (cx < 0 || cy < 0 || cx >= canvas.width || cy >= canvas.height)
@@ -444,7 +484,7 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   /* =========================
-     Render
+      Render
   ========================= */
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const half = Math.ceil(maxPlayers / 2);
@@ -455,7 +495,8 @@ function GameScreen({ maxPlayers = 10 }) {
       className={`user-card ${!u ? 'empty' : ''}`}
       ref={(el) => {
         if (u && el) userCardRefs.current[u.userId] = el;
-      }}>
+      }}
+    >
       <div className="avatar" />
       <span className="username">
         {u ? u.nickname : 'Empty'}
@@ -528,13 +569,19 @@ function GameScreen({ maxPlayers = 10 }) {
                 />
               )}
 
-              <div className="tool-btn" onClick={() => handleToolClick('pen')}>
+              <div 
+                className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`} 
+                onClick={() => handleToolClick('pen')}>
                 <PenIcon color={penColor} />
               </div>
-              <div className="tool-btn" onClick={() => handleToolClick('fill')}>
+              <div 
+                className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`} 
+                onClick={() => handleToolClick('fill')}>
                 <img src="/svg/fill.svg" alt="fill" />
               </div>
-              <div className="tool-btn" onClick={() => handleToolClick('eraser')}>
+              <div 
+                className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} 
+                onClick={() => handleToolClick('eraser')}>
                 <img src="/svg/eraser.svg" alt="eraser" />
               </div>
               <div className="tool-btn delete-btn" onClick={clearCanvas}>
@@ -549,9 +596,6 @@ function GameScreen({ maxPlayers = 10 }) {
         </div>
       </div>
 
-      {/* =========================
-          FLOAT CHAT BUBBLES (추가된 부분)
-      ========================= */}
       {Object.entries(chatBubbles).map(([uid, msg]) => {
         const el = userCardRefs.current[uid];
         if (!el) return null;
