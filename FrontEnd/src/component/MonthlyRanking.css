@@ -1,54 +1,79 @@
-/* 전체 컨테이너: 칠판/크리스마스 배경 */
+/* 전체 컨테이너 */
 .ranking-container {
-  background-color: #2F5A2D; /* 칠판 색상 */
+  background-color: #2F5A2D;
   min-height: 100vh;
   padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-family: 'Rounded Mplus 1c', sans-serif; /* 둥근 폰트 추천 */
+  font-family: 'Rounded Mplus 1c', sans-serif;
+  overflow-x: hidden; /* 가로 스크롤 방지 */
 }
 
 /* === 상단 Podium 영역 === */
 .podium-section {
-  display: flex;
-  align-items: flex-end; /* 바닥 기준 정렬 */
-  justify-content: center;
-  gap: 15px;
-  height: 500px; /* 전체 높이 확보 */
+  position: relative; /* ✨ 자식들의 기준점 */
+  width: 100%;
+  max-width: 800px;   /* 전체 무대 너비 제한 */
+  height: 500px;
   margin-top: 40px;
   margin-bottom: 30px;
-  padding-top: 50px;
+  /* flex 관련 속성 제거하고 직접 배치합니다 */
 }
 
 .podium-item {
+  position: absolute; /* ✨ 절대 위치로 배치 */
+  bottom: 0;          /* 바닥에 붙임 */
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: relative;
-  width: 300px;
+  width: 280px;       /* 기둥 너비 */
+  
+  z-index: 1;
 }
 
-/* 기둥 스타일 공통 */
+/* === ✨ 위치 결정 클래스 === */
+
+/* 1등: 가운데 */
+.pos-center {
+  left: 50%;
+  transform: translateX(-50%) scale(1.1); /* 1등은 조금 더 크게 */
+  z-index: 10; /* 제일 앞에 */
+}
+
+/* 2등: 왼쪽 */
+.pos-left {
+  left: 20%; /* 화면의 20% 지점 */
+  transform: translateX(-50%) scale(0.9);
+  z-index: 5;
+}
+
+/* 3등: 오른쪽 */
+.pos-right {
+  left: 80%; /* 화면의 80% 지점 */
+  transform: translateX(-50%) scale(0.9);
+  z-index: 5;
+}
+
+
+/* === 기둥 스타일 === */
 .pillar {
   width: 100%;
   border-radius: 8px 8px 0 0;
   position: relative;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-
-  /* ✨ 이 두 줄을 추가/수정하세요 */
-  flex-direction: column; /* 세로로 쌓이게 함 */
-  gap: 3px;               /* 1등과 추천수 사이 간격 조절 */
+  gap: 3px;
   
-  /* 애니메이션 설정: 높이가 0에서 시작 */
-  height: 0; 
-  animation: riseUp 1s ease-out forwards;
+  /* 기둥 높이와 배경색 변경은 여전히 CSS로 부드럽게 */
+  transition: height 0.6s ease, background 0.6s ease;
 }
 
-/* 눈 효과 (기둥 위 하얀 부분) */
+/* 눈 효과 */
+/* 눈 효과 */
 .snow-cap {
   position: absolute;
   top: -20px;
@@ -59,19 +84,13 @@
   border-radius: 20px;
   z-index: 10;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-
   display: flex;
-  justify-content: center; /* 가로 중앙 */
-  align-items: center;     /* 세로 중앙 */
-
+  justify-content: center;
+  align-items: center;
   color: #333; 
   font-weight: bold;
 }
-/* 눈 효과 속 텍스트 */
-.img-topic{
-}
 
-/* 리본 장식 */
 .ribbon {
   position: absolute;
   width: 20px;
@@ -81,130 +100,88 @@
   border-right: 2px solid rgba(255,255,255,0.5);
 }
 
-.rank-text{
+.rank-text, .recommend {
   color: white;
   font-weight: bold;
-  font-size: 1.5rem;
-  z-index: 2;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-}
-.recommend{
-  color: white;
-  font-weight: bold;
-  font-size: 1.2rem;
   z-index: 2;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
 }
+.rank-text { font-size: 1.5rem; }
+.recommend { font-size: 1.2rem; }
 
-/* --- 순위별 스타일 (높이, 색상, 딜레이) --- */
-
-/* 2등 (Silver/Green Theme) */
-.podium-item.second .pillar {
+/* === 색상 테마 (Rank에 따라 적용) === */
+.first .pillar {
+  background: linear-gradient(to bottom, #D42426, #8B0000);
+}
+.second .pillar {
   background: linear-gradient(to bottom, #4CAF50, #2E7D32);
-  animation-delay: 0s; /* 가장 먼저 시작 */
 }
-
-/* 1등 (Gold/Red Theme) */
-.podium-item.first {
-  width: 350px; /* 1등은 좀 더 크게 */
-  z-index: 5;
-}
-.podium-item.first .pillar {
-  background: linear-gradient(to bottom, #D42426, #8B0000); /* 크리스마스 레드 */
-  animation-delay: 0.8s; /* 주인공은 마지막에 */
-}
-
-/* 3등 (Bronze/Brown Theme) */
-.podium-item.third .pillar {
+.third .pillar {
   background: linear-gradient(to bottom, #CD7F32, #8D5524);
-  animation-delay: 0.4s; /* 두번째로 시작 */
 }
-
 
 /* === 이미지 영역 === */
 .img-wrapper {
   margin-bottom: 25px;
-  position: relative; /* 뱃지 위치 기준점 */
-  display: flex;      /* 내부 이미지 중앙 정렬 */
+  position: relative;
+  display: flex;
   justify-content: center;
   align-items: center;
-  
-  opacity: 0; 
-  transform: translateY(20px);
-  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
-
-/* 딜레이 클래스명 변경 반영 */
-.podium-item.second .img-wrapper { animation-delay: 1.0s; }
-.podium-item.third .img-wrapper  { animation-delay: 1.4s; }
-.podium-item.first .img-wrapper  { animation-delay: 1.8s; }
 
 .ranking-img {
   width: 200px;
   height: 200px;
-  object-fit: cover; /* 이미지가 찌그러지지 않고 꽉 차게 */
+  object-fit: cover;
   background: white;
-  border-radius: 25%; /* 둥근 사각형 */
-  border: 4px solid #FFD700; /* 금색 테두리 */
+  border-radius: 25%;
+  border: 4px solid #FFD700;
   box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  /* 테두리 색 변경 애니메이션만 남김 */
+  transition: border-color 0.6s ease; 
 }
-
-/* 1등 스타일 (크기 및 테두리 색상) */
+/* 1등일 때 테두리 색 변경 */
 .first .ranking-img {
-  width: 220px;
-  height: 220px;
-  border-color: #D42426; /* 1등 레드 테두리 */
-}
-
-
-.user-name {
-  margin-top: 5px;
-  color: white;
-  font-weight: bold;
-  text-shadow: 1px 1px 2px black;
+  border-color: #D42426;
+  /* 크기 조정은 transform scale로 대체되므로 width/height 직접 변경 제거 */
 }
 
 .rank-badge {
   position: absolute;
   top: -5px;
-  right: 25px; /* 이미지 너비에 따라 중앙 정렬 보정을 위해 조정 필요할 수 있음 (또는 right: 10%) */
+  right: 15px;
   background: #FFD700;
   color: #333;
-  width: 25px;
-  height: 25px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
   font-weight: bold;
-  font-size: 0.8rem;
   box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
   z-index: 10;
+  transition: all 0.6s ease; /* 뱃지 숫자 변경 시 부드럽게 */
 }
 
-/* 1등 뱃지 위치 미세 조정 (이미지가 더 크므로) */
-.first .rank-badge {
-  right: 15px; 
-}
-
-/* === 하단 리스트 영역 === */
+/* === 하단 리스트 === */
 .list-section {
   width: 100%;
   max-width: 600px;
-  background: rgba(255, 255, 255, 0.9); /* 반투명 흰색 배경 */
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 15px;
   padding: 20px;
   box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+  z-index: 20; /* 기둥 위에 오도록 */
 }
 
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(4, 1fr); /* 한 줄에 4명 */
+  grid-template-columns: repeat(4, 1fr);
   gap: 15px;
 }
-
 .grid-item {
-  background: #E8F5E9; /* 연한 초록색 */
+  background: #E8F5E9;
   border-radius: 10px;
   padding: 10px;
   display: flex;
@@ -212,36 +189,8 @@
   align-items: center;
   border: 2px solid #81C784;
 }
-
-.list-avatar { font-size: 2rem; }
-.list-name { 
-  font-weight: bold; 
-  color: #333; 
-  margin: 5px 0;
-  font-size: 0.9rem;
+.list-avatar { 
+    width: 50px; height: 50px; object-fit: cover; border-radius: 50%; margin-bottom: 5px;
 }
-.list-rank {
-  font-size: 0.8rem;
-  color: #666;
-  background: #fff;
-  padding: 2px 8px;
-  border-radius: 10px;
-}
-
-
-/* === 키프레임 애니메이션 === */
-@keyframes riseUp {
-  from { height: 0; }
-  to { height: var(--final-height); }
-}
-
-@keyframes popIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.5);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
+.list-topic { font-weight: bold; font-size: 0.9rem; margin-bottom: 2px; }
+.list-rec { font-size: 0.8rem; background: #fff; padding: 2px 8px; border-radius: 10px; }

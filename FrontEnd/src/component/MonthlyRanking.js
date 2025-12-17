@@ -1,36 +1,33 @@
 import { useEffect, useState } from 'react';
 import './MonthlyRanking.css';
 import axios from 'axios';
-import { matchPath } from 'react-router-dom';
+// ✨ 1. Framer Motion 임포트
+import { motion, AnimatePresence } from 'framer-motion';
 
 const MonthlyRanking = () => {
   const [imgs, setImgs] = useState([]);
   
-  // 1,2,3등과 나머지 분리
-  const top3 = imgs.length > 0 ? [imgs[1], imgs[0], imgs[2]] : []; 
+  // 상위 3명과 나머지 분리
+  // ✨ slice(0, 3)은 항상 3개 배열을 반환하므로 안전하게 filter로 실제 데이터만 남김
+  const top3Data = imgs.slice(0, 3).filter(item => item);
   const restImgs = imgs.length > 3 ? imgs.slice(3) : [];
 
-  // ✨ 1등의 점수 (비율 계산의 기준점)
-  // top3[1]이 1등입니다. 데이터가 없으면 1로 설정하여 0 나누기 방지
-  const maxScore = top3[1]?.rec || 1; 
-  
-  // ✨ 1등의 고정 높이 설정 (예: 250px)
+  const maxScore = imgs[0]?.rec || 1; 
   const maxPixelHeight = 250;
 
   useEffect(() => {
     (async() => {
       try {
         let response = await axios.get("http://localhost:8080/monRnk/getMonRnk");
+        
         const mappedData = response.data.map((item) => ({
           id: item.imgId,
           topic: item.topic,
           rec: item.recommend,
           url: item.imgUrl
         }));
-        setImgs(mappedData);
-
-        console.log(response.data);
         
+        setImgs(mappedData.sort((a, b) => b.rec - a.rec));
       } catch (error) {
         console.error("통신 에러:", error);
       }
@@ -39,87 +36,124 @@ const MonthlyRanking = () => {
 
   const handleClick = async (id) => {
     try{
+      // (백엔드 연동 시 주석 해제)
       await axios.post(`http://localhost:8080/monRnk/increaseRec/${id}`);
-
+      
+      // ✨ 즉각적인 UI 반응을 위한 낙관적 업데이트
       setImgs((prev) => {
         const newImgs = prev.map((img) =>
           img.id === id ? { ...img, rec: img.rec + 1} : img
         );
+        // 점수 변경 후 재정렬 -> 순위 변경 발생
+        return [...newImgs].sort((a, b) => b.rec - a.rec);
+      });
 
-        return newImgs.sort((a, b) => b.rec - a.rec);
-      })
     }catch(error){
       console.log("추천 업데이트 실패: ", error);
-      
     }
   }
 
   return (
     <div className="ranking-container">
-      <div className="podium-section">
-        {top3.map((img, index) => {
-          if(!img) return null;
-
-          let rank = 0;
-          let rankClass = '';
-          if (index === 0) { rank = 2; rankClass = 'second'; }
-          else if (index === 1) { rank = 1; rankClass = 'first'; }
-          else { rank = 3; rankClass = 'third'; }
-
-          // ✨ 높이 동적 계산 로직
-          // (내 점수 / 1등 점수) * 최대 높이
-          let calculatedHeight = (img.rec / maxScore) * maxPixelHeight;
+      <AnimatePresence>
+      <motion.div className="podium-section" layout>
+        {top3Data.map((img, index) => {
           
-          // ✨ 최소 높이 보장 (글씨가 잘리지 않게 최소 80px은 확보)
+          let positionClass = '';
+          let rankClass = '';
+          let rankNum = index + 1;
+
+          if (index === 0) { positionClass = 'pos-center'; rankClass = 'first'; } 
+          else if (index === 1) { positionClass = 'pos-left'; rankClass = 'second'; } 
+          else { positionClass = 'pos-right'; rankClass = 'third'; }
+
+          let calculatedHeight = (img.rec / maxScore) * maxPixelHeight;
           calculatedHeight = Math.max(130, calculatedHeight);
 
           return (
-            <div key={img.id} className={`podium-item ${rankClass}`}>
-              
-              {/* === 변경된 부분: 래퍼 제거 및 클래스명 변경 === */}
-              <div className="img-wrapper">
-                  <img 
+            <motion.div 
+              key={img.id}
+              layoutId={img.id} 
+              layout 
+              className={`podium-item ${positionClass} ${rankClass}`}
+              // ✨ 1. Pop 등장 효과 강화
+              // 처음 나타날 때(initial) 약간 위에서 더 크게 시작해서,
+              // 제자리로(animate) 튕기며 돌아옵니다.
+              initial={{ opacity: 0, scale: 1.2, y: -30 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
+              // 튕기는 느낌을 더 강하게 주는 스프링 설정
+              transition={{ 
+                type: "spring", 
+                stiffness: 400, 
+                damping: 25,
+                mass: 1.2 
+              }}
+            >
+              {/* ✨ 2. Flash 효과를 위한 래퍼 애니메이션 추가 */}
+              <motion.div 
+                className="img-wrapper"
+                // 처음 마운트될 때 황금색 빛이 번쩍이는 애니메이션
+                initial={{ filter: "drop-shadow(0 0 0 rgba(255,215,0,0))" }}
+                animate={{ 
+                    filter: [
+                        "drop-shadow(0 0 0 rgba(255,215,0,0))", // 시작
+                        "drop-shadow(0 0 30px rgba(255,215,0,0.8))", // 중간에 강한 빛
+                        "drop-shadow(0 0 0 rgba(255,215,0,0))" // 끝
+                    ]
+                }}
+                transition={{ duration: 0.8, ease: "easeInOut", times: [0, 0.2, 1] }}
+              >
+                  <motion.img 
                     src={img.url} 
                     alt={img.topic} 
-                    className="ranking-img" 
+                    className="ranking-img"
                     onClick={() => handleClick(img.id)}
-                    style={{cursor: 'pointer'}}/>
-                  <span className="rank-badge">{rank}</span>
-              </div>
+                    style={{cursor: 'pointer'}}
+                    layout 
+                  />
+                  <span className="rank-badge">{rankNum}</span>
+              </motion.div>
               
-              {/* 기둥 (솟아오르는 부분) */}
-              <div 
+              <motion.div 
                 className="pillar" 
-                style={{ '--final-height': `${calculatedHeight}px` }}
+                style={{ height: `${calculatedHeight}px` }}
+                layout
               >
-                <div className="snow-cap">
-                  <div className="img-topic">{img.topic}</div>
-                </div> 
+                {/* ... (기둥 내부 내용 동일) ... */}
+                <div className="snow-cap"><div className="img-topic">{img.topic}</div></div> 
                 <div className="ribbon"></div>
-                <span className="rank-text">{rank}st</span>
-                <span className="recommend">{img.rec}</span>
-              </div>
-            </div>
+                <span className="rank-text">{rankNum}st</span>
+                <motion.span key={img.rec} className="recommend">{img.rec}</motion.span>
+              </motion.div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
+      </AnimatePresence>
 
-      {/* --- 하단: 나머지 리스트 (Grid) --- */}
+      {/* --- 하단: 나머지 리스트 (이전과 동일) --- */}
       <div className="list-section">
-        <div className="grid-container">
-          {restImgs.map((img, index) => (
-            <div key={img.id} className="grid-item">
-              <img 
-                src={img.url} 
-                alt={img.topic} 
-                className="list-avatar" 
-                onClick={() => handleClick(img.id)}
-                style={{cursor: "pointer"}}/>
-              <div className="list-topic">{img.topic}</div>
-              <div className="list-rank">{index + 4}위</div>
-            </div>
+        <motion.div className="grid-container" layout>
+          <AnimatePresence>
+          {restImgs.map((img) => (
+            <motion.div 
+              key={img.id} 
+              layoutId={img.id}
+              layout
+              className="grid-item"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.3 } }} // 사라질 때 좀 더 빨리 작아지게
+            >
+               {/* ... (리스트 아이템 내용 동일) ... */}
+               <img src={img.url} alt={img.topic} className="list-avatar" onClick={() => handleClick(img.id)} style={{cursor: "pointer"}}/>
+               <div className="list-topic">{img.topic}</div>
+               <div className="list-rec">{img.rec}</div>
+            </motion.div>
           ))}
-        </div>
+          </AnimatePresence>
+        </motion.div>
       </div>
     </div>
   );
