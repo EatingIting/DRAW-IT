@@ -53,6 +53,11 @@ const MonthlyRanking = () => {
           let rankClass = '';
           let rankNum = index + 1;
 
+          // ✨ 1등과 나머지의 크기(너비)를 변수로 설정
+          // 1등은 좀 더 넓게(320px), 나머지는 기본(280px)
+          const isFirst = index === 0;
+          const itemWidth = isFirst ? 320 : 280;
+
           if (index === 0) { positionClass = 'pos-center'; rankClass = 'first'; } 
           else if (index === 1) { positionClass = 'pos-left'; rankClass = 'second'; } 
           else { positionClass = 'pos-right'; rankClass = 'third'; }
@@ -63,26 +68,24 @@ const MonthlyRanking = () => {
           return (
             <motion.div 
               key={img.id}
-              /* 🚨 중요 수정 1: 여기서 layoutId 삭제! 상자는 날아오지 않습니다. */
-              /* 대신 layout 속성은 유지해야 1,2,3등끼리 자리 바꿀 때 부드럽습니다. */
-              layout 
-
+              layout // layout 속성 유지 (위치 이동 애니메이션용)
               className={`podium-item ${positionClass} ${rankClass}`}
               
-              /* 기둥과 장식이 "뿅" 하고 튀어나오는 효과 */
-              initial={{ opacity: 0, scale: 0.5, y: 50 }} 
-              animate={{ 
-                  opacity: 1, 
-                  y: 0,
-                  scale: index === 0 ? 1.1 : 0.9  // 약간의 원근감
+              // ✨ [핵심 수정 1] scale 애니메이션 제거하고 실제 스타일(width) 변경
+              // marginLeft를 width의 절반으로 설정하여 항상 정확한 중앙 정렬 유지
+              style={{ 
+                width: `${itemWidth}px`, 
+                marginLeft: `-${itemWidth / 2}px`,
+                zIndex: isFirst ? 10 : 5 // 1등이 앞으로 오게
               }}
+              
+              // ✨ [핵심 수정 2] animate에서 scale 제거 (이제 width가 변하므로 필요 없음)
+              initial={{ opacity: 0, y: 50 }} 
+              animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
               
               transition={{ 
-                type: "spring", 
-                stiffness: 400, 
-                damping: 25,
-                mass: 1 
+                type: "spring", stiffness: 300, damping: 25 
               }}
             >
               <div className="img-wrapper">
@@ -93,7 +96,12 @@ const MonthlyRanking = () => {
                     alt={img.topic} 
                     className="ranking-img"
                     onClick={() => handleClick(img.id)}
-                    style={{cursor: 'pointer'}}
+                    style={{
+                        cursor: 'pointer',
+                        // ✨ [핵심 수정 3] 이미지 크기도 1등일 때 실제 px로 키움
+                        width: isFirst ? '240px' : '200px',
+                        height: isFirst ? '240px' : '200px'
+                    }}
                   />
                   <span className="rank-badge">{rankNum}</span>
               </div>

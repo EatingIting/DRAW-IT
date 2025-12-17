@@ -30,6 +30,8 @@
   width: 280px;       /* 기둥 너비 */
   
   z-index: 1;
+
+  transform-origin: bottom;
 }
 
 /* === ✨ 위치 결정 클래스 === */
@@ -174,6 +176,7 @@
   max-width: 600px;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 15px;
+  margin-top: 50px;
   padding: 20px;
   box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
   z-index: 20; /* 기둥 위에 오도록 */
