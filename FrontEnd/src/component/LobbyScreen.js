@@ -77,10 +77,17 @@ function LobbyScreen() {
           const data = JSON.parse(message.body);
 
           if (data.type === "USER_UPDATE") {
-            setPlayers(data.users);
+            const sortedUsers = (data.users || []).sort((a, b) => {
+              // a가 방장이면 앞으로(-1), b가 방장이면 뒤로(1), 아니면 순서 유지(0)
+              if (a.host && !b.host) return -1;
+              if (!a.host && b.host) return 1;
+              return 0;
+            });
+
+            setPlayers(sortedUsers); // 정렬된 리스트를 상태에 저장
 
             setIsHost(
-              data.users.some(
+              sortedUsers.some(
                 (u) => u.host === true && u.userId === userIdRef.current
               )
             );

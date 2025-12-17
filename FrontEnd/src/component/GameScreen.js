@@ -159,6 +159,12 @@ function GameScreen({ maxPlayers = 10 }) {
               host: String(u.userId) === String(hostId),
             }));
 
+            mappedUsers.sort((a, b) => {
+              if (a.host && !b.host) return -1;
+              if (!a.host && b.host) return 1;
+              return 0;
+            });
+
             setPlayers(mappedUsers);
 
             if (data.gameStarted && data.drawerUserId) {
