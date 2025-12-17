@@ -15,7 +15,8 @@
   align-items: flex-end; /* 바닥 기준 정렬 */
   justify-content: center;
   gap: 15px;
-  height: 350px; /* 전체 높이 확보 */
+  height: 500px; /* 전체 높이 확보 */
+  margin-top: 40px;
   margin-bottom: 30px;
   padding-top: 50px;
 }
@@ -25,7 +26,7 @@
   flex-direction: column;
   align-items: center;
   position: relative;
-  width: 100px;
+  width: 300px;
 }
 
 /* 기둥 스타일 공통 */
@@ -37,6 +38,10 @@
   justify-content: center;
   align-items: center;
   box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+
+  /* ✨ 이 두 줄을 추가/수정하세요 */
+  flex-direction: column; /* 세로로 쌓이게 함 */
+  gap: 3px;               /* 1등과 추천수 사이 간격 조절 */
   
   /* 애니메이션 설정: 높이가 0에서 시작 */
   height: 0; 
@@ -46,14 +51,24 @@
 /* 눈 효과 (기둥 위 하얀 부분) */
 .snow-cap {
   position: absolute;
-  top: -10px;
+  top: -20px;
   left: -5px;
   right: -5px;
-  height: 20px;
+  height: 50px;
   background: white;
   border-radius: 20px;
   z-index: 10;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+
+  display: flex;
+  justify-content: center; /* 가로 중앙 */
+  align-items: center;     /* 세로 중앙 */
+
+  color: #333; 
+  font-weight: bold;
+}
+/* 눈 효과 속 텍스트 */
+.img-topic{
 }
 
 /* 리본 장식 */
@@ -66,10 +81,17 @@
   border-right: 2px solid rgba(255,255,255,0.5);
 }
 
-.rank-text {
+.rank-text{
   color: white;
   font-weight: bold;
   font-size: 1.5rem;
+  z-index: 2;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+}
+.recommend{
+  color: white;
+  font-weight: bold;
+  font-size: 1.2rem;
   z-index: 2;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
 }
@@ -81,62 +103,60 @@
   background: linear-gradient(to bottom, #4CAF50, #2E7D32);
   animation-delay: 0s; /* 가장 먼저 시작 */
 }
-/* 최종 높이를 애니메이션 키프레임 내에서 제어하거나 height를 따로 지정 */
-.podium-item.second .pillar { --final-height: 120px; }
 
 /* 1등 (Gold/Red Theme) */
 .podium-item.first {
-  width: 120px; /* 1등은 좀 더 크게 */
+  width: 350px; /* 1등은 좀 더 크게 */
   z-index: 5;
 }
 .podium-item.first .pillar {
   background: linear-gradient(to bottom, #D42426, #8B0000); /* 크리스마스 레드 */
   animation-delay: 0.8s; /* 주인공은 마지막에 */
 }
-.podium-item.first .pillar { --final-height: 180px; }
 
 /* 3등 (Bronze/Brown Theme) */
 .podium-item.third .pillar {
   background: linear-gradient(to bottom, #CD7F32, #8D5524);
   animation-delay: 0.4s; /* 두번째로 시작 */
 }
-.podium-item.third .pillar { --final-height: 90px; }
 
 
-/* === 캐릭터(아바타) 영역 === */
-.avatar-wrapper {
-  margin-bottom: 10px;
-  text-align: center;
-  opacity: 0; /* 처음에 숨김 */
+/* === 이미지 영역 === */
+.img-wrapper {
+  margin-bottom: 25px;
+  position: relative; /* 뱃지 위치 기준점 */
+  display: flex;      /* 내부 이미지 중앙 정렬 */
+  justify-content: center;
+  align-items: center;
+  
+  opacity: 0; 
   transform: translateY(20px);
   animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
-/* 아바타 딜레이는 기둥 딜레이 + 올라가는 시간 뒤에 실행 */
-.podium-item.second .avatar-wrapper { animation-delay: 1.0s; }
-.podium-item.third .avatar-wrapper  { animation-delay: 1.4s; }
-.podium-item.first .avatar-wrapper  { animation-delay: 1.8s; }
+/* 딜레이 클래스명 변경 반영 */
+.podium-item.second .img-wrapper { animation-delay: 1.0s; }
+.podium-item.third .img-wrapper  { animation-delay: 1.4s; }
+.podium-item.first .img-wrapper  { animation-delay: 1.8s; }
 
-.avatar-circle {
-  width: 70px;
-  height: 70px;
+.ranking-img {
+  width: 200px;
+  height: 200px;
+  object-fit: cover; /* 이미지가 찌그러지지 않고 꽉 차게 */
   background: white;
-  border-radius: 50%;
-  border: 4px solid #FFD700;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
+  border-radius: 25%; /* 둥근 사각형 */
+  border: 4px solid #FFD700; /* 금색 테두리 */
   box-shadow: 0 4px 6px rgba(0,0,0,0.2);
 }
 
-.first .avatar-circle {
-  width: 90px;
-  height: 90px;
-  border-color: #D42426; /* 1등은 빨간 테두리 */
+/* 1등 스타일 (크기 및 테두리 색상) */
+.first .ranking-img {
+  width: 220px;
+  height: 220px;
+  border-color: #D42426; /* 1등 레드 테두리 */
 }
 
-.avatar-img { font-size: 2.5rem; }
+
 .user-name {
   margin-top: 5px;
   color: white;
@@ -147,7 +167,7 @@
 .rank-badge {
   position: absolute;
   top: -5px;
-  right: -5px;
+  right: 25px; /* 이미지 너비에 따라 중앙 정렬 보정을 위해 조정 필요할 수 있음 (또는 right: 10%) */
   background: #FFD700;
   color: #333;
   width: 25px;
@@ -159,8 +179,13 @@
   font-weight: bold;
   font-size: 0.8rem;
   box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+  z-index: 10;
 }
 
+/* 1등 뱃지 위치 미세 조정 (이미지가 더 크므로) */
+.first .rank-badge {
+  right: 15px; 
+}
 
 /* === 하단 리스트 영역 === */
 .list-section {

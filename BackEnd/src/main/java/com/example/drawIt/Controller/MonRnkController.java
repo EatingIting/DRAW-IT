@@ -4,13 +4,12 @@ import com.example.drawIt.DTO.MonRnkDTO;
 import com.example.drawIt.Service.MonRnkService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
+@RequestMapping("/monRnk")
 @CrossOrigin(origins = "http://localhost:3000")
 public class MonRnkController {
 
@@ -21,5 +20,14 @@ public class MonRnkController {
     public ResponseEntity<List<MonRnkDTO>> getMonRnk() {
         List<MonRnkDTO> listMonRnk = monRnkService.getMonRnk();
         return ResponseEntity.ok().body(listMonRnk);
+    }
+
+    @PostMapping("/increaseRec/{imgId}")
+    public ResponseEntity<Void> increaseRec(@PathVariable Long imgId){
+        if(monRnkService.increaseRec(imgId)){
+            return ResponseEntity.ok().build();
+        }else{
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

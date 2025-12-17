@@ -5,12 +5,10 @@ import com.example.drawIt.Entity.MonRnk;
 import com.example.drawIt.Repository.MonRnkRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class MonRnkService {
@@ -59,5 +57,19 @@ public class MonRnkService {
         }
 
         return dtoList;
+    }
+
+    @Transactional
+    public boolean increaseRec(long imgId){
+        Optional<MonRnk> optionalMonRnk = monRnkRepository.findById(imgId);
+
+        if(optionalMonRnk.isPresent()){
+            MonRnk monRnk = optionalMonRnk.get();
+            monRnk.setRecommend(monRnk.getRecommend() + 1);
+            monRnkRepository.save(monRnk);
+            return true;
+        }
+
+        return false;
     }
 }
