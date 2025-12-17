@@ -3,6 +3,7 @@ package com.example.drawIt.Domain;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import java.util.List;
 
 @Getter
 @Setter
@@ -18,4 +19,14 @@ public class DrawEvent {
     private String color;
     private float lineWidth;
     private String tool;
+
+    private List<Point> points;
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class Point {
+        private float x;
+        private float y;
+    }
 }

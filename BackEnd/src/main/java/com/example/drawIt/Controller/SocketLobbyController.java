@@ -37,8 +37,7 @@ public class SocketLobbyController {
             StompHeaderAccessor accessor
     ) {
 
-        String sessionId = Objects.requireNonNull(
-                accessor.getSessionId(),
+        String sessionId = Objects.requireNonNull(accessor.getSessionId(),
                 "STOMP sessionId is null"
         );
 
@@ -71,27 +70,43 @@ public class SocketLobbyController {
         // ✅ 중간 입장 히스토리 전송 (완전한 정답)
         if (state != null && !state.getDrawEvents().isEmpty()) {
 
-            List<Map<String, Object>> historyPayload = new ArrayList<>();
+            Map<String, Object> totalHistoryPayload = new HashMap<>();
 
+            // 1. 현재 그려진 히스토리 (Active History)
+            List<Map<String, Object>> activeHistory = new ArrayList<>();
             for (DrawEvent evt : state.getDrawEvents()) {
-                Map<String, Object> map = new HashMap<>();
-                map.put("type", evt.getType());
-                map.put("x", evt.getX());
-                map.put("y", evt.getY());
-                map.put("color", evt.getColor());
-                map.put("width", evt.getLineWidth()); // 지난번 답변의 굵기 이슈도 여기서 챙김
-                map.put("userId", evt.getUserId());
-                map.put("tool", evt.getTool()); // tool 정보도 포함하면 좋음
-
-                historyPayload.add(map);
+                activeHistory.add(convertEventToMap(evt)); // 아래 헬퍼 메소드 참고
             }
+            totalHistoryPayload.put("history", activeHistory);
 
-            // 변경된 전송 방식: 유저 ID 기반의 고유 토픽 사용
+            // 2. 취소된 히스토리 (Redo Stack)
+            // ★ 이것을 보내줘야 들어오자마자 Redo가 가능합니다.
+            List<Map<String, Object>> redoHistory = new ArrayList<>();
+            for (DrawEvent evt : state.getRedoStack()) {
+                redoHistory.add(convertEventToMap(evt));
+            }
+            totalHistoryPayload.put("redoStack", redoHistory);
+
+            // 변경된 전송 방식: Map을 전송 (history + redoStack)
             messagingTemplate.convertAndSend(
                     "/topic/history/" + dto.getUserId(),
-                    historyPayload
+                    totalHistoryPayload
             );
         }
+    }
+
+    // (편의를 위한 헬퍼 메서드 - 같은 클래스 하단에 추가)
+    private Map<String, Object> convertEventToMap(DrawEvent evt) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("type", evt.getType());
+        map.put("x", evt.getX());
+        map.put("y", evt.getY());
+        map.put("color", evt.getColor());
+        map.put("width", evt.getLineWidth());
+        map.put("userId", evt.getUserId());
+        map.put("tool", evt.getTool());
+        map.put("points", evt.getPoints());
+        return map;
     }
 
     /* =========================
@@ -172,45 +187,53 @@ public class SocketLobbyController {
     ) {
         GameState state = gameStateManager.getGame(roomId);
         if (state == null) return;
-
-        // drawer 검증
         if (!evt.getUserId().equals(state.getDrawerUserId())) return;
 
-        // CLEAR 처리
-        if ("CLEAR".equals(evt.getType())) {
-            state.getDrawEvents().clear();
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId + "/draw", evt);
 
-            messagingTemplate.convertAndSend(
-                    "/topic/lobby/" + roomId + "/draw",
-                    Map.of("type", "CLEAR")
-            );
-            return;
+        switch (evt.getType()) {
+            case "START":
+            case "MOVE":
+                break;
+
+            case "END":
+                // ★★★ 핵심 수정 1: 타입을 'STROKE'로 강제 변경하여 저장 ★★★
+                // 이렇게 해야 나중에 들어온 사람이 redrawAll 할 때 선으로 인식합니다.
+                if (evt.getPoints() != null && !evt.getPoints().isEmpty()) {
+                    evt.setType("STROKE");
+                    state.getDrawEvents().add(evt);
+                    state.getRedoStack().clear();
+                }
+                break;
+
+            case "FILL":
+            case "CLEAR":
+                state.getDrawEvents().add(evt);
+                state.getRedoStack().clear();
+                break;
+
+            // ... (UNDO, REDO 로직은 기존과 동일) ...
+            case "UNDO":
+                List<DrawEvent> history = state.getDrawEvents();
+                if (!history.isEmpty()) {
+                    DrawEvent lastAction = history.remove(history.size() - 1);
+                    state.getRedoStack().push(lastAction);
+                }
+                break;
+
+            case "REDO":
+                Stack<DrawEvent> redoStack = state.getRedoStack();
+                if (!redoStack.isEmpty()) {
+                    DrawEvent action = redoStack.pop();
+                    state.getDrawEvents().add(action);
+                }
+                break;
         }
 
-        // 히스토리 제한
-        if (state.getDrawEvents().size() > 10_000) {
-            state.getDrawEvents().clear();
+        if (state.getDrawEvents().size() > 5000) {
+            state.getDrawEvents().remove(0);
         }
-
-        // 히스토리 저장 (DrawEvent)
-        state.getDrawEvents().add(evt);
-
-        // ✅ 프론트 호환 Map으로 변환해서 브로드캐스트
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("type", evt.getType());
-        payload.put("x", evt.getX());
-        payload.put("y", evt.getY());
-        payload.put("color", evt.getColor());
-        payload.put("width", evt.getLineWidth());
-        payload.put("tool", evt.getTool());
-        payload.put("userId", evt.getUserId());
-
-        messagingTemplate.convertAndSend(
-                "/topic/lobby/" + roomId + "/draw",
-                payload
-        );
     }
-
 
     /* =========================
        전체 지우기
@@ -224,43 +247,19 @@ public class SocketLobbyController {
         if (state == null) return;
 
         Object userIdObj = payload.get("userId");
-        if (userIdObj == null) return;
+        if (userIdObj == null || !userIdObj.toString().equals(state.getDrawerUserId())) return;
 
-        if (!userIdObj.toString().equals(state.getDrawerUserId())) return;
+        // "전체 지우기" 라는 동작을 히스토리에 추가 (그래야 Undo 가능)
+        DrawEvent clearEvent = new DrawEvent();
+        clearEvent.setType("CLEAR");
+        clearEvent.setUserId(userIdObj.toString());
 
-        state.getDrawEvents().clear();
+        state.getDrawEvents().add(clearEvent);
+        state.getRedoStack().clear();
 
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId + "/draw",
-                Map.of("type", "CLEAR")
-        );
-    }
-
-    @MessageMapping("/draw/{roomId}/history")
-    public void sendHistory(
-            @DestinationVariable String roomId,
-            StompHeaderAccessor accessor) {
-        GameState state = gameStateManager.getGame(roomId);
-        if (state == null || state.getDrawEvents().isEmpty()) return;
-
-        String sessionId = Objects.requireNonNull(accessor.getSessionId());
-
-        List<Map<String, Object>> historyPayload = new ArrayList<>();
-        for (DrawEvent evt : state.getDrawEvents()) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("type", evt.getType());
-            map.put("x", evt.getX());
-            map.put("y", evt.getY());
-            map.put("color", evt.getColor());
-            map.put("width", evt.getLineWidth());
-            map.put("userId", evt.getUserId());
-            historyPayload.add(map);
-        }
-
-        messagingTemplate.convertAndSendToUser(
-                sessionId,
-                "/queue/draw/history",
-                historyPayload
+                Map.of("type", "CLEAR", "userId", userIdObj)
         );
     }
 }

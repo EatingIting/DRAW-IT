@@ -67,8 +67,15 @@ function GameScreen({ maxPlayers = 10 }) {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
   const drawing = useRef(false);
-  const isRemoteDrawing = useRef(false); 
+  const isRemoteDrawing = useRef(false);
   const scaleRef = useRef({ x: 1, y: 1 });
+
+  /* =========================
+      Undo / Redo Refs (NEW)
+  ========================= */
+  const historyRef = useRef([]);      // 완료된 동작들 저장
+  const redoStackRef = useRef([]);    // 취소된 동작들 저장
+  const currentStrokeRef = useRef([]); // 현재 그리는 중인 선의 좌표들 저장
 
   /* =========================
       Tool State (Persistent)
@@ -128,7 +135,7 @@ function GameScreen({ maxPlayers = 10 }) {
   const canvasReadyRef = useRef(false);
 
   /* =========================
-      Canvas 초기화 함수 (로컬)
+      Canvas 초기화 및 히스토리 리셋 함수
   ========================= */
   const resetCanvasLocal = () => {
     const ctx = ctxRef.current;
@@ -137,6 +144,10 @@ function GameScreen({ maxPlayers = 10 }) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     isRemoteDrawing.current = false;
+    // 게임 리셋 시 히스토리도 날립니다.
+    historyRef.current = [];
+    redoStackRef.current = [];
+    currentStrokeRef.current = [];
   };
 
   /* =========================
@@ -180,6 +191,8 @@ function GameScreen({ maxPlayers = 10 }) {
   /* =========================
       WebSocket Connect
   ========================= */
+  const prevDrawerIdRef = useRef(null);
+
   useEffect(() => {
     if (!userId || !nickname) {
       navigate('/join');
@@ -193,44 +206,44 @@ function GameScreen({ maxPlayers = 10 }) {
         client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
           const data = JSON.parse(msg.body);
 
-          // ✅ [핵심] 출제자 적용 로직
-          const applyDrawer = (drawerUserId) => {
-            if (!drawerUserId) return;
+          // ============================================================
+          //  ★ [통합 함수] 출제자 상태 변경 및 알림 처리 (핵심 해결책)
+          // ============================================================
+          const updateDrawerState = (newDrawerId) => {
+            if (!newDrawerId) return;
 
-            const me = String(drawerUserId) === String(userId);
+            const me = String(newDrawerId) === String(userId);
             setIsDrawer(me);
 
-            if (me) {
-              // 1. [로컬] 펜 설정 초기화 (검은색 펜)
-              setPenColor('#000000ff');
-              setActiveTool('pen');
-              
-              // 2. [로컬] Context 강제 초기화 (즉시 반영)
-              if (ctxRef.current) {
-                ctxRef.current.globalCompositeOperation = 'source-over';
-                ctxRef.current.strokeStyle = '#000000ff';
-                ctxRef.current.lineWidth = 5; 
-              }
+            // 1. 내가 출제자이고 + '이전 출제자'가 내가 아니었다면? -> 알림 발사!
+            // (USER_UPDATE가 먼저 오든 GAME_START가 먼저 오든, 딱 한번만 실행됨)
+            if (me && prevDrawerIdRef.current !== String(newDrawerId)) {
+               // UI가 렌더링될 시간을 조금 줌
+               setTimeout(() => {
+                 alert('당신이 출제자 입니다! 제시어에 맞게 그림을 그려주세요.');
+                 
+                 // 캔버스 클리어 명령 전송 (새 출제자니까)
+                 client.publish({
+                    destination: `/app/draw/${lobbyId}/clear`,
+                    body: JSON.stringify({ userId }),
+                 });
+               }, 100);
 
-              // 3. ✅ [추가/중요] 새 출제자가 "모두의 캔버스를 지워라" 명령 전송
-              //    이것이 Viewer들의 화면을 초기화시키는 결정타입니다.
-              client.publish({
-                destination: `/app/draw/${lobbyId}/clear`,
-                body: JSON.stringify({ userId }), // 내 ID로 보냄
-              });
-
-              // 4. 알림 처리
-              const hasAlerted = sessionStorage.getItem(`hasAlertedDrawer_${lobbyId}`);
-              if (!hasAlerted) {
-                setTimeout(() => {
-                  alert('당신이 출제자 입니다! 제시어에 맞게 그림을 그려주세요.');
-                  sessionStorage.setItem(`hasAlertedDrawer_${lobbyId}`, 'true');
-                }, 0);
-              }
-            } else {
-              sessionStorage.removeItem(`hasAlertedDrawer_${lobbyId}`);
+               // 펜 설정 초기화
+               setPenColor('#000000ff');
+               setActiveTool('pen');
+               if (ctxRef.current) {
+                 ctxRef.current.globalCompositeOperation = 'source-over';
+                 ctxRef.current.strokeStyle = '#000000ff';
+                 ctxRef.current.lineWidth = 5; 
+               }
             }
+
+            // 2. 현재 출제자 ID를 기록해둠 (다음 비교를 위해)
+            prevDrawerIdRef.current = String(newDrawerId);
           };
+          // ============================================================
+
 
           if (data.type === 'USER_UPDATE') {
             const hostId = data.hostUserId;
@@ -248,19 +261,18 @@ function GameScreen({ maxPlayers = 10 }) {
             setPlayers(mappedUsers);
 
             if (data.gameStarted && data.drawerUserId) {
-              applyDrawer(data.drawerUserId);
+              updateDrawerState(data.drawerUserId);
             }
           }
 
           if (data.type === 'GAME_START') {
-            sessionStorage.removeItem(`hasAlertedDrawer_${lobbyId}`);
-            resetCanvasLocal(); // 일단 로컬 캔버스 비우기
-            applyDrawer(data.drawerUserId); // 새 출제자 로직 실행
+            resetCanvasLocal();
+            updateDrawerState(data.drawerUserId);
           }
 
           if (data.type === 'DRAWER_CHANGED') {
-            resetCanvasLocal(); // 일단 로컬 캔버스 비우기
-            applyDrawer(data.drawerUserId); // 새 출제자 로직 실행
+            resetCanvasLocal();
+            updateDrawerState(data.drawerUserId);
           }
 
           if (data.type === 'ROOM_DESTROYED') {
@@ -275,19 +287,21 @@ function GameScreen({ maxPlayers = 10 }) {
         });
 
         client.subscribe(`/topic/history/${userId}`, (msg) => {
-          const history = JSON.parse(msg.body);
+          const data = JSON.parse(msg.body);
+          const historyList = data.history || [];
+          const redoList = data.redoStack || [];
 
+          // 1. 캔버스에 그려진 그림 복구
           if (canvasReadyRef.current) {
-            history.forEach((evt) => {
+            historyList.forEach((evt) => {
               applyRemoteDraw(evt, true);
             });
           } else {
-            pendingHistoryRef.current = history;
+            // 캔버스 로딩 전이면 대기열에 넣기 (Active History만)
+            pendingHistoryRef.current = historyList;
           }
-        });
 
-        client.publish({
-          destination: `/app/draw/${lobbyId}/history`,
+          redoStackRef.current = redoList;
         });
 
         client.publish({
@@ -334,7 +348,7 @@ function GameScreen({ maxPlayers = 10 }) {
   ========================= */
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true }); // 성능 최적화
 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -364,7 +378,60 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [activeTool, penColor, penWidth, eraserWidth]);
 
   /* =========================
-      Draw Sync
+      Helper: Redraw Canvas (for Undo/Redo)
+  ========================= */
+  const redrawAll = () => {
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+    if (!ctx || !canvas) return;
+
+    // 1. 캔버스 초기화
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 2. 히스토리 처음부터 다시 그리기
+    historyRef.current.forEach((action) => {
+      if (action.type === 'CLEAR') {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      } else if (action.type === 'FILL') {
+        floodFill(action.x, action.y, action.color);
+      } else if (action.type === 'STROKE') {
+        // 선 그리기 동작 복구
+        ctx.beginPath();
+        if (action.points && action.points.length > 0) {
+          ctx.moveTo(action.points[0].x, action.points[0].y);
+          for (let i = 1; i < action.points.length; i++) {
+            ctx.lineTo(action.points[i].x, action.points[i].y);
+          }
+        }
+        
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        if (action.tool === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.strokeStyle = 'rgba(0,0,0,1)'; // 지우개는 색상 무관
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = action.color;
+        }
+        ctx.lineWidth = action.lineWidth;
+        ctx.stroke();
+      }
+    });
+
+    // 3. 현재 도구 상태 복구 (안하면 엉뚱한 설정으로 남을 수 있음)
+    if (activeTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = eraserWidth;
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = penColor;
+      ctx.lineWidth = penWidth;
+    }
+  };
+
+  /* =========================
+      Draw Sync Logic
   ========================= */
   const publishDraw = (evt) => {
     stompRef.current?.publish({
@@ -374,24 +441,101 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   const applyRemoteDraw = (evt, isHistory = false) => {
-    if (!isHistory && String(evt.userId) === String(userId)) return;
+    // 내 이벤트이고 히스토리 로딩이 아니라면 무시
+    const isMe = String(evt.userId) === String(userId);
+    if (!isHistory && isMe) return;
 
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
     if (!ctx || !canvas) return;
 
-    // ✅ CLEAR 수신 시 모든 클라이언트가 캔버스 초기화
+    /* ------------ UNDO 처리 ------------ */
+    if (evt.type === 'UNDO') {
+      if (historyRef.current.length > 0) {
+        const lastAction = historyRef.current.pop();
+        redoStackRef.current.push(lastAction);
+        redrawAll();
+      }
+      return;
+    }
+
+    /* ------------ REDO 처리 ------------ */
+    if (evt.type === 'REDO') {
+      if (redoStackRef.current.length > 0) {
+        const actionToRedo = redoStackRef.current.pop();
+        historyRef.current.push(actionToRedo);
+        redrawAll(); 
+      }
+      return;
+    }
+
+    /* ------------ CLEAR 처리 ------------ */
     if (evt.type === 'CLEAR') {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       isRemoteDrawing.current = false;
+      
+      // 기록 저장
+      historyRef.current.push({ type: 'CLEAR' });
+      redoStackRef.current = []; 
       return;
     }
 
+    /* ------------ FILL 처리 ------------ */
     if (evt.type === 'FILL') {
       floodFill(evt.x, evt.y, evt.color);
+      
+      // 기록 저장
+      historyRef.current.push({
+        type: 'FILL',
+        x: evt.x,
+        y: evt.y,
+        color: evt.color
+      });
+      redoStackRef.current = [];
       return;
     }
 
+    /* ============================================================
+       ★ [NEW] 점들의 집합(Points)으로 온 경우 (히스토리 재생용)
+       : 백엔드에서 보내준 완성된 선 하나를 한 번에 그립니다.
+    ============================================================ */
+    if (evt.points && evt.points.length > 0) {
+      // 1. 스타일 설정
+      ctx.beginPath();
+      if (evt.tool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = evt.color;
+      }
+      ctx.lineWidth = evt.lineWidth || evt.width || 5;
+
+      // 2. 선 그리기 (Move -> Line loop)
+      const first = evt.points[0];
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < evt.points.length; i++) {
+        ctx.lineTo(evt.points[i].x, evt.points[i].y);
+      }
+      ctx.stroke();
+      ctx.closePath();
+
+      // 3. 로컬 히스토리에 저장 (나중에 Undo/Redo가 먹히기 위함)
+      //    이미 그려진 상태이므로 redoStack은 초기화하지 않아도 됨(Undo시 사용됨)
+      //    단, 중복 저장을 막기 위해 히스토리 로딩 중이거나 내가 아닐 때 저장
+      historyRef.current.push({
+        type: 'STROKE',
+        tool: evt.tool,
+        color: evt.color,
+        lineWidth: evt.lineWidth || evt.width || 5,
+        points: evt.points
+      });
+      
+      return; // 여기서 함수 종료 (아래 START/MOVE 로직 실행 안 함)
+    }
+
+    /* ------------ 실시간 선 그리기 (START/MOVE/END) ------------ */
+    // 1. 도구 설정
     if (evt.tool === 'eraser') {
       ctx.globalCompositeOperation = 'destination-out';
       ctx.strokeStyle = 'rgba(0,0,0,1)';
@@ -401,10 +545,12 @@ function GameScreen({ maxPlayers = 10 }) {
     }
     ctx.lineWidth = evt.lineWidth || evt.width || 5;
 
+    // 2. 동작 수행
     if (evt.type === 'START') {
       ctx.beginPath();
       ctx.moveTo(evt.x, evt.y);
       isRemoteDrawing.current = true;
+      currentStrokeRef.current = [{ x: evt.x, y: evt.y }];
     }
 
     if (evt.type === 'MOVE') {
@@ -412,17 +558,33 @@ function GameScreen({ maxPlayers = 10 }) {
         ctx.beginPath();
         ctx.moveTo(evt.x, evt.y);
         isRemoteDrawing.current = true;
+        currentStrokeRef.current = [{ x: evt.x, y: evt.y }];
       } else {
         ctx.lineTo(evt.x, evt.y);
         ctx.stroke();
+        currentStrokeRef.current.push({ x: evt.x, y: evt.y });
       }
     }
 
     if (evt.type === 'END') {
       ctx.closePath();
       isRemoteDrawing.current = false;
+      
+      // [Remote] 실시간 드로잉 종료 시 히스토리에 저장
+      if (currentStrokeRef.current.length > 0) {
+        historyRef.current.push({
+          type: 'STROKE',
+          tool: evt.tool,
+          color: evt.color,
+          lineWidth: evt.lineWidth || evt.width || 5,
+          points: [...currentStrokeRef.current]
+        });
+        currentStrokeRef.current = [];
+        redoStackRef.current = [];
+      }
     }
 
+    // 내 턴일 때 설정 복구 (원격 그리기 종료 후)
     if (!isHistory && isDrawer) {
       if (activeTool === 'eraser') {
         ctx.globalCompositeOperation = 'destination-out';
@@ -436,7 +598,7 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   /* =========================
-      Local Draw
+      Local Draw (Mouse Events)
   ========================= */
   const calculateScale = () => {
     const canvas = canvasRef.current;
@@ -455,8 +617,17 @@ function GameScreen({ maxPlayers = 10 }) {
     const x = e.nativeEvent.offsetX * scaleRef.current.x;
     const y = e.nativeEvent.offsetY * scaleRef.current.y;
 
+    /* -- FILL TOOL -- */
     if (activeTool === 'fill') {
       floodFill(x, y, fillColor);
+      
+      // [Local] History 저장
+      historyRef.current.push({
+        type: 'FILL',
+        x, y, color: fillColor
+      });
+      redoStackRef.current = [];
+
       publishDraw({
         type: 'FILL',
         x,
@@ -466,9 +637,13 @@ function GameScreen({ maxPlayers = 10 }) {
       return;
     }
 
+    /* -- PEN / ERASER TOOL -- */
     drawing.current = true;
     ctxRef.current.beginPath();
     ctxRef.current.moveTo(x, y);
+
+    // [Local] 좌표 수집 시작
+    currentStrokeRef.current = [{ x, y }];
 
     publishDraw({
       type: 'START',
@@ -489,6 +664,9 @@ function GameScreen({ maxPlayers = 10 }) {
     ctxRef.current.lineTo(x, y);
     ctxRef.current.stroke();
 
+    // [Local] 좌표 수집
+    currentStrokeRef.current.push({ x, y });
+
     publishDraw({
       type: 'MOVE',
       x,
@@ -503,7 +681,32 @@ function GameScreen({ maxPlayers = 10 }) {
     if (!drawing.current) return;
     drawing.current = false;
     ctxRef.current.closePath();
-    publishDraw({ type: 'END' });
+
+    const strokePoints = [...currentStrokeRef.current];
+    
+    // [Local] History 저장
+    if (currentStrokeRef.current.length > 0) {
+      historyRef.current.push({
+        type: 'STROKE',
+        tool: activeTool,
+        color: penColor,
+        lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth,
+        points: [...currentStrokeRef.current]
+      });
+      currentStrokeRef.current = [];
+      redoStackRef.current = [];
+    }
+
+    publishDraw({ 
+      type: 'END', 
+      tool: activeTool, 
+      color: penColor, 
+      lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth,
+      points: strokePoints
+    });
+
+    currentStrokeRef.current = [];
+    redoStackRef.current = [];
   };
 
   const clearCanvas = () => {
@@ -512,10 +715,46 @@ function GameScreen({ maxPlayers = 10 }) {
     if (ctx && canvasRef.current) {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     }
+
+    // [Local] History 저장
+    historyRef.current.push({ type: 'CLEAR' });
+    redoStackRef.current = [];
+
     stompRef.current?.publish({
       destination: `/app/draw/${lobbyId}/clear`,
       body: JSON.stringify({ userId }),
     });
+  };
+
+  /* =========================
+      Undo / Redo Handlers (NEW)
+  ========================= */
+  const handleUndo = () => {
+    if (!isDrawer || historyRef.current.length === 0) return;
+
+    // 1. 마지막 동작 꺼내서 Redo 스택으로 이동
+    const lastAction = historyRef.current.pop();
+    redoStackRef.current.push(lastAction);
+
+    // 2. 화면 다시 그리기
+    redrawAll();
+
+    // 3. 서버에 UNDO 이벤트 전송
+    publishDraw({ type: 'UNDO' });
+  };
+
+  const handleRedo = () => {
+    if (!isDrawer || redoStackRef.current.length === 0) return;
+
+    // 1. Redo 스택에서 동작 꺼내서 History로 이동
+    const actionToRedo = redoStackRef.current.pop();
+    historyRef.current.push(actionToRedo);
+
+    // 2. 화면 다시 그리기
+    redrawAll();
+
+    // 3. 서버에 REDO 이벤트 전송
+    publishDraw({ type: 'REDO' });
   };
 
   /* =========================
@@ -524,6 +763,8 @@ function GameScreen({ maxPlayers = 10 }) {
   const floodFill = (x, y, color) => {
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
+    if(!ctx || !canvas) return;
+    
     const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = img.data;
     const [r, g, b, a] = hexToRgba(color);
@@ -618,6 +859,7 @@ function GameScreen({ maxPlayers = 10 }) {
                 onMouseDown={startDraw}
                 onMouseMove={draw}
                 onMouseUp={endDraw}
+                onMouseLeave={endDraw}
               />
             </div>
 
@@ -662,6 +904,22 @@ function GameScreen({ maxPlayers = 10 }) {
                   onClick={() => handleToolClick('eraser')}>
                   <img src="/svg/eraser.svg" alt="eraser" />
                 </div>
+                
+                {/* --- Undo / Redo Buttons (Added) --- */}
+                <div className="tool-btn" onClick={handleUndo} title="Undo">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 7v6h6" />
+                    <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+                  </svg>
+                </div>
+                <div className="tool-btn" onClick={handleRedo} title="Redo">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 7v6h-6" />
+                    <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+                  </svg>
+                </div>
+                {/* ----------------------------------- */}
+
                 <div className="tool-btn delete-btn" onClick={clearCanvas}>
                   🗑
                 </div>
@@ -674,7 +932,8 @@ function GameScreen({ maxPlayers = 10 }) {
           </div>
         </div>
       </div>
-
+      
+      {/* ... Chat Bubbles & Input Area (동일) ... */}
       {Object.entries(chatBubbles).map(([uid, msg]) => {
         const el = userCardRefs.current[uid];
         if (!el) return null;
