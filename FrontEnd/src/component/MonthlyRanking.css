@@ -12,13 +12,13 @@
 
 /* === 상단 Podium 영역 === */
 .podium-section {
-  position: relative; /* ✨ 자식들의 기준점 */
+  position: relative;
   width: 100%;
-  max-width: 800px;   /* 전체 무대 너비 제한 */
+  max-width: 800px;
   height: 500px;
-  margin-top: 40px;
-  margin-bottom: 30px;
-  /* flex 관련 속성 제거하고 직접 배치합니다 */
+  
+  /* ✨ 수정된 부분: 상하 여백은 유지하되, 좌우는 auto로 설정하여 중앙 정렬 */
+  margin: 40px auto 30px auto; 
 }
 
 .podium-item {
@@ -34,27 +34,31 @@
 
 /* === ✨ 위치 결정 클래스 === */
 
-/* 1등: 가운데 */
+/* 1등: 화면 정중앙(50%) */
 .pos-center {
   left: 50%;
-  transform: translateX(-50%) scale(1.1); /* 1등은 조금 더 크게 */
-  z-index: 10; /* 제일 앞에 */
+  margin-left: -140px; /* 280px의 절반인 140px를 뺌 (transform 대체) */
+  z-index: 10;
+  
+  /* 크기 확대는 scale 대신 zoom이나 width 변경이 아닌, 
+     Framer Motion의 animate prop에서 처리되므로 여기선 transform 제거 */
 }
 
-/* 2등: 왼쪽 */
+/* 2등: 1등 기준으로 왼쪽으로 딱 붙게 배치 */
 .pos-left {
-  left: 20%; /* 화면의 20% 지점 */
-  transform: translateX(-50%) scale(0.9);
+  /* 50%에서 기둥 너비(280px)만큼 왼쪽으로 이동 */
+  left: calc(50% - 270px); 
+  margin-left: -140px; 
   z-index: 5;
 }
 
-/* 3등: 오른쪽 */
+/* 3등: 1등 기준으로 오른쪽으로 딱 붙게 배치 */
 .pos-right {
-  left: 80%; /* 화면의 80% 지점 */
-  transform: translateX(-50%) scale(0.9);
+  /* 50%에서 기둥 너비(280px)만큼 오른쪽으로 이동 */
+  left: calc(50% + 270px); 
+  margin-left: -140px;
   z-index: 5;
 }
-
 
 /* === 기둥 스타일 === */
 .pillar {
