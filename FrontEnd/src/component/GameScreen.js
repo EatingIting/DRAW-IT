@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import axios from 'axios';
 
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
@@ -46,8 +47,6 @@ function GameScreen({ maxPlayers = 10 }) {
   const [players, setPlayers] = useState([]);
   const [isDrawer, setIsDrawer] = useState(false);
 
-  const alertedRef = useRef(false);
-
   /* =========================
       Leave
   ========================= */
@@ -68,21 +67,27 @@ function GameScreen({ maxPlayers = 10 }) {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
   const drawing = useRef(false);
-  const lastPointRef = useRef(null);
-
-  // ✅ [수정] 화면 비율 저장용 (렉 방지)
+  const isRemoteDrawing = useRef(false); 
   const scaleRef = useRef({ x: 1, y: 1 });
 
   /* =========================
-      Tool State
+      Tool State (Persistent)
   ========================= */
-  const [activeTool, setActiveTool] = useState('pen');
+  const [activeTool, setActiveTool] = useState(() => localStorage.getItem('activeTool') || 'pen');
   const [showModal, setShowModal] = useState(false);
 
-  const [penColor, setPenColor] = useState('#000000ff');
-  const [penWidth, setPenWidth] = useState(5);
-  const [fillColor, setFillColor] = useState('#ff0000ff');
-  const [eraserWidth, setEraserWidth] = useState(20);
+  const [penColor, setPenColor] = useState(() => localStorage.getItem('penColor') || '#000000ff');
+  const [penWidth, setPenWidth] = useState(() => Number(localStorage.getItem('penWidth')) || 5);
+  const [fillColor, setFillColor] = useState(() => localStorage.getItem('fillColor') || '#ff0000ff');
+  const [eraserWidth, setEraserWidth] = useState(() => Number(localStorage.getItem('eraserWidth')) || 20);
+
+  useEffect(() => {
+    localStorage.setItem('activeTool', activeTool);
+    localStorage.setItem('penColor', penColor);
+    localStorage.setItem('penWidth', penWidth);
+    localStorage.setItem('fillColor', fillColor);
+    localStorage.setItem('eraserWidth', eraserWidth);
+  }, [activeTool, penColor, penWidth, fillColor, eraserWidth]);
 
   const handleToolClick = (tool) => {
     if (activeTool === tool) {
@@ -123,6 +128,56 @@ function GameScreen({ maxPlayers = 10 }) {
   const canvasReadyRef = useRef(false);
 
   /* =========================
+      Canvas 초기화 함수 (로컬)
+  ========================= */
+  const resetCanvasLocal = () => {
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+    if (ctx && canvas) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    isRemoteDrawing.current = false;
+  };
+
+  /* =========================
+      Initial Data Fetch
+  ========================= */
+  useEffect(() => {
+    const fetchGameData = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/lobby/${lobbyId}`);
+        const data = res.data?.lobby ?? res.data;
+
+        if (data && data.users) {
+          const hostId = data.hostUserId;
+          const mappedUsers = data.users.map((u) => ({
+            ...u,
+            host: String(u.userId) === String(hostId),
+          }));
+
+          mappedUsers.sort((a, b) => {
+            if (a.host && !b.host) return -1;
+            if (!a.host && b.host) return 1;
+            return 0;
+          });
+
+          setPlayers(mappedUsers);
+          
+          if (data.gameStarted && data.drawerUserId) {
+             const me = String(data.drawerUserId) === String(userId);
+             setIsDrawer(me);
+          }
+        }
+      } catch (err) {
+        console.error("초기 데이터 로드 실패:", err);
+      }
+    };
+
+    fetchGameData();
+  }, [lobbyId, userId]);
+
+
+  /* =========================
       WebSocket Connect
   ========================= */
   useEffect(() => {
@@ -138,17 +193,42 @@ function GameScreen({ maxPlayers = 10 }) {
         client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
           const data = JSON.parse(msg.body);
 
+          // ✅ [핵심] 출제자 적용 로직
           const applyDrawer = (drawerUserId) => {
             if (!drawerUserId) return;
 
             const me = String(drawerUserId) === String(userId);
             setIsDrawer(me);
 
-            if (me && !alertedRef.current) {
-              alertedRef.current = true;
-              setTimeout(() => {
-                alert('주제어에 맞는 그림을 그려주세요!');
-              }, 0);
+            if (me) {
+              // 1. [로컬] 펜 설정 초기화 (검은색 펜)
+              setPenColor('#000000ff');
+              setActiveTool('pen');
+              
+              // 2. [로컬] Context 강제 초기화 (즉시 반영)
+              if (ctxRef.current) {
+                ctxRef.current.globalCompositeOperation = 'source-over';
+                ctxRef.current.strokeStyle = '#000000ff';
+                ctxRef.current.lineWidth = 5; 
+              }
+
+              // 3. ✅ [추가/중요] 새 출제자가 "모두의 캔버스를 지워라" 명령 전송
+              //    이것이 Viewer들의 화면을 초기화시키는 결정타입니다.
+              client.publish({
+                destination: `/app/draw/${lobbyId}/clear`,
+                body: JSON.stringify({ userId }), // 내 ID로 보냄
+              });
+
+              // 4. 알림 처리
+              const hasAlerted = sessionStorage.getItem(`hasAlertedDrawer_${lobbyId}`);
+              if (!hasAlerted) {
+                setTimeout(() => {
+                  alert('당신이 출제자 입니다! 제시어에 맞게 그림을 그려주세요.');
+                  sessionStorage.setItem(`hasAlertedDrawer_${lobbyId}`, 'true');
+                }, 0);
+              }
+            } else {
+              sessionStorage.removeItem(`hasAlertedDrawer_${lobbyId}`);
             }
           };
 
@@ -173,13 +253,14 @@ function GameScreen({ maxPlayers = 10 }) {
           }
 
           if (data.type === 'GAME_START') {
-            alertedRef.current = false;
-            applyDrawer(data.drawerUserId);
+            sessionStorage.removeItem(`hasAlertedDrawer_${lobbyId}`);
+            resetCanvasLocal(); // 일단 로컬 캔버스 비우기
+            applyDrawer(data.drawerUserId); // 새 출제자 로직 실행
           }
 
           if (data.type === 'DRAWER_CHANGED') {
-            alertedRef.current = false;
-            applyDrawer(data.drawerUserId);
+            resetCanvasLocal(); // 일단 로컬 캔버스 비우기
+            applyDrawer(data.drawerUserId); // 새 출제자 로직 실행
           }
 
           if (data.type === 'ROOM_DESTROYED') {
@@ -193,7 +274,6 @@ function GameScreen({ maxPlayers = 10 }) {
           applyRemoteDraw(evt);
         });
 
-        // ✅ [수정] 히스토리 구독 (내 ID 전용 토픽 + 캔버스 준비 체크)
         client.subscribe(`/topic/history/${userId}`, (msg) => {
           const history = JSON.parse(msg.body);
 
@@ -232,11 +312,9 @@ function GameScreen({ maxPlayers = 10 }) {
               delete copy[uid];
               return copy;
             });
-            // 타이머 완료 후 Ref에서도 제거 (메모리 관리)
             delete bubbleTimeoutRef.current[uid]; 
           }, 3000);
 
-          // 저장해둬야 다음 메시지 올 때 취소 가능
           bubbleTimeoutRef.current[uid] = timeoutId;
         });
       },
@@ -252,7 +330,7 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [lobbyId, navigate, publishLeave, userId, nickname]);
 
   /* =========================
-      Canvas Init
+      Canvas Init & Tool Sync
   ========================= */
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -262,8 +340,6 @@ function GameScreen({ maxPlayers = 10 }) {
     ctx.lineJoin = 'round';
 
     ctxRef.current = ctx;
-
-    // ✅ [수정] 캔버스 준비 완료 처리 및 대기 중인 히스토리 그리기
     canvasReadyRef.current = true;
 
     if (pendingHistoryRef.current.length > 0) {
@@ -298,16 +374,16 @@ function GameScreen({ maxPlayers = 10 }) {
   };
 
   const applyRemoteDraw = (evt, isHistory = false) => {
-    // ✅ [수정] 히스토리는 내가 그렸던 것도 다시 그려야 함
     if (!isHistory && String(evt.userId) === String(userId)) return;
 
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
     if (!ctx || !canvas) return;
 
+    // ✅ CLEAR 수신 시 모든 클라이언트가 캔버스 초기화
     if (evt.type === 'CLEAR') {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      lastPointRef.current = null;
+      isRemoteDrawing.current = false;
       return;
     }
 
@@ -316,7 +392,6 @@ function GameScreen({ maxPlayers = 10 }) {
       return;
     }
 
-    // 도구 설정 복원
     if (evt.tool === 'eraser') {
       ctx.globalCompositeOperation = 'destination-out';
       ctx.strokeStyle = 'rgba(0,0,0,1)';
@@ -324,41 +399,45 @@ function GameScreen({ maxPlayers = 10 }) {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = evt.color;
     }
-    // ✅ [확인] 백엔드에서 width로 줬다면 width, lineWidth라면 lineWidth (보통 통일하는게 좋음)
-    // 여기서는 백엔드가 주는 값 그대로 사용 (수신부는 유연하게)
     ctx.lineWidth = evt.lineWidth || evt.width || 5;
 
     if (evt.type === 'START') {
       ctx.beginPath();
       ctx.moveTo(evt.x, evt.y);
-      lastPointRef.current = { x: evt.x, y: evt.y };
-      return;
+      isRemoteDrawing.current = true;
     }
 
     if (evt.type === 'MOVE') {
-      // START 유실 대비
-      if (!lastPointRef.current) {
+      if (!isRemoteDrawing.current) {
         ctx.beginPath();
         ctx.moveTo(evt.x, evt.y);
+        isRemoteDrawing.current = true;
       } else {
         ctx.lineTo(evt.x, evt.y);
         ctx.stroke();
       }
-      lastPointRef.current = { x: evt.x, y: evt.y };
-      return;
     }
 
     if (evt.type === 'END') {
       ctx.closePath();
-      lastPointRef.current = null;
+      isRemoteDrawing.current = false;
+    }
+
+    if (!isHistory && isDrawer) {
+      if (activeTool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = eraserWidth;
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = penColor;
+        ctx.lineWidth = penWidth;
+      }
     }
   };
 
   /* =========================
-      Local Draw (Optimized)
+      Local Draw
   ========================= */
-  
-  // ✅ [수정] 비율 계산 함수 (그리기 시작할 때 한 번만 호출)
   const calculateScale = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -371,8 +450,6 @@ function GameScreen({ maxPlayers = 10 }) {
 
   const startDraw = (e) => {
     if (!isDrawer) return;
-
-    // ✅ 클릭 시점 비율 계산 (최적화)
     calculateScale();
 
     const x = e.nativeEvent.offsetX * scaleRef.current.x;
@@ -399,7 +476,6 @@ function GameScreen({ maxPlayers = 10 }) {
       y,
       tool: activeTool,
       color: penColor,
-      // ✅ [수정] 변수명 width -> lineWidth 로 통일 (백엔드 호환)
       lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth,
     });
   };
@@ -407,7 +483,6 @@ function GameScreen({ maxPlayers = 10 }) {
   const draw = (e) => {
     if (!isDrawer || !drawing.current) return;
 
-    // ✅ 저장된 비율 사용 (연산 최소화)
     const x = e.nativeEvent.offsetX * scaleRef.current.x;
     const y = e.nativeEvent.offsetY * scaleRef.current.y;
 
@@ -420,7 +495,6 @@ function GameScreen({ maxPlayers = 10 }) {
       y,
       tool: activeTool,
       color: penColor,
-      // ✅ [수정] 변수명 width -> lineWidth 로 통일
       lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth,
     });
   };
@@ -434,13 +508,10 @@ function GameScreen({ maxPlayers = 10 }) {
 
   const clearCanvas = () => {
     if (!isDrawer) return;
-
     const ctx = ctxRef.current;
-    const canvas = canvasRef.current;
-    if (ctx && canvas) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (ctx && canvasRef.current) {
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     }
-
     stompRef.current?.publish({
       destination: `/app/draw/${lobbyId}/clear`,
       body: JSON.stringify({ userId }),
@@ -550,50 +621,52 @@ function GameScreen({ maxPlayers = 10 }) {
               />
             </div>
 
-            <div className="tool-box">
-              {showModal && activeTool === 'pen' && (
-                <PenSettings
-                  color={penColor}
-                  setColor={setPenColor}
-                  width={penWidth}
-                  setWidth={setPenWidth}
-                  onClose={() => setShowModal(false)}
-                />
-              )}
-              {showModal && activeTool === 'fill' && (
-                <FillSettings
-                  color={fillColor}
-                  setColor={setFillColor}
-                  onClose={() => setShowModal(false)}
-                />
-              )}
-              {showModal && activeTool === 'eraser' && (
-                <EraserSettings
-                  width={eraserWidth}
-                  setWidth={setEraserWidth}
-                  onClose={() => setShowModal(false)}
-                />
-              )}
+            {isDrawer && (
+              <div className="tool-box">
+                {showModal && activeTool === 'pen' && (
+                  <PenSettings
+                    color={penColor}
+                    setColor={setPenColor}
+                    width={penWidth}
+                    setWidth={setPenWidth}
+                    onClose={() => setShowModal(false)}
+                  />
+                )}
+                {showModal && activeTool === 'fill' && (
+                  <FillSettings
+                    color={fillColor}
+                    setColor={setFillColor}
+                    onClose={() => setShowModal(false)}
+                  />
+                )}
+                {showModal && activeTool === 'eraser' && (
+                  <EraserSettings
+                    width={eraserWidth}
+                    setWidth={setEraserWidth}
+                    onClose={() => setShowModal(false)}
+                  />
+                )}
 
-              <div 
-                className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`} 
-                onClick={() => handleToolClick('pen')}>
-                <PenIcon color={penColor} />
+                <div 
+                  className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`} 
+                  onClick={() => handleToolClick('pen')}>
+                  <PenIcon color={penColor} />
+                </div>
+                <div 
+                  className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`} 
+                  onClick={() => handleToolClick('fill')}>
+                  <img src="/svg/fill.svg" alt="fill" />
+                </div>
+                <div 
+                  className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} 
+                  onClick={() => handleToolClick('eraser')}>
+                  <img src="/svg/eraser.svg" alt="eraser" />
+                </div>
+                <div className="tool-btn delete-btn" onClick={clearCanvas}>
+                  🗑
+                </div>
               </div>
-              <div 
-                className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`} 
-                onClick={() => handleToolClick('fill')}>
-                <img src="/svg/fill.svg" alt="fill" />
-              </div>
-              <div 
-                className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} 
-                onClick={() => handleToolClick('eraser')}>
-                <img src="/svg/eraser.svg" alt="eraser" />
-              </div>
-              <div className="tool-btn delete-btn" onClick={clearCanvas}>
-                🗑
-              </div>
-            </div>
+            )}
           </div>
 
           <div className="user-column right">
