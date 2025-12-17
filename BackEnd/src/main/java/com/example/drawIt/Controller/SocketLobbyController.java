@@ -1,5 +1,6 @@
 package com.example.drawIt.Controller;
 
+import com.example.drawIt.DTO.LobbyResponseDTO;
 import com.example.drawIt.DTO.SocketJoinDTO;
 import com.example.drawIt.Domain.DrawEvent;
 import com.example.drawIt.Domain.GameState;
@@ -16,7 +17,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Controller
 @RequiredArgsConstructor
@@ -26,6 +27,27 @@ public class SocketLobbyController {
     private final LobbyService lobbyService;
     private final SimpMessagingTemplate messagingTemplate;
     private final GameStateManager gameStateManager;
+
+    /* =========================
+       [수정됨] 방 목록 전체 브로드캐스트
+    ========================= */
+    private void broadcastLobbyList() {
+        List<Lobby> lobbies = lobbyService.getAllRooms();
+
+        List<LobbyResponseDTO> dtos = lobbies.stream().map(lobby -> {
+            LobbyResponseDTO dto = new LobbyResponseDTO(lobby);
+
+            // 🔥 [여기가 오류 수정된 부분] Set -> List<Map...>
+            List<Map<String, Object>> users = lobbyUserStore.getUsers(lobby.getId());
+            int currentCount = (users != null) ? users.size() : 0;
+
+            dto.setCurrentCount(currentCount);
+            dto.setMaxCount(10);
+            return dto;
+        }).collect(Collectors.toList());
+
+        messagingTemplate.convertAndSend("/topic/lobbies", dtos);
+    }
 
     /* =========================
        입장 / 재접속
@@ -68,30 +90,27 @@ public class SocketLobbyController {
                 payload
         );
 
-        // ✅ 중간 입장 히스토리 전송 (완전한 정답)
         if (state != null && !state.getDrawEvents().isEmpty()) {
-
             List<Map<String, Object>> historyPayload = new ArrayList<>();
-
             for (DrawEvent evt : state.getDrawEvents()) {
                 Map<String, Object> map = new HashMap<>();
                 map.put("type", evt.getType());
                 map.put("x", evt.getX());
                 map.put("y", evt.getY());
                 map.put("color", evt.getColor());
-                map.put("width", evt.getLineWidth()); // 지난번 답변의 굵기 이슈도 여기서 챙김
+                map.put("width", evt.getLineWidth());
                 map.put("userId", evt.getUserId());
-                map.put("tool", evt.getTool()); // tool 정보도 포함하면 좋음
-
+                map.put("tool", evt.getTool());
                 historyPayload.add(map);
             }
-
-            // 변경된 전송 방식: 유저 ID 기반의 고유 토픽 사용
             messagingTemplate.convertAndSend(
                     "/topic/history/" + dto.getUserId(),
                     historyPayload
             );
         }
+
+        // 입장했으니 목록 갱신
+        broadcastLobbyList();
     }
 
     /* =========================
@@ -117,10 +136,13 @@ public class SocketLobbyController {
                         "drawerUserId", drawerUserId
                 )
         );
+
+        // 상태 변경 알림
+        broadcastLobbyList();
     }
 
     /* =========================
-       나가기 (drawer 이탈 처리 포함)
+       나가기
     ========================= */
     @MessageMapping("/lobby/{roomId}/leave")
     public void leave(
@@ -131,7 +153,6 @@ public class SocketLobbyController {
 
         lobbyUserStore.leaveRoom(roomId, userId);
 
-        // 🔹 drawer가 나간 경우 재선정
         GameState state = gameStateManager.getGame(roomId);
         if (state != null && userId.equals(state.getDrawerUserId())) {
 
@@ -157,14 +178,14 @@ public class SocketLobbyController {
                         "users", lobbyUserStore.getUsers(roomId)
                 )
         );
+
+        // 퇴장했으니 목록 갱신
+        broadcastLobbyList();
     }
 
     /* =========================
-       그림 그리기
+       그림 그리기 (변경 없음)
     ========================= */
-    /* =========================
-   그림 그리기 (단일 메서드)
-========================= */
     @MessageMapping("/draw/{roomId}")
     public void handleDraw(
             @DestinationVariable String roomId,
@@ -172,14 +193,10 @@ public class SocketLobbyController {
     ) {
         GameState state = gameStateManager.getGame(roomId);
         if (state == null) return;
-
-        // drawer 검증
         if (!evt.getUserId().equals(state.getDrawerUserId())) return;
 
-        // CLEAR 처리
         if ("CLEAR".equals(evt.getType())) {
             state.getDrawEvents().clear();
-
             messagingTemplate.convertAndSend(
                     "/topic/lobby/" + roomId + "/draw",
                     Map.of("type", "CLEAR")
@@ -187,15 +204,11 @@ public class SocketLobbyController {
             return;
         }
 
-        // 히스토리 제한
         if (state.getDrawEvents().size() > 10_000) {
             state.getDrawEvents().clear();
         }
-
-        // 히스토리 저장 (DrawEvent)
         state.getDrawEvents().add(evt);
 
-        // ✅ 프론트 호환 Map으로 변환해서 브로드캐스트
         Map<String, Object> payload = new HashMap<>();
         payload.put("type", evt.getType());
         payload.put("x", evt.getX());
@@ -211,10 +224,6 @@ public class SocketLobbyController {
         );
     }
 
-
-    /* =========================
-       전체 지우기
-    ========================= */
     @MessageMapping("/draw/{roomId}/clear")
     public void clear(
             @DestinationVariable String roomId,
@@ -222,14 +231,10 @@ public class SocketLobbyController {
     ) {
         GameState state = gameStateManager.getGame(roomId);
         if (state == null) return;
-
         Object userIdObj = payload.get("userId");
         if (userIdObj == null) return;
-
         if (!userIdObj.toString().equals(state.getDrawerUserId())) return;
-
         state.getDrawEvents().clear();
-
         messagingTemplate.convertAndSend(
                 "/topic/lobby/" + roomId + "/draw",
                 Map.of("type", "CLEAR")
@@ -242,9 +247,7 @@ public class SocketLobbyController {
             StompHeaderAccessor accessor) {
         GameState state = gameStateManager.getGame(roomId);
         if (state == null || state.getDrawEvents().isEmpty()) return;
-
         String sessionId = Objects.requireNonNull(accessor.getSessionId());
-
         List<Map<String, Object>> historyPayload = new ArrayList<>();
         for (DrawEvent evt : state.getDrawEvents()) {
             Map<String, Object> map = new HashMap<>();
@@ -256,7 +259,6 @@ public class SocketLobbyController {
             map.put("userId", evt.getUserId());
             historyPayload.add(map);
         }
-
         messagingTemplate.convertAndSendToUser(
                 sessionId,
                 "/queue/draw/history",

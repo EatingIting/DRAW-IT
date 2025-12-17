@@ -16,6 +16,11 @@ public class LobbyResponseDTO {
     private String mode;
     private String hostNickname;
     private boolean gameStarted;
+    private int currentCount;
+    private int maxCount;
+
+    public void setCurrentCount(int currentCount) { this.currentCount = currentCount; }
+    public void setMaxCount(int maxCount) { this.maxCount = maxCount; }
 
     public LobbyResponseDTO(Lobby lobby) {
         this.id = lobby.getId();
