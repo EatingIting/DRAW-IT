@@ -4,6 +4,8 @@ import com.example.drawIt.DTO.MonRnkDTO;
 import com.example.drawIt.Entity.MonRnk;
 import com.example.drawIt.Repository.MonRnkRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,12 +18,11 @@ public class MonRnkService {
     @Autowired
     private MonRnkRepository monRnkRepository;
 
-    public List<MonRnkDTO> getMonRnk(String yyMM) { // 매개변수 추가
+    public List<MonRnkDTO> getMonRnk(String yyMM, Pageable pageable) { // 매개변수 추가
 
         Calendar cal = Calendar.getInstance();
-
-        // [변경 1] 들어온 yyMM 문자열을 Date로 변환하여 Calendar에 설정
         SimpleDateFormat sdf = new SimpleDateFormat("yyMM");
+
         try {
             Date targetDate = sdf.parse(yyMM); // "2412" -> 2024년 12월 1일 00:00:00 (Date 객체)
             cal.setTime(targetDate);
@@ -49,15 +50,12 @@ public class MonRnkService {
         Date endDate = cal.getTime();
 
         // DB 조회
-        List<MonRnk> entites = monRnkRepository.findByRegDateBetweenOrderByRecommendDesc(startDate, endDate);
+        Slice<MonRnk> entities = monRnkRepository.findByRegDateBetweenOrderByRecommendDesc(startDate, endDate, pageable);
 
-        // DTO 변환 로직 (기존과 동일)
         List<MonRnkDTO> dtoList = new ArrayList<>();
-        // 이미지 저장 폴더명을 위한 포맷터 (이미지 경로 생성용)
         SimpleDateFormat folderFormat = new SimpleDateFormat("yyMM");
 
-        for(MonRnk entity: entites){
-            // 주의: 여기서는 검색한 달(yyMM)이 아니라, 실제 엔티티가 저장된 날짜 기반으로 폴더를 찾아야 함
+        for(MonRnk entity: entities){
             String dateFolder = folderFormat.format(entity.getRegDate());
             String filename = entity.getImgName();
             String accessUrl = "http://localhost:8080/image/" + dateFolder + "/" + filename + ".jpg";

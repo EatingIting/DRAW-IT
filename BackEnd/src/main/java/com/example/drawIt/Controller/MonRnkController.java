@@ -3,6 +3,8 @@ package com.example.drawIt.Controller;
 import com.example.drawIt.DTO.MonRnkDTO;
 import com.example.drawIt.Service.MonRnkService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,10 +18,16 @@ public class MonRnkController {
     @Autowired
     private MonRnkService monRnkService;
 
-    @GetMapping("/getMonRnk/{yyMM}") // {yyMM} 경로 변수 추가
-    public ResponseEntity<List<MonRnkDTO>> getMonRnk(@PathVariable String yyMM) {
-        // 서비스 메서드에 yyMM 전달
-        List<MonRnkDTO> listMonRnk = monRnkService.getMonRnk(yyMM);
+    @GetMapping("/getMonRnk/{yyMM}")
+    public ResponseEntity<List<MonRnkDTO>> getMonRnk(
+            @PathVariable String yyMM,
+            @RequestParam(defaultValue = "0") int page, // 페이지 번호 (기본 0)
+            @RequestParam(defaultValue = "8") int size  // 페이지 크기 (기본 8)
+    ) {
+        // PageRequest 생성
+        Pageable pageable = PageRequest.of(page, size);
+
+        List<MonRnkDTO> listMonRnk = monRnkService.getMonRnk(yyMM, pageable);
         return ResponseEntity.ok().body(listMonRnk);
     }
 
