@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import './MonthlyRanking.css';
 import axios from 'axios';
@@ -9,6 +10,8 @@ const MonthlyRanking = () => {
   const [targetDate, setTargetDate] = useState(new Date());
   const [titleDate, setTitleDate] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+
+  const navigate = useNavigate();
   
   const top3Data = imgs.slice(0, 3).filter(item => item);
   const restImgs = imgs.length > 3 ? imgs.slice(3) : [];
@@ -79,6 +82,13 @@ const MonthlyRanking = () => {
 
   return (
     <div className={`ranking-container ${isLocked ? 'click-locked' : ''}`}>
+
+      <button className="back-btn" onClick={() => {navigate(-1);}}>
+         <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+         </svg>
+      </button>
+      
       <button className="nav-btn prev-btn" onClick={() => changeMonth(-1)}>◀</button>
       <button className="nav-btn next-btn" onClick={() => changeMonth(1)}>▶</button>
       
