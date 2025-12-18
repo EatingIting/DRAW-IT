@@ -16,9 +16,10 @@ public class MonRnkController {
     @Autowired
     private MonRnkService monRnkService;
 
-    @GetMapping("/getMonRnk")
-    public ResponseEntity<List<MonRnkDTO>> getMonRnk() {
-        List<MonRnkDTO> listMonRnk = monRnkService.getMonRnk();
+    @GetMapping("/getMonRnk/{yyMM}") // {yyMM} 경로 변수 추가
+    public ResponseEntity<List<MonRnkDTO>> getMonRnk(@PathVariable String yyMM) {
+        // 서비스 메서드에 yyMM 전달
+        List<MonRnkDTO> listMonRnk = monRnkService.getMonRnk(yyMM);
         return ResponseEntity.ok().body(listMonRnk);
     }
 

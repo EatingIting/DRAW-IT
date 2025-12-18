@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 const MonthlyRanking = () => {
   const [imgs, setImgs] = useState([]);
   const [isLocked, setIsLocked] = useState(false); // 애니메이션 중 클릭 방지 상태
+  const [titleDate, setTitleDate] = useState("");
   
   const top3Data = imgs.slice(0, 3).filter(item => item);
   const restImgs = imgs.length > 3 ? imgs.slice(3) : [];
@@ -16,7 +17,16 @@ const MonthlyRanking = () => {
   useEffect(() => {
     (async() => {
       try {
-        let response = await axios.get("http://localhost:8080/monRnk/getMonRnk");
+        const now = new Date();
+        const fullYear = now.getFullYear(); // 2024 (표시용)
+        const year = String(fullYear).slice(-2); // 24 (API용)
+        const month = String(now.getMonth() + 1).padStart(2, '0'); // 12
+        
+        const yyMM = `${year}${month}`;
+
+        setTitleDate(`${fullYear}.${month}`);
+
+        let response = await axios.get(`http://localhost:8080/monRnk/getMonRnk/${yyMM}`);
         const mappedData = response.data.map((item) => ({
           id: item.imgId,
           topic: item.topic,
@@ -80,6 +90,11 @@ const MonthlyRanking = () => {
           let rankClass = '';
           let rankNum = index + 1;
 
+          let rankSuffix = 'th';
+          if (rankNum === 1) rankSuffix = 'st';
+          else if (rankNum === 2) rankSuffix = 'nd';
+          else if (rankNum === 3) rankSuffix = 'rd';
+
           const isFirst = index === 0;
           const itemWidth = isFirst ? 320 : 280;
 
@@ -127,7 +142,6 @@ const MonthlyRanking = () => {
                         height: isFirst ? '240px' : '200px'
                     }}
                   />
-                  <span className="rank-badge">{rankNum}</span>
               </div>
               
               <motion.div 
@@ -137,7 +151,7 @@ const MonthlyRanking = () => {
               >
                 <div className="snow-cap"><div className="img-topic">{img.topic}</div></div> 
                 <div className="ribbon"></div>
-                <span className="rank-text">{rankNum}st</span>
+                <span className="rank-text">{rankNum}{rankSuffix}</span>
                 <motion.span key={img.rec} className="recommend">{img.rec}</motion.span>
               </motion.div>
             </motion.div>
@@ -145,6 +159,10 @@ const MonthlyRanking = () => {
         })}
       </motion.div>
       </AnimatePresence>
+
+      <div className="hall-of-fame-title">
+        {titleDate} <br/>명예의 전당
+      </div>
 
       <div className="list-section">
         <motion.div className="grid-container" layout>
