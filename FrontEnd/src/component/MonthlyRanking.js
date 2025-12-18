@@ -5,9 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const MonthlyRanking = () => {
   const [imgs, setImgs] = useState([]);
-  const [isLocked, setIsLocked] = useState(false); // 애니메이션 중 클릭 방지 상태
+  const [isLocked, setIsLocked] = useState(false);
   const [targetDate, setTargetDate] = useState(new Date());
   const [titleDate, setTitleDate] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   
   const top3Data = imgs.slice(0, 3).filter(item => item);
   const restImgs = imgs.length > 3 ? imgs.slice(3) : [];
@@ -17,6 +18,8 @@ const MonthlyRanking = () => {
 
   useEffect(() => {
     (async() => {
+      setIsLoading(true);
+      setImgs([]); 
       try {
         const fullYear = targetDate.getFullYear();
         const year = String(fullYear).slice(-2); 
@@ -24,9 +27,6 @@ const MonthlyRanking = () => {
         const yyMM = `${year}${month}`;
 
         setTitleDate(`${fullYear}.${month}`);
-
-        // 날짜가 바뀌면 기존 데이터를 비워준다
-        setImgs([]);
 
         let response = await axios.get(`http://localhost:8080/monRnk/getMonRnk/${yyMM}`);
         const mappedData = response.data.map((item) => ({
@@ -39,51 +39,35 @@ const MonthlyRanking = () => {
       } catch (error) {
         console.error("통신 에러:", error);
         setImgs([]);
+      } finally {
+        setIsLoading(false);
       }
     })();
   }, [targetDate]);
 
   const handleClick = async (id) => {
-    // 1. 이미 락이 걸려있다면(순위 변동 애니메이션 중) 클릭 무시
     if (isLocked) return;
-
     try{
-      // ✨ [수정 핵심] 무조건 락을 거는 것이 아니라, 미리 계산 후 판단
-      
-      // A. 현재 상태 복사 및 점수 증가 시뮬레이션
       const nextImgs = imgs.map((img) =>
         img.id === id ? { ...img, rec: img.rec + 1} : img
       );
-
-      // B. 점수 순으로 정렬 시뮬레이션
       const sortedNextImgs = [...nextImgs].sort((a, b) => b.rec - a.rec);
-
-      // C. 순위 변동 여부 확인
-      // 현재 순서(ID 배열)와 바뀔 순서(ID 배열)를 비교
       const currentOrder = imgs.map(img => img.id).join(',');
       const nextOrder = sortedNextImgs.map(img => img.id).join(',');
-      const isRankChanged = currentOrder !== nextOrder;
-
-      // D. 순위가 바뀔 때만 락을 걸고 타임아웃 설정
-      if (isRankChanged) {
+      
+      if (currentOrder !== nextOrder) {
         setIsLocked(true);
-        setTimeout(() => {
-          setIsLocked(false);
-        }, 1000); // 애니메이션 시간(약 1초) 동안 클릭 방지
+        setTimeout(() => setIsLocked(false), 1000); 
       }
-      // 서버 업데이트
       await axios.post(`http://localhost:8080/monRnk/increaseRec/${id}`);
-
-      // E. 상태 업데이트 (순위가 안 바뀌면 즉시 반영, 바뀌면 락 걸린 상태로 반영)
       setImgs(sortedNextImgs);
-
     } catch(error){
       console.log("추천 업데이트 실패: ", error);
     }
   }
 
   const changeMonth = (offset) => {
-    if (isLocked) return; // 애니메이션 중 클릭 방지
+    if (isLocked) return;
     setTargetDate((prevDate) => {
       const newDate = new Date(prevDate);
       newDate.setMonth(newDate.getMonth() + offset);
@@ -91,133 +75,135 @@ const MonthlyRanking = () => {
     });
   };
 
+  const hasData = imgs.length > 0;
+
   return (
-    // 락이 걸렸을 때만 'click-locked' 클래스 추가 (CSS에서 pointer-events: none 처리)
     <div className={`ranking-container ${isLocked ? 'click-locked' : ''}`}>
-
-      <button className="nav-btn prev-btn" onClick={() => changeMonth(-1)}>
-        ◀ {/* 텍스트나 아이콘은 취향껏 수정 */}
-      </button>
-      <button className="nav-btn next-btn" onClick={() => changeMonth(1)}>
-        ▶ 
-      </button>
+      <button className="nav-btn prev-btn" onClick={() => changeMonth(-1)}>◀</button>
+      <button className="nav-btn next-btn" onClick={() => changeMonth(1)}>▶</button>
       
-      <AnimatePresence>
+      {/* ✨ podium-section은 항상 존재 (공간 확보) 
+         데이터가 있으면 기둥 3개를, 없으면 404 텍스트를 띄움
+      */}
       <motion.div className="podium-section" layout>
-        {top3Data.map((img, index) => {
-          
-          let positionClass = '';
-          let rankClass = '';
-          let rankNum = index + 1;
+        <AnimatePresence mode='wait'>
+          {hasData ? (
+            // 데이터가 있을 때: 기존 Podium 로직
+            top3Data.map((img, index) => {
+              let positionClass = '';
+              let rankClass = '';
+              let rankNum = index + 1;
+              let rankSuffix = rankNum === 1 ? 'st' : rankNum === 2 ? 'nd' : 'rd';
 
-          let rankSuffix = 'th';
-          if (rankNum === 1) rankSuffix = 'st';
-          else if (rankNum === 2) rankSuffix = 'nd';
-          else if (rankNum === 3) rankSuffix = 'rd';
+              const isFirst = index === 0;
+              const itemWidth = isFirst ? 320 : 280;
 
-          const isFirst = index === 0;
-          const itemWidth = isFirst ? 320 : 280;
+              if (index === 0) { positionClass = 'pos-center'; rankClass = 'first'; } 
+              else if (index === 1) { positionClass = 'pos-left'; rankClass = 'second'; } 
+              else { positionClass = 'pos-right'; rankClass = 'third'; }
 
-          if (index === 0) { positionClass = 'pos-center'; rankClass = 'first'; } 
-          else if (index === 1) { positionClass = 'pos-left'; rankClass = 'second'; } 
-          else { positionClass = 'pos-right'; rankClass = 'third'; }
+              let calculatedHeight = (img.rec / maxScore) * maxPixelHeight;
+              calculatedHeight = Math.max(130, calculatedHeight);
+              let pillarDelay = index === 1 ? 0 : index === 2 ? 0.4 : 0.8;
 
-          let calculatedHeight = (img.rec / maxScore) * maxPixelHeight;
-          calculatedHeight = Math.max(130, calculatedHeight);
-
-          return (
-            <motion.div 
-              key={img.id}
-              layout 
-              className={`podium-item ${positionClass} ${rankClass}`}
-              style={{ 
-                width: `${itemWidth}px`, 
-                marginLeft: `-${itemWidth / 2}px`,
-                zIndex: isFirst ? 10 : 5 
-              }}
-              initial={{ opacity: 0, y: 50 }} 
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
-              transition={{ 
-                type: "spring", stiffness: 300, damping: 25 
-              }}
-            >
-              <div className="img-wrapper">
-                  <motion.img 
-                    layoutId={img.id} 
-                    src={img.url} 
-                    alt={img.topic} 
-                    className="ranking-img"
-                    onClick={() => handleClick(img.id)}
-
-                    whileHover={{ scale: 1.15, rotate: -5 }} 
-                    whileTap={{ 
-                      scale: 1.15, 
-                      rotate: [0, -5, 5, -5, 0], // CSS @keyframes paperShake 효과를 배열로 구현
-                      transition: { duration: 0.4 }
-                    }}
-                    style={{
-                        cursor: 'pointer',
-                        width: isFirst ? '240px' : '200px',
-                        height: isFirst ? '240px' : '200px'
-                    }}
-                  />
-              </div>
-              
+              return (
+                <motion.div 
+                  key={img.id}
+                  layout 
+                  className={`podium-item ${positionClass} ${rankClass}`}
+                  style={{ 
+                    width: `${itemWidth}px`, 
+                    marginLeft: `-${itemWidth / 2}px`,
+                    zIndex: isFirst ? 20 : 5 
+                  }}
+                >
+                  <div className="img-wrapper">
+                      <motion.img 
+                        layoutId={img.id} 
+                        src={img.url} 
+                        alt={img.topic} 
+                        className="ranking-img halo-active"
+                        onClick={() => handleClick(img.id)}
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                        whileHover={{ scale: 1.15, rotate: -5 }} 
+                        whileTap={{ scale: 1.15, rotate: [0, -5, 5, -5, 0], transition: { rotate: { type: "tween", duration: 0.4 } } }}
+                        style={{
+                            cursor: 'pointer',
+                            width: isFirst ? '240px' : '200px',
+                            height: isFirst ? '240px' : '200px'
+                        }}
+                      />
+                  </div>
+                  <motion.div 
+                    className="pillar" 
+                    initial={{ height: 0 }}
+                    animate={{ height: calculatedHeight }}
+                    transition={{ delay: pillarDelay, duration: 0.5, ease: "easeOut" }}
+                    layout 
+                  >
+                    <div className="snow-cap"><div className="img-topic">{img.topic}</div></div> 
+                    <div className="ribbon"></div>
+                    <span className="rank-text">{rankNum}{rankSuffix}</span>
+                    <motion.span key={img.rec} className="recommend">{img.rec}</motion.span>
+                  </motion.div>
+                </motion.div>
+              );
+            })
+          ) : (
+             // ✨ 데이터가 없을 때: 404 메시지 (로딩중이 아닐 때만)
+             !isLoading && (
               <motion.div 
-                className="pillar" 
-                style={{ height: `${calculatedHeight}px` }}
-                layout 
+                key="not-found"
+                className="not-found-message"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
               >
-                <div className="snow-cap"><div className="img-topic">{img.topic}</div></div> 
-                <div className="ribbon"></div>
-                <span className="rank-text">{rankNum}{rankSuffix}</span>
-                <motion.span key={img.rec} className="recommend">{img.rec}</motion.span>
+                404: ART NOT FOUND
               </motion.div>
-            </motion.div>
-          );
-        })}
+             )
+          )}
+        </AnimatePresence>
       </motion.div>
-      </AnimatePresence>
 
+      {/* 명예의 전당 타이틀 (항상 표시, 위치 고정) */}
       <div className="hall-of-fame-title">
         {titleDate} <br/>명예의 전당
       </div>
 
-      <div className="list-section">
-        <motion.div className="grid-container" layout>
-          <AnimatePresence>
-          {restImgs.map((img) => (
-            <motion.div 
-              key={img.id} 
-              layout
-              className="grid-item"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }} 
-            >
-               <motion.img 
-                  layoutId={img.id}
-                  src={img.url} 
-                  alt={img.topic} 
-                  className="list-avatar" 
-                  onClick={() => handleClick(img.id)} 
-                  style={{cursor: "pointer"}}
-
-                  whileHover={{ scale: 1.15, rotate: -5 }}
-                  whileTap={{ 
-                    scale: 1.15, 
-                    rotate: [0, -5, 5, -5, 0],
-                    transition: { duration: 0.4 }
-                  }}
-               />
-               <div className="list-topic">{img.topic}</div>
-               <div className="list-rec">{img.rec}</div>
-            </motion.div>
-          ))}
-          </AnimatePresence>
-        </motion.div>
-      </div>
+      {/* 리스트 섹션 (데이터가 있을 때만 표시) */}
+      {hasData && (
+        <div className="list-section">
+          <motion.div className="grid-container" layout>
+            <AnimatePresence>
+            {restImgs.map((img) => (
+              <motion.div 
+                key={img.id} 
+                layout
+                className="grid-item"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8 }} 
+              >
+                 <motion.img 
+                    layoutId={img.id}
+                    src={img.url} 
+                    alt={img.topic} 
+                    className="list-avatar" 
+                    onClick={() => handleClick(img.id)} 
+                    whileHover={{ scale: 1.15, rotate: -5 }}
+                    whileTap={{ scale: 1.15, rotate: [0, -5, 5, -5, 0] }}
+                 />
+                 <div className="list-topic">{img.topic}</div>
+                 <div className="list-rec">{img.rec}</div>
+              </motion.div>
+            ))}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

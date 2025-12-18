@@ -54,10 +54,14 @@
   position: relative;
   width: 100%;
   max-width: 800px;
-  height: 500px;
+  height: 500px; /* 높이 고정 */
+  margin: 40px auto 30px auto;
   
-  /* ✨ 수정된 부분: 상하 여백은 유지하되, 좌우는 auto로 설정하여 중앙 정렬 */
-  margin: 40px auto 30px auto; 
+  /* ✨ 내부 컨텐츠(404 메시지) 중앙 정렬을 위한 Flex 설정 */
+  /* absolute 포지션인 기둥들(podium-item)은 이 Flex의 영향을 받지 않고 bottom:0을 유지합니다 */
+  display: flex;
+  justify-content: center;
+  align-items: center; 
 }
 
 .podium-item {
@@ -112,11 +116,10 @@
   align-items: center;
   box-shadow: 0 4px 10px rgba(0,0,0,0.3);
   gap: 3px;
+
   
-  /* 기둥 높이와 배경색 변경은 여전히 CSS로 부드럽게 */
   transition: height 0.6s ease, background 0.6s ease;
 }
-
 /* 눈 효과 */
 /* 눈 효과 */
 .snow-cap {
@@ -174,6 +177,24 @@
   align-items: center;
 }
 
+/* === 후광(Halo) 애니메이션 정의 === */
+@keyframes halo-glow {
+  0% {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+    border-color: #FFD700;
+  }
+  50% {
+    /* 빛이 퍼지는 효과 */
+    box-shadow: 0 0 30px 10px rgba(255, 215, 0, 0.6);
+    border-color: #FFF; /* 테두리도 밝게 빛남 */
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+    border-color: #FFD700;
+  }
+}
+
+/* === 랭킹 이미지 스타일 수정 === */
 .ranking-img {
   width: 200px;
   height: 200px;
@@ -181,9 +202,19 @@
   background: white;
   border-radius: 25%;
   border: 4px solid #FFD700;
+  /* 기본 그림자 */
   box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-  /* 테두리 색 변경 애니메이션만 남김 */
-  transition: border-color 0.6s ease; 
+  
+  /* 부드러운 전환 */
+  transition: filter 0.3s ease; 
+  transform-origin: center center;
+}
+
+/* JS에서 추가한 클래스: 이미지가 렌더링 된 후 깜빡거리는 후광 효과 */
+.ranking-img.halo-active {
+  /* 2초 동안 무한 반복하여 빛남 */
+  animation: halo-glow 2s infinite ease-in-out;
+  /* 이미지가 등장하는 딜레이 이후부터 애니메이션이 자연스럽게 보이도록 설정됨 */
 }
 /* 1등일 때 테두리 색 변경 */
 .first .ranking-img {
@@ -191,15 +222,48 @@
   /* 크기 조정은 transform scale로 대체되므로 width/height 직접 변경 제거 */
 }
 
+/* 1등은 더 강렬한 붉은빛 후광 (선택사항) */
+.first .ranking-img.halo-active {
+  animation: halo-glow-red 2s infinite ease-in-out;
+}
+
+@keyframes halo-glow-red {
+  0% { box-shadow: 0 0 10px rgba(212, 36, 38, 0.2); border-color: #D42426; }
+  50% { box-shadow: 0 0 40px 15px rgba(212, 36, 38, 0.6); border-color: #FF6B6B; }
+  100% { box-shadow: 0 0 10px rgba(212, 36, 38, 0.2); border-color: #D42426; }
+}
+
+/* 404 메시지 중앙 정렬 */
+.not-found-message {
+  /* position: absolute 제거 -> 부모인 podium-section의 flex 정렬을 따름 */
+  font-family: 'NeoDunggeunmo', sans-serif;
+  font-size: 4rem; 
+  color: #FF6B6B;  
+  text-align: center;
+  
+  text-shadow: 
+    4px 4px 0px #000,
+    -2px -2px 0px #330000;
+    
+  z-index: 100;
+  animation: flicker 2s infinite; 
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 .hall-of-fame-title {
+  /* position: relative;  <-- 필요하다면 추가 */
   font-family: 'NeoDunggeunmo', sans-serif;
   text-align: center;
   font-size: 3rem;
-  color: #FFD700; /* 금색 */
+  color: #FFD700; 
+  /* margin은 JS에서 데이터 유무에 따라 inline style로 조절되거나, 여기서 기본값 설정 */
   margin: 50px 0 30px 0;
-  
-  /* 픽셀 폰트에 어울리는 각진 그림자 */
   text-shadow: 4px 4px 0px #000000; 
+  z-index: 10; /* 404 메시지와 겹칠 경우를 대비해 우선순위 조정 */
 }
 
 /* === 하단 리스트 === */
