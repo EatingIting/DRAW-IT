@@ -19,19 +19,21 @@
 }
 
 .nav-btn {
-  position: absolute;
-  top: 300px; /* 시상대 높이 쯤에 위치하도록 조정 (필요시 숫자 변경) */
+  position: fixed;          /* ✅ 스크롤해도 화면에 고정 */
+  top: 50%;                 /* ✅ 화면 y축 중앙 */
+  transform: translateY(-50%); /* ✅ 정확히 중앙 맞춤 */
+
   background: none;
   border: none;
-  font-family: 'NeoDunggeunmo', sans-serif; /* 레트로 폰트 적용 */
+  font-family: 'NeoDunggeunmo', sans-serif;
   font-size: 2rem;
-  color: rgba(255, 255, 255, 0.6); /* 평소엔 약간 투명하게 */
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
-  z-index: 100; /* 다른 요소보다 위에 오도록 */
+
+  z-index: 1000;            /* ✅ 다른 요소 위로 */
   transition: all 0.3s ease;
   text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
-
 .nav-btn:hover {
   color: #FFD700; /* 호버시 금색으로 강조 */
   transform: scale(1.2); /* 커지는 효과 */

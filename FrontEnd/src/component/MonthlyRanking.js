@@ -96,10 +96,10 @@ const MonthlyRanking = () => {
     <div className={`ranking-container ${isLocked ? 'click-locked' : ''}`}>
 
       <button className="nav-btn prev-btn" onClick={() => changeMonth(-1)}>
-        Let's Go Back ◀ {/* 텍스트나 아이콘은 취향껏 수정 */}
+        ◀ {/* 텍스트나 아이콘은 취향껏 수정 */}
       </button>
       <button className="nav-btn next-btn" onClick={() => changeMonth(1)}>
-        ▶ Let's Go Future
+        ▶ 
       </button>
       
       <AnimatePresence>
