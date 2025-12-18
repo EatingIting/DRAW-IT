@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -22,12 +23,8 @@ public class LobbyUserStore {
     // F5를 위한 유예 시간 (1.5초)
     private static final long GRACE_MS = 1500;
 
-    // roomId -> (userId -> UserSessionState)
     private final Map<String, Map<String, UserSessionState>> rooms = new ConcurrentHashMap<>();
-
-    // sessionId -> (roomId, userId)
     private final Map<String, String[]> sessionIndex = new ConcurrentHashMap<>();
-
     /* =========================
        입장 / 재접속
     ========================= */
@@ -177,21 +174,27 @@ public class LobbyUserStore {
         ));
     }
 
-    // ✅ [중요 수정] 끊긴 유저(Loading 중인 유저)도 포함해서 반환해야 함!
-    // 이걸 빼먹으면 화면 이동 중에 "유저 없음"으로 게임이 터집니다.
     public List<Map<String, Object>> getUsers(String roomId) {
         Map<String, UserSessionState> users = rooms.get(roomId);
         if (users == null) return List.of();
 
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (UserSessionState u : users.values()) {
-            // ⚠️ disconnectAt 체크 제거! (스케줄러가 지우기 전까진 살아있는 유저로 취급)
-            result.add(Map.of(
-                    "userId", u.getUserId(),
-                    "nickname", u.getNickname(),
-                    "host", u.isHost()
-            ));
-        }
-        return result;
+        return users.values().stream()
+                // 1. 정렬 로직
+                .sorted((u1, u2) -> {
+                    // 방장(Host)은 무조건 맨 앞
+                    if (u1.isHost() && !u2.isHost()) return -1;
+                    if (!u1.isHost() && u2.isHost()) return 1;
+
+                    // 나머지는 입장 시간(joinedAt) 오름차순
+                    return Long.compare(u1.getJoinedAt(), u2.getJoinedAt());
+                })
+                // 2. 맵핑 (여기가 에러 발생 지점)
+                // ✅ 수정: Map.<String, Object>of(...) 로 타입을 명시해야 함
+                .map(u -> Map.<String, Object>of(
+                        "userId", u.getUserId(),
+                        "nickname", u.getNickname(),
+                        "host", u.isHost()
+                ))
+                .collect(Collectors.toList());
     }
 }
