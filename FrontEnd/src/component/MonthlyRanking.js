@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 const MonthlyRanking = () => {
   const [imgs, setImgs] = useState([]);
   const [isLocked, setIsLocked] = useState(false); // 애니메이션 중 클릭 방지 상태
+  const [targetDate, setTargetDate] = useState(new Date());
   const [titleDate, setTitleDate] = useState("");
   
   const top3Data = imgs.slice(0, 3).filter(item => item);
@@ -17,14 +18,15 @@ const MonthlyRanking = () => {
   useEffect(() => {
     (async() => {
       try {
-        const now = new Date();
-        const fullYear = now.getFullYear(); // 2024 (표시용)
-        const year = String(fullYear).slice(-2); // 24 (API용)
-        const month = String(now.getMonth() + 1).padStart(2, '0'); // 12
-        
+        const fullYear = targetDate.getFullYear();
+        const year = String(fullYear).slice(-2); 
+        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
         const yyMM = `${year}${month}`;
 
         setTitleDate(`${fullYear}.${month}`);
+
+        // 날짜가 바뀌면 기존 데이터를 비워준다
+        setImgs([]);
 
         let response = await axios.get(`http://localhost:8080/monRnk/getMonRnk/${yyMM}`);
         const mappedData = response.data.map((item) => ({
@@ -36,9 +38,10 @@ const MonthlyRanking = () => {
         setImgs(mappedData.sort((a, b) => b.rec - a.rec));
       } catch (error) {
         console.error("통신 에러:", error);
+        setImgs([]);
       }
     })();
-  }, []);
+  }, [targetDate]);
 
   const handleClick = async (id) => {
     // 1. 이미 락이 걸려있다면(순위 변동 애니메이션 중) 클릭 무시
@@ -79,9 +82,26 @@ const MonthlyRanking = () => {
     }
   }
 
+  const changeMonth = (offset) => {
+    if (isLocked) return; // 애니메이션 중 클릭 방지
+    setTargetDate((prevDate) => {
+      const newDate = new Date(prevDate);
+      newDate.setMonth(newDate.getMonth() + offset);
+      return newDate;
+    });
+  };
+
   return (
     // 락이 걸렸을 때만 'click-locked' 클래스 추가 (CSS에서 pointer-events: none 처리)
     <div className={`ranking-container ${isLocked ? 'click-locked' : ''}`}>
+
+      <button className="nav-btn prev-btn" onClick={() => changeMonth(-1)}>
+        Let's Go Back ◀ {/* 텍스트나 아이콘은 취향껏 수정 */}
+      </button>
+      <button className="nav-btn next-btn" onClick={() => changeMonth(1)}>
+        ▶ Let's Go Future
+      </button>
+      
       <AnimatePresence>
       <motion.div className="podium-section" layout>
         {top3Data.map((img, index) => {

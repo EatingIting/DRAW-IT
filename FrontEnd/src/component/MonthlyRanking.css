@@ -7,6 +7,7 @@
 
 /* 전체 컨테이너 */
 .ranking-container {
+  position: relative;
   background-color: #2F5A2D;
   min-height: 100vh;
   padding: 20px;
@@ -15,6 +16,35 @@
   align-items: center;
   font-family: 'Rounded Mplus 1c', sans-serif;
   overflow-x: hidden; /* 가로 스크롤 방지 */
+}
+
+.nav-btn {
+  position: absolute;
+  top: 300px; /* 시상대 높이 쯤에 위치하도록 조정 (필요시 숫자 변경) */
+  background: none;
+  border: none;
+  font-family: 'NeoDunggeunmo', sans-serif; /* 레트로 폰트 적용 */
+  font-size: 2rem;
+  color: rgba(255, 255, 255, 0.6); /* 평소엔 약간 투명하게 */
+  cursor: pointer;
+  z-index: 100; /* 다른 요소보다 위에 오도록 */
+  transition: all 0.3s ease;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.nav-btn:hover {
+  color: #FFD700; /* 호버시 금색으로 강조 */
+  transform: scale(1.2); /* 커지는 효과 */
+}
+
+/* 왼쪽 버튼 위치 */
+.prev-btn {
+  left: 5%; /* 화면 왼쪽에서 5% 떨어짐 */
+}
+
+/* 오른쪽 버튼 위치 */
+.next-btn {
+  right: 5%; /* 화면 오른쪽에서 5% 떨어짐 */
 }
 
 /* === 상단 Podium 영역 === */
