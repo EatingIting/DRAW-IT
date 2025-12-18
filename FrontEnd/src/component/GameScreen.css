@@ -1,3 +1,5 @@
+/* GameScreen.css */
+
 /* =========================================
    :root - 변수 (Lobby와 통일)
    ========================================= */
@@ -82,7 +84,7 @@
 }
 
 /* =========================================
-   유저 리스트 (Lobby와 완전 동일 스타일)
+   유저 리스트
    ========================================= */
 .user-column {
   display: flex;
@@ -152,31 +154,84 @@
 }
 
 /* =========================================
-   중앙: 스케치북 & 툴박스
+   중앙: 타이머, 스케치북, 툴박스
    ========================================= */
 .center-board-area {
-  position: relative;
   display: flex;
+  flex-direction: column;
   justify-content: center;
-  align-items: flex-start; /* 상단 정렬 */
-  gap: 20px;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+/* ✅ 보드와 도구함을 가로로 묶는 래퍼 */
+.board-wrapper {
+  display: flex;
+  flex-direction: row; /* 스케치북 그룹(좌) - 도구함(우) 가로 배치 */
+  align-items: flex-start; /* 상단 기준 정렬 */
+  gap: 0px; /* 스케치북과 도구함 사이 간격 0 (딱 붙임) */
+}
+
+.canvas-group {
+    display: flex;
+    flex-direction: column; /* 타이머(위) - 스케치북(아래) */
+    align-items: center;
+}
+
+/* ✅ 타이머 컨테이너 */
+.timer-container {
+  width: 746px; /* 캔버스 너비와 동일 */
+  height: 10px;
+  background-color: #eee;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 2px solid #333;
+  margin-bottom: 5px; /* 스케치북과 약간의 간격 */
+}
+
+/* ✅ 타이머 애니메이션 바 */
+.timer-bar {
+  width: 100%;
+  height: 100%;
+  background-color: #ff5252; 
+  transform-origin: left; 
+  animation: shrink 60s linear forwards;
+}
+
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+.tool-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;    
+  gap: 15px;
+  
+  /* 타이머 높이(10px) + 타이머마진(5px) + 스케치북 상단 여백 고려하여 높이 맞춤 */
+  margin-top: 50px; 
+  
+  /* 스케치북과 더 밀착시키고 싶다면 음수 마진 사용 */
+  margin-left: -5px; 
+  z-index: 10;
 }
 
 /* 스케치북 이미지 배경 */
 .drawingBoard {
   width: 900px;
-  height: 675px; /* aspect-ratio 4:3 비슷하게 맞춤 */
+  height: 675px; 
   
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
   position: relative; 
   
-  /* 스케치북 자체에 그림자 추가 */
   filter: drop-shadow(10px 10px 0px rgba(0,0,0,0.2));
 }
 
-/* 캔버스 위치 (이미지상의 흰 종이 위치에 맞춤) */
+/* 캔버스 위치 */
 .canvas {
   position: absolute;
   top: 38px;
@@ -188,31 +243,47 @@
   touch-action: none;
 }
 
-/* 툴박스 (오른쪽에 부착된 패널 스타일) */
-.tool-box {
+/* 도구함 전체 컨테이너 (주제어 + 도구박스) */
+.tool-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: center;    
+  gap: 15px;
   
-  background: #ffec99; /* 옅은 노랑 패널 */
-  border: var(--game-border-width) solid var(--game-border-color);
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 6px 6px 0 rgba(0,0,0,0.2);
+  /* ✅ 스케치북 상단 나사 부분과 높이를 맞추기 위해 마진 조정 */
+  margin-top: 35px; 
   
-  position: relative;
-  margin-top: 40px; /* 위치 조정 */
-  z-index: 50;
-
-  -webkit-user-select: none; /* Chrome, Safari, Opera */
-  -moz-user-select: none;    /* Firefox */
-  -ms-user-select: none;     /* IE 10+ */
-  user-select: none;         /* Standard */
-
-  cursor: pointer;
+  /* ✅ 스케치북과 더 밀착시키고 싶다면 음수 마진 사용 가능 */
+  margin-left: -10px; 
+  z-index: 10; /* 스케치북 위로 살짝 올라와도 보이게 */
 }
 
-/* 툴 아이콘을 감싸는 버튼 스타일 */
+/* 주제어 배지 */
+.keyword-badge {
+  background-color: #fdd835;
+  color: #212121;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  margin: 0; 
+}
+
+/* ✅ 툴박스: 세로 정렬 (Vertical Layout) */
+.tool-box {
+  display: flex;
+  flex-direction: column; /* 세로 정렬 */
+  gap: 10px;
+  padding: 10px;
+  background-color: #ffe082; 
+  border-radius: 10px;
+  border: 2px solid #333;
+}
+
+/* 툴 아이콘 버튼 */
 .tool-btn {
   width: 56px;
   height: 56px;
@@ -227,6 +298,8 @@
   cursor: pointer;
   position: relative;
   transition: all 0.2s ease;
+  
+  user-select: none;
 }
 
 .tool-btn:hover {
@@ -234,19 +307,16 @@
 }
 
 .tool-btn.active {
-  background: #ffc107; /* 활성화 시 진한 노랑 */
+  background: #ffc107; 
   transform: translateY(2px);
-  box-shadow: inset 0 3px 0 rgba(0,0,0,0.2); /* 눌린 효과 */
+  box-shadow: inset 0 3px 0 rgba(0,0,0,0.2);
 }
 
-/* 전체 지우기 버튼 (빨강) */
+/* 전체 지우기 버튼 */
 .tool-btn.delete-btn {
   background: #ff6b6b;
-  margin-top: 20px;
-  font-size: 2.5rem;       /* 아이콘 크기 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  margin-top: 10px; /* 지우개와 간격 */
+  font-size: 2.5rem;       
   padding-bottom: 5px;
 }
 
@@ -266,15 +336,8 @@
   display: block;
 }
 
-.tool-btn img, 
-.tool-btn svg {
-  pointer-events: none; /* 아이콘 클릭이 부모(div) 클릭으로 통과됨 */
-  user-select: none;
-  -webkit-user-drag: none; /* 이미지 드래그 방지 */
-}
-
 /* =========================================
-   하단 채팅바 (Lobby와 동일)
+   하단 채팅바
    ========================================= */
 .chat-area {
   height: 80px;
@@ -336,19 +399,19 @@
   box-shadow: none;
 }
 
-/* 말풍선 */
-
+/* =========================================
+   말풍선 및 애니메이션
+   ========================================= */
 .chat-bubble-float {
   background: white;
   padding: 10px 14px;
   border-radius: 12px;
   
-  /* ✅ 게임 테마에 맞춘 테두리와 그림자 추가 */
   border: 3px solid #2c2c2c;
   box-shadow: 4px 4px 0 rgba(0,0,0,0.2); 
 
   font-size: 14px;
-  font-weight: 700; /* 폰트 굵게 */
+  font-weight: 700;
   color: #333;
 
   max-width: 200px;
@@ -361,45 +424,39 @@
   z-index: 9999;
 }
 
-/* ✅ 꺾인 꼬리 만들기 (테두리 부분) */
 .chat-bubble-float::before {
   content: "";
   position: absolute;
-  left: -10px; /* 위치 조정 */
+  left: -10px;
   top: 50%;
-  
   width: 14px;
   height: 14px;
-  background: #2c2c2c; /* 테두리 색상 */
-  
-  /* 회전(rotate)과 비틀기(skew)로 꺾인 모양 생성 */
+  background: #2c2c2c;
   transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
-  
-  /* 꼬리 끝을 살짝 둥글게 */
   border-bottom-left-radius: 4px;
-  z-index: -2; /* 말풍선 뒤로 */
+  z-index: -2;
 }
 
-/* ✅ 꺾인 꼬리 만들기 (흰색 채움 부분) */
 .chat-bubble-float::after {
   content: "";
   position: absolute;
-  left: -6px; /* 테두리보다 살짝 안쪽으로 */
+  left: -6px;
   top: 50%;
-  
   width: 14px;
   height: 14px;
-  background: white; /* 말풍선 배경색 */
-  
-  /* before와 동일한 각도로 변형하여 덮어씌움 */
+  background: white;
   transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
   z-index: -1;
 }
 
-/* 등장 애니메이션 */
 @keyframes bubbleFloat {
   0% { opacity: 0; transform: translateY(6px); }
   10% { opacity: 1; transform: translateY(0); }
   90% { opacity: 1; }
   100% { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
