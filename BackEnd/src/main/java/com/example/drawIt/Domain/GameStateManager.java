@@ -3,6 +3,7 @@ package com.example.drawIt.Domain;
 import org.springframework.stereotype.Component;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Component
 public class GameStateManager {
@@ -44,5 +45,33 @@ public class GameStateManager {
         if (users == null || users.isEmpty()) return null;
         int idx = new Random().nextInt(users.size());
         return (String) users.get(idx).get("userId");
+    }
+
+    public String pickNextDrawer(GameState state, List<Map<String, Object>> users) {
+        if (users == null || users.isEmpty()) return null;
+
+        // 1. 아직 출제 안 한 사람 찾기
+        List<String> candidates = users.stream()
+                .map(u -> (String) u.get("userId"))
+                .filter(uid -> !state.getDrawnUserIds().contains(uid))
+                .collect(Collectors.toList());
+
+        String nextDrawer;
+
+        // 2. 모든 사람이 한 번씩 다 했다면? -> 전체 유저 중에서 랜덤 (단, 방금 한 사람은 제외하면 좋음)
+        if (candidates.isEmpty()) {
+            candidates = users.stream()
+                    .map(u -> (String) u.get("userId"))
+                    .collect(Collectors.toList());
+        }
+
+        // 3. 후보군 중 랜덤 선정
+        int idx = new Random().nextInt(candidates.size());
+        nextDrawer = candidates.get(idx);
+
+        // 4. 기록 추가
+        state.getDrawnUserIds().add(nextDrawer);
+
+        return nextDrawer;
     }
 }
