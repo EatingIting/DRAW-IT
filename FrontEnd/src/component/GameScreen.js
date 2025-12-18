@@ -10,6 +10,7 @@ import EraserSettings from './settingmodals/EraserSettings';
 import PenIcon from './icons/PenIcon';
 import './GameScreen.css';
 import { API_BASE_URL } from '../api/config';
+import { createPortal } from 'react-dom';
 
 const hexToRgba = (hex) => {
   let c;
@@ -42,8 +43,26 @@ function GameScreen({ maxPlayers = 10 }) {
   
   const [isGameStarted, setIsGameStarted] = useState(false);
   
-  // ✅ 서버 동기화용 종료 시간
+  // 서버 동기화용 종료 시간
   const [roundEndTime, setRoundEndTime] = useState(0); 
+
+  //정답자 ID (하늘색 배경으로 표시용)
+  const [winnerId, setWinnerId] = useState(null);
+
+  //현재 출제자 ID 저장 (별 표시용)
+  const [currentDrawerId, setCurrentDrawerId] = useState(null);
+
+  // 정답 알림 모달 상태 (visible: 보임여부, winner: 정답자이름, answer: 정답)
+  const [answerModal, setAnswerModal] = useState({ visible: false, winner: '', answer: '' });
+
+  //전체 슬롯 (빈 자리 포함)
+  const totalSlots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
+
+  //왼쪽 컬럼 (짝수 인덱스)
+  const leftUsers = totalSlots.filter((_, i) => i % 2 === 0);
+
+  //오른쪽 컬럼 (홀수 인덱스)
+  const rightUsers = totalSlots.filter((_, i) => i % 2 === 1);
 
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
@@ -69,7 +88,7 @@ function GameScreen({ maxPlayers = 10 }) {
   const [chatMessage, setChatMessage] = useState('');
   const bubbleTimeoutRef = useRef({});
   
-  // ✅ 타이머 DOM Ref
+  // 타이머 DOM Ref
   const timerBarRef = useRef(null);
 
   const handleLeaveGame = () => {
@@ -139,7 +158,7 @@ function GameScreen({ maxPlayers = 10 }) {
       webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
       reconnectDelay: 3000,
       onConnect: () => {
-        console.log("✅ Game 소켓 연결 성공");
+        console.log("Game 소켓 연결 성공");
 
         client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
           const data = JSON.parse(msg.body);
@@ -150,7 +169,9 @@ function GameScreen({ maxPlayers = 10 }) {
             setIsDrawer(me);
             if (newWord) setKeyword(newWord);
 
-            // ✅ 서버 시간 수신 시 업데이트
+            setCurrentDrawerId(newDrawerId); //출제자에게 별이 옮겨감
+
+            // 서버 시간 수신 시 업데이트
             if (endTime) {
                 setRoundEndTime(endTime);
             }
@@ -174,6 +195,20 @@ function GameScreen({ maxPlayers = 10 }) {
             }
             prevDrawerIdRef.current = String(newDrawerId);
           };
+
+          if (data.type === 'CORRECT_ANSWER') {
+             const winnerId = data.winnerUserId;
+             const winnerName = data.winnerNickname;
+             const answer = data.answer;
+             
+             setWinnerId(winnerId);
+
+             setAnswerModal({ visible: true, winner: winnerName, answer: answer });
+
+             setTimeout(() => {
+                 setAnswerModal(prev => ({ ...prev, visible: false }));
+             }, 1500); //1.5초 뒤에 모달 닫기
+          }
 
           if (data.type === 'USER_UPDATE') {
             const hostId = data.hostUserId;
@@ -201,6 +236,8 @@ function GameScreen({ maxPlayers = 10 }) {
           }
 
           if (data.type === 'DRAWER_CHANGED') {
+            setWinnerId(null);
+            setAnswerModal(prev => ({ ...prev, visible: false }));
             resetCanvasLocal();
             updateDrawerState(data.drawerUserId, data.word, data.roundEndTime);
           }
@@ -208,6 +245,11 @@ function GameScreen({ maxPlayers = 10 }) {
           if (data.type === 'ROOM_DESTROYED') {
             alert('방이 삭제되었습니다.');
             navigate('/');
+          }
+
+          if (data.type === 'GAME_OVER') {
+            alert(`게임이 종료되었습니다.`);
+            handleLeaveGame();
           }
         });
 
@@ -259,7 +301,7 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [lobbyId, userId, nickname, navigate]);
 
 
-  // ✅ 타이머 애니메이션 동기화
+  // 타이머 애니메이션 동기화
   useEffect(() => {
     if (!isGameStarted || !roundEndTime || !timerBarRef.current) return;
 
@@ -280,7 +322,7 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [roundEndTime, isGameStarted]);
 
 
-  // ✅ 방장 타임오버 로직
+  // 방장 타임오버 로직
   useEffect(() => {
     if (!isGameStarted || !roundEndTime) return;
     const amIHost = players.find(p => String(p.userId) === String(userId))?.host;
@@ -567,37 +609,56 @@ function GameScreen({ maxPlayers = 10 }) {
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const half = Math.ceil(maxPlayers / 2);
 
-  const renderUser = (u, i) => (
+  const renderUser = (u, index) => (
     <div
-      key={i}
-      className={`user-card ${!u ? 'empty' : ''}`}
+      key={index} // React key는 고유해야 하므로 원래 인덱스 등 활용
+      className={`user-card ${!u ? 'empty' : ''} ${u && String(u.userId) === String(winnerId) ? 'winner' : ''}`}
       ref={(el) => { if (u && el) userCardRefs.current[u.userId] = el; }}
     >
       <div className="avatar" />
       <span className="username">
         {u ? u.nickname : 'Empty'}
-        {u?.host && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
+        {/* 방장 대신 현재 출제자에게 별 표시 */}
+        {u && String(u.userId) === String(currentDrawerId) && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
       </span>
     </div>
   );
 
   return (
     <div className="game-wrapper">
+       
+       {/* 모달 (Portal) */}
+       {answerModal.visible && createPortal(
+         <div className="answer-modal-overlay">
+            <div className="answer-modal-content">
+                <div className="confetti">🎉</div>
+                <h2>정답자가 나왔습니다!</h2>
+                <div className="modal-info">
+                    <p>정답: <span className="highlight-text">{answerModal.answer}</span></p>
+                    <p>정답자: <span className="highlight-winner">{answerModal.winner}</span></p>
+                </div>
+            </div>
+         </div>,
+         document.body
+       )}
+
        <button className="back-btn" onClick={handleLeaveGame}>
          <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
          </svg>
        </button>
+
        <div className="game-area">
           <div className="game-grid">
-             <div className="user-column left">{slots.slice(0, half).map(renderUser)}</div>
              
+             {/* ✅ [왼쪽 컬럼] 짝수 인덱스 유저들 (0:방장, 2, 4...) */}
+             <div className="user-column left">
+                {leftUsers.map((u, i) => renderUser(u, i * 2))} 
+             </div>
+             
+             {/* 중앙 보드 영역 (기존 유지) */}
              <div className="center-board-area">
-                
-                {/* 묶음 래퍼: 타이머, 스케치북, 도구함 */}
                 <div className="board-wrapper">
-                    
-                    {/* 1. 캔버스 그룹 (타이머 + 스케치북) */}
                     <div className="canvas-group">
                         {isGameStarted && (
                           <div className="timer-container">
@@ -614,7 +675,6 @@ function GameScreen({ maxPlayers = 10 }) {
                         </div>
                     </div>
 
-                    {/* 2. 도구함 (우측) */}
                     {isDrawer && (
                        <div className="tool-container">
                           {keyword && (
@@ -623,6 +683,7 @@ function GameScreen({ maxPlayers = 10 }) {
                             </div>
                           )}
                           <div className="tool-box">
+                              {/* ... (도구함 내부 버튼들 기존 동일) ... */}
                               {showModal && activeTool === 'pen' && <PenSettings color={penColor} setColor={setPenColor} width={penWidth} setWidth={setPenWidth} onClose={() => setShowModal(false)} />}
                               {showModal && activeTool === 'fill' && <FillSettings color={fillColor} setColor={setFillColor} onClose={() => setShowModal(false)} />}
                               {showModal && activeTool === 'eraser' && <EraserSettings width={eraserWidth} setWidth={setEraserWidth} onClose={() => setShowModal(false)} />}
@@ -632,7 +693,7 @@ function GameScreen({ maxPlayers = 10 }) {
                               <div className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} onClick={() => handleToolClick('eraser')}><img src="/svg/eraser.svg" alt="eraser" /></div>
                               
                               <div className="tool-btn" onClick={handleUndo} title="Undo">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 0 0 0-6 2.3L3 13" /></svg>
                               </div>
                               <div className="tool-btn" onClick={handleRedo} title="Redo">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
@@ -641,13 +702,18 @@ function GameScreen({ maxPlayers = 10 }) {
                           </div>
                        </div>
                     )}
-                </div> {/* End board-wrapper */}
-
+                </div>
              </div>
              
-             <div className="user-column right">{slots.slice(half).map(renderUser)}</div>
+             {/* ✅ [오른쪽 컬럼] 홀수 인덱스 유저들 (1, 3, 5...) */}
+             <div className="user-column right">
+                {rightUsers.map((u, i) => renderUser(u, i * 2 + 1))}
+             </div>
+
           </div>
        </div>
+       
+       {/* ... (말풍선, 채팅바 로직 기존 동일) ... */}
        {Object.entries(chatBubbles).map(([uid, msg]) => {
           const el = userCardRefs.current[uid];
           if (!el) return null;

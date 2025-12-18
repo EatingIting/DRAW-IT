@@ -153,6 +153,26 @@
   text-overflow: ellipsis;
 }
 
+.user-card.winner {
+  background-color: #1c7ed6; /* 진한 파란색 */
+  border-color: #1864ab;
+  color: white; /* 글자색 흰색으로 변경 */
+  transform: scale(1.1); /* 약간 커지게 */
+  box-shadow: 0 0 15px rgba(28, 126, 214, 0.6); /* 파란색 광채 */
+  transition: all 0.3s ease;
+}
+
+/* 정답자일 때 내부 텍스트 색상 변경 */
+.user-card.winner .username {
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+/* 정답자일 때 아바타 테두리 변경 */
+.user-card.winner .avatar {
+  border-color: white;
+}
+
 /* =========================================
    중앙: 타이머, 스케치북, 툴박스
    ========================================= */
@@ -459,4 +479,92 @@
 @keyframes popIn {
   0% { transform: scale(0); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+.answer-modal-overlay {
+  position: fixed; /* 화면 전체 기준 */
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  
+  /* 배경을 반투명 검정으로 하여 뒤를 흐리게 */
+  background-color: rgba(0, 0, 0, 0.7); 
+  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+  /* 최상위 z-index */
+  z-index: 99999; 
+  
+  /* 배경 등장 애니메이션 */
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* 모달 내용 박스 */
+.answer-modal-content {
+  background-color: #fff;
+  padding: 40px 60px;
+  border-radius: 20px;
+  text-align: center;
+  
+  /* 그림자와 테두리로 팝업 느낌 강조 */
+  box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+  border: 5px solid #2b8a3e; /* 게임 테마색 */
+  
+  min-width: 350px;
+  
+  /* ✅ [수정] 애니메이션 이름을 modalPopIn으로 변경 */
+  animation: modalPopIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.answer-modal-content h2 {
+  font-size: 2rem;
+  color: #333;
+  margin-bottom: 20px;
+  font-family: 'Jua', sans-serif;
+}
+
+.modal-info p {
+  font-size: 1.5rem;
+  margin: 12px 0;
+  color: #555;
+  font-family: 'Jua', sans-serif;
+}
+
+.highlight-text {
+  color: #e03131; /* 정답 강조 (빨강) */
+  font-weight: bold;
+  font-size: 1.8rem;
+}
+
+.highlight-winner {
+  color: #1971c2; /* 정답자 강조 (파랑) */
+  font-weight: bold;
+  font-size: 1.8rem;
+}
+
+.confetti {
+  font-size: 4rem;
+  margin-bottom: 15px;
+  display: block;
+}
+
+/* 애니메이션 정의 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ✅ [수정] 모달 전용 팝업 애니메이션 (이름 변경 및 중복 제거) */
+@keyframes modalPopIn {
+  from { 
+    transform: scale(0.5); 
+    opacity: 0; 
+  }
+  to { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
 }
