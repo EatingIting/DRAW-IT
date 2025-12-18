@@ -56,7 +56,7 @@ function Main() {
     try {
       // 방 존재 여부 확인
       await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
-      
+
       // 3. 방으로 이동하면서 닉네임 정보를 state로도 전달 (안전장치)
       navigate(`/lobby/${roomId}`, { state: { nickname: nickname.trim() } });
     } catch (error) {
@@ -92,17 +92,17 @@ function Main() {
 
         {/* 메인 버튼 그룹 */}
         <div className="btn-group">
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setIsCreateModalOpen(true)}
             disabled={!hasNickname} // 닉네임 없으면 비활성화
             style={{ opacity: !hasNickname ? 0.5 : 1, cursor: !hasNickname ? 'not-allowed' : 'pointer' }}
           >
             방만들기
           </button>
-          
-          <button 
-            type="button" 
+
+          <button
+            type="button"
             onClick={() => navigate('/join')}
             disabled={!hasNickname} // 닉네임 없으면 비활성화
             style={{ opacity: !hasNickname ? 0.5 : 1, cursor: !hasNickname ? 'not-allowed' : 'pointer' }}
@@ -133,9 +133,14 @@ function Main() {
         </div>
       </div>
 
+      <div className='monthlyRanking' onClick={() => navigate('/ranking')}>
+        <img src="/img/monRank.png" className="rankLogo" alt="MonthlyRanking"/>
+      </div>
+
+      {/* 방 생성 모달 */}
       {isCreateModalOpen && (
-        <CreateRoomModal 
-          onClose={() => setIsCreateModalOpen(false)} 
+        <CreateRoomModal
+          onClose={() => setIsCreateModalOpen(false)}
           nickname={nickname.trim()} // 모달에도 닉네임 전달
         />
       )}
