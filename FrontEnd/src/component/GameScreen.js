@@ -123,6 +123,43 @@ function GameScreen({ maxPlayers = 10 }) {
     currentStrokeRef.current = [];
   };
 
+  const saveMyDrawing = async (currentKeyword) => {
+    if (!canvasRef.current) return;
+    
+    // 1. 원본 캔버스 가져오기
+    const sourceCanvas = canvasRef.current;
+
+    // 2. 임시 캔버스 생성 (메모리 상에만 존재)
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = sourceCanvas.width;
+    tempCanvas.height = sourceCanvas.height;
+    const tCtx = tempCanvas.getContext('2d');
+
+    // 3. 임시 캔버스에 '흰색' 배경 채우기 (이게 없으면 투명 = 검은색이 됨)
+    tCtx.fillStyle = '#FFFFFF';
+    tCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+    // 4. 흰색 배경 위에 원본 그림 복사하기
+    tCtx.drawImage(sourceCanvas, 0, 0);
+
+    // 5. 임시 캔버스에서 이미지 데이터 추출
+    const base64Data = tempCanvas.toDataURL('image/jpeg', 0.8);
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/game/image/save`, {
+        lobbyId: lobbyId,
+        userId: userId,
+        nickname: nickname,
+        keyword: currentKeyword, 
+        base64Image: base64Data
+      });
+      console.log("🎨 내 그림 저장 완료! (흰색 배경 적용)");
+    } catch (err) {
+      console.error("❌ 그림 저장 실패:", err);
+    }
+  };
+
+
   useEffect(() => {
     if (!lobbyId) return;
     const fetchGameData = async () => {
@@ -150,6 +187,8 @@ function GameScreen({ maxPlayers = 10 }) {
   }, [lobbyId, userId]);
 
   const prevDrawerIdRef = useRef(null);
+  // 쵯신 주제어를 저장할 Ref
+  const keywordRef = useRef("");
 
   useEffect(() => {
     if (!userId || !nickname || !lobbyId) return;
@@ -167,7 +206,11 @@ function GameScreen({ maxPlayers = 10 }) {
             if (!newDrawerId) return;
             const me = String(newDrawerId) === String(userId);
             setIsDrawer(me);
-            if (newWord) setKeyword(newWord);
+            
+            if (newWord) {
+                setKeyword(newWord);
+                keywordRef.current = newWord; // 최신 값 저장
+            }
 
             setCurrentDrawerId(newDrawerId);
 
@@ -238,6 +281,12 @@ function GameScreen({ maxPlayers = 10 }) {
           }
 
           if (data.type === 'DRAWER_CHANGED') {
+
+            if (String(prevDrawerIdRef.current) === String(userId)) {
+                 // 저장 함수 호출 (현재 상태인 keyword를 넘겨줌)
+                 saveMyDrawing(keywordRef.current);
+            }
+
             setWinnerId(null);
             setRoundEndTime(0); 
             resetCanvasLocal();
@@ -276,6 +325,11 @@ function GameScreen({ maxPlayers = 10 }) {
           }
 
           if (data.type === 'GAME_OVER') {
+
+            if (String(prevDrawerIdRef.current) === String(userId)) {
+            saveMyDrawing(keywordRef.current);
+            }
+
             setTimeOverModal(false); //게임 끝나면 모달 끄기
             alert(`게임이 종료되었습니다.`);
             handleLeaveGame();

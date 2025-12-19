@@ -15,7 +15,7 @@ import java.nio.file.Paths;
 @RestController
 public class ImageController {
 
-    private final String BASE_DIR = "C:/MonthlyRank/";
+    private final String BASE_DIR = "C:/DrawIt/MonthlyRank/";
 
     @GetMapping("/image/{date}/{filename}")
     public ResponseEntity<Resource> serveFile(@PathVariable String date,
