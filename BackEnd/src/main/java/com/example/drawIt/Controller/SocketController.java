@@ -122,7 +122,7 @@ public class SocketController {
 
         String newDrawer = gameStateManager.pickRandomDrawer(users);
         state.setDrawerUserId(newDrawer);
-        String newWord = gameStateManager.pickRandomWord();
+        String newWord = gameStateManager.getUniqueWord(state);
         state.setCurrentWord(newWord);
 
         // ✅ 시간 갱신
