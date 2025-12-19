@@ -55,14 +55,14 @@ function GameScreen({ maxPlayers = 10 }) {
   // 정답 알림 모달 상태 (visible: 보임여부, winner: 정답자이름, answer: 정답)
   const [answerModal, setAnswerModal] = useState({ visible: false, winner: '', answer: '' });
 
-  //전체 슬롯 (빈 자리 포함)
-  const totalSlots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
+  // 출제자 알림 모달 (visible: 보임여부, word: 주제어)
+  const [drawerModal, setDrawerModal] = useState({ visible: false, keyword: '' });
 
-  //왼쪽 컬럼 (짝수 인덱스)
-  const leftUsers = totalSlots.filter((_, i) => i % 2 === 0);
+  //시간 초과 알림 모달
+  const [timeOverModal, setTimeOverModal] = useState(false);
 
-  //오른쪽 컬럼 (홀수 인덱스)
-  const rightUsers = totalSlots.filter((_, i) => i % 2 === 1);
+  //User 알림 모달
+  const [guesserModal, setGuesserModal] = useState(false);
 
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
@@ -163,36 +163,28 @@ function GameScreen({ maxPlayers = 10 }) {
         client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
           const data = JSON.parse(msg.body);
 
-          const updateDrawerState = (newDrawerId, newWord, endTime) => {
+          const updateDrawerState = (newDrawerId, newWord, endTime, triggerModal = false) => {
             if (!newDrawerId) return;
             const me = String(newDrawerId) === String(userId);
             setIsDrawer(me);
             if (newWord) setKeyword(newWord);
 
-            setCurrentDrawerId(newDrawerId); //출제자에게 별이 옮겨감
+            setCurrentDrawerId(newDrawerId);
 
-            // 서버 시간 수신 시 업데이트
-            if (endTime) {
+            if (endTime !== undefined) {
                 setRoundEndTime(endTime);
             }
 
-            const isNewDrawer = prevDrawerIdRef.current !== String(newDrawerId);
-            if (me && isNewDrawer) {
-               setTimeout(() => {
-                 alert(`당신이 출제자 입니다!\n주제어: [ ${newWord || "???"} ]\n그림을 그려주세요.`);
-                 client.publish({
-                   destination: `/app/draw/${lobbyId}/clear`,
-                   body: JSON.stringify({ userId }),
-                 });
-               }, 100);
-               setPenColor('#000000ff');
-               setActiveTool('pen');
-               if (ctxRef.current) {
-                 ctxRef.current.globalCompositeOperation = 'source-over';
-                 ctxRef.current.strokeStyle = '#000000ff';
-                 ctxRef.current.lineWidth = 5; 
-               }
+            // 여기가 핵심입니다! (triggerModal 사용)
+            if (me && triggerModal) {
+              console.log("🔥 모달 띄우기 발동!"); // 디버깅용 로그
+              setDrawerModal({ visible: true, keyword: newWord || "???" });
+                
+              client.publish({ destination: `/app/draw/${lobbyId}/clear`, body: JSON.stringify({ userId }) });
+              setPenColor('#000000ff');
+              setActiveTool('pen');
             }
+            
             prevDrawerIdRef.current = String(newDrawerId);
           };
 
@@ -204,6 +196,8 @@ function GameScreen({ maxPlayers = 10 }) {
              setWinnerId(winnerId);
 
              setAnswerModal({ visible: true, winner: winnerName, answer: answer });
+
+             setRoundEndTime(0); //정답자가 나오면 타이머 중지
 
              setTimeout(() => {
                  setAnswerModal(prev => ({ ...prev, visible: false }));
@@ -226,20 +220,49 @@ function GameScreen({ maxPlayers = 10 }) {
                 return; 
             }
             
-            if (data.drawerUserId) updateDrawerState(data.drawerUserId, data.word, data.roundEndTime);
+            if (data.drawerUserId) updateDrawerState(data.drawerUserId, data.word, data.roundEndTime, false);
           }
 
           if (data.type === 'GAME_START') {
             setIsGameStarted(true);
             resetCanvasLocal();
-            updateDrawerState(data.drawerUserId, data.word, data.roundEndTime);
+            updateDrawerState(data.drawerUserId, data.word, 0, true);
+            setRoundEndTime(0);
+          }
+
+          if (data.type === 'ROUND_START') {
+             setDrawerModal(prev => ({ ...prev, visible: false }));
+             setGuesserModal(false);
+             
+             setRoundEndTime(data.roundEndTime);
           }
 
           if (data.type === 'DRAWER_CHANGED') {
             setWinnerId(null);
-            setAnswerModal(prev => ({ ...prev, visible: false }));
+            setRoundEndTime(0); 
             resetCanvasLocal();
-            updateDrawerState(data.drawerUserId, data.word, data.roundEndTime);
+            
+            updateDrawerState(data.drawerUserId, data.word, 0, false); 
+
+            // ✅ [동시 시작] 1초 뒤에 이전 모달 끄고 & 새 모달 동시에 켜기
+            setTimeout(() => {
+                // 1. 이전 결과 모달들 끄기
+                setAnswerModal(prev => ({ ...prev, visible: false }));
+                setTimeOverModal(false);
+
+                // 2. 역할에 맞는 모달 켜기 (닫는 타이머 삭제!)
+                if (String(data.drawerUserId) === String(userId)) {
+                    // [출제자]
+                    setDrawerModal({ visible: true, keyword: data.word || "???" });
+                    
+                    client.publish({ destination: `/app/draw/${lobbyId}/clear`, body: JSON.stringify({ userId }) });
+                    setPenColor('#000000ff');
+                    setActiveTool('pen');
+                } else {
+                    // [맞추는 사람]
+                    setGuesserModal(true);
+                }
+            }, 1000); // 1초 대기 후 등장이 가장 적절
           }
 
           if (data.type === 'ROOM_DESTROYED') {
@@ -247,7 +270,13 @@ function GameScreen({ maxPlayers = 10 }) {
             navigate('/');
           }
 
+          if(data.type === 'TIME_OVER') {
+            setTimeOverModal(true);
+            setRoundEndTime(0);
+          }
+
           if (data.type === 'GAME_OVER') {
+            setTimeOverModal(false); //게임 끝나면 모달 끄기
             alert(`게임이 종료되었습니다.`);
             handleLeaveGame();
           }
@@ -303,47 +332,54 @@ function GameScreen({ maxPlayers = 10 }) {
 
   // 타이머 애니메이션 동기화
   useEffect(() => {
-    if (!isGameStarted || !roundEndTime || !timerBarRef.current) return;
+    // 게임 중이 아니거나 시간이 설정되지 않았으면 100% 유지
+    if (!isGameStarted || !roundEndTime || !timerBarRef.current) {
+        if (timerBarRef.current) {
+            timerBarRef.current.style.width = '100%';
+            timerBarRef.current.style.animation = 'none';
+        }
+        return;
+    }
 
+    const GAME_DURATION = 60000; // 전체 게임 시간 (60초)
     const now = Date.now();
-    const remainingTime = roundEndTime - now;
-    const elapsed = 60000 - remainingTime;
+    const remainingTime = roundEndTime - now; // 남은 시간
+    
+    // 이미 지난 시간 (Elapsed Time)
+    const elapsed = GAME_DURATION - remainingTime;
 
-    if (elapsed > 0 && elapsed < 60000) {
-        timerBarRef.current.style.animation = 'none';
-        void timerBarRef.current.offsetWidth; // Trigger reflow
-        timerBarRef.current.style.animation = `shrink 60s linear forwards`;
-        timerBarRef.current.style.animationDelay = `-${elapsed / 1000}s`;
-    } else if (remainingTime <= 0) {
+    // 애니메이션 리셋 (리플로우 강제)
+    timerBarRef.current.style.animation = 'none';
+    void timerBarRef.current.offsetWidth;
+
+    if (remainingTime <= 0) {
         timerBarRef.current.style.width = '0%';
     } else {
-        timerBarRef.current.style.animation = `shrink 60s linear forwards`;
+        // 애니메이션은 항상 60초 동안 100% -> 0%로 설정
+        timerBarRef.current.style.animation = `shrink ${GAME_DURATION / 1000}s linear forwards`;
+        
+        // 이미 지난 시간만큼 음수 딜레이를 줘서 애니메이션을 중간부터 시작시킴
+        timerBarRef.current.style.animationDelay = `-${elapsed / 1000}s`;
     }
   }, [roundEndTime, isGameStarted]);
 
-
-  // 방장 타임오버 로직
   useEffect(() => {
-    if (!isGameStarted || !roundEndTime) return;
-    const amIHost = players.find(p => String(p.userId) === String(userId))?.host;
-    if (amIHost) {
-      const now = Date.now();
-      const timeLeft = roundEndTime - now;
-
-      if (timeLeft > 0) {
-          const timer = setTimeout(() => {
-            if (stompRef.current?.connected) {
-              stompRef.current.publish({
-                destination: `/app/lobby/${lobbyId}/timeover`,
-                body: JSON.stringify({}),
-              });
-            }
-          }, timeLeft);
-          return () => clearTimeout(timer);
-      }
+    // 조건: 게임시작 + 출제자 + 대기시간 + 모달꺼짐 + 시간초과OFF + 정답모달OFF + ★승자없음★
+    if (isGameStarted && 
+        isDrawer && 
+        roundEndTime === 0 && 
+        !drawerModal.visible && 
+        !timeOverModal && 
+        !answerModal.visible &&
+        !winnerId) { // 정답자가 나와있는 상태면 절대 켜지 마! (이전 출제자 보호)
+        
+        setDrawerModal(prev => ({ 
+            ...prev, 
+            visible: true, 
+            keyword: keyword || prev.keyword || "???" 
+        }));
     }
-  }, [roundEndTime, isGameStarted, players, userId, lobbyId]);
-
+  }, [isGameStarted, isDrawer, roundEndTime, drawerModal.visible, keyword, timeOverModal, answerModal.visible, winnerId]); // 의존성 추가
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -606,8 +642,9 @@ function GameScreen({ maxPlayers = 10 }) {
     setChatMessage('');
   };
 
-  const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
-  const half = Math.ceil(maxPlayers / 2);
+  const totalSlots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
+  const leftUsers = totalSlots.filter((_, i) => i % 2 === 0);
+  const rightUsers = totalSlots.filter((_, i) => i % 2 === 1);
 
   const renderUser = (u, index) => (
     <div
@@ -621,13 +658,19 @@ function GameScreen({ maxPlayers = 10 }) {
         {/* 방장 대신 현재 출제자에게 별 표시 */}
         {u && String(u.userId) === String(currentDrawerId) && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
       </span>
+      {/* ✅ [추가] 점수 표시 (유저가 있을 때만) */}
+        {u && (
+          <span className="user-score" style={{ fontSize: '12px', color: '#1971c2', fontWeight: 'bold' }}>
+            Score: {u.score || 0}
+          </span>
+        )}
     </div>
   );
 
   return (
     <div className="game-wrapper">
        
-       {/* 모달 (Portal) */}
+       {/* 정답자 모달 */}
        {answerModal.visible && createPortal(
          <div className="answer-modal-overlay">
             <div className="answer-modal-content">
@@ -636,6 +679,58 @@ function GameScreen({ maxPlayers = 10 }) {
                 <div className="modal-info">
                     <p>정답: <span className="highlight-text">{answerModal.answer}</span></p>
                     <p>정답자: <span className="highlight-winner">{answerModal.winner}</span></p>
+                </div>
+            </div>
+         </div>,
+         document.body
+       )}
+
+       {/* 시간 초과 모달 */}
+       {timeOverModal && createPortal(
+         <div className="answer-modal-overlay">
+            <div className="answer-modal-content">
+                <div className="confetti" style={{ fontSize: '3rem' }}>⌛️</div>
+                <h2>시간 초과!</h2>
+                <div className="modal-info">
+                    <p>아무도 정답을 맞추지 못했습니다 😭</p>
+                    <p style={{ marginTop: '10px', fontSize: '0.9rem', color: '#666' }}>
+                        잠시 후 다음 라운드가 시작됩니다...
+                    </p>
+                </div>
+            </div>
+         </div>,
+         document.body
+       )}
+
+       {/* 출제자 알림 모달 */}
+       {drawerModal.visible && createPortal(
+         <div className="answer-modal-overlay"> {/* 스타일 재사용 */}
+            <div className="answer-modal-content">
+                <h2>당신이 출제자 입니다!</h2>
+                <div className="modal-info">
+                    <p style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#333' }}>
+                        주제어: <span className="highlight-text">{drawerModal.keyword}</span>
+                    </p>
+                    <p style={{ marginTop: '15px' }}>그림을 그려주세요 🎨</p>
+                </div>
+            </div>
+         </div>,
+         document.body
+       )}
+
+       {/* 맞추는 사람 알림 모달 */}
+       {guesserModal && createPortal(
+         <div className="answer-modal-overlay">
+            <div className="answer-modal-content">
+                <div className="confetti" style={{ fontSize: '3rem' }}>🤔</div>
+                <h2>그림을 맞춰보세요!</h2>
+                <div className="modal-info">
+                    <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#333' }}>
+                        출제자가 그림을 그리고 있습니다.
+                    </p>
+                    <p style={{ marginTop: '10px', color: '#666' }}>
+                        채팅창에 정답을 입력하세요! ⌨️
+                    </p>
                 </div>
             </div>
          </div>,
@@ -693,10 +788,17 @@ function GameScreen({ maxPlayers = 10 }) {
                               <div className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} onClick={() => handleToolClick('eraser')}><img src="/svg/eraser.svg" alt="eraser" /></div>
                               
                               <div className="tool-btn" onClick={handleUndo} title="Undo">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 0 0 0-6 2.3L3 13" /></svg>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M9 14 4 9l5-5"/>
+                                  <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
+                                </svg>
                               </div>
+
                               <div className="tool-btn" onClick={handleRedo} title="Redo">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="m15 14 5-5-5-5"/>
+                                  <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
+                                </svg>
                               </div>
                               <div className="tool-btn delete-btn" onClick={clearCanvas}>🗑</div>
                           </div>
