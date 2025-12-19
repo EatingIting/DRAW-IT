@@ -294,15 +294,27 @@ function LobbyScreen() {
       {Object.entries(chatBubbles).map(([uid, message]) => {
         const el = userCardRefs.current[uid];
         if (!el) return null;
+
+        const userIndex = players.findIndex(p => p.userId === uid);
+        const isLeftColumn = userIndex === -1 ? true : userIndex < 5;
+
         const rect = el.getBoundingClientRect();
+
         return (
           <div
             key={uid}
-            className="chat-bubble-float"
+            // 왼쪽이면 left-col, 오른쪽이면 right-col 클래스 붙임
+            className={`chat-bubble-float ${isLeftColumn ? "left-col" : "right-col"}`}
             style={{
               position: "fixed",
-              top: rect.top - 40, 
-              left: rect.left + 10,
+              top: rect.top + rect.height / 2, // 카드 높이의 절반(중앙)
+              
+              // 🔥 [핵심] 왼쪽 줄은 카드 오른쪽 끝, 오른쪽 줄은 카드 왼쪽 끝에 붙임
+              left: isLeftColumn ? rect.right + 15 : rect.left - 15,
+              
+              // 🔥 [핵심] 오른쪽 줄은 말풍선을 왼쪽으로 100% 밀어서 배치
+              transform: isLeftColumn ? "translateY(-50%)" : "translate(-100%, -50%)",
+              
               zIndex: 9999,
             }}
           >
@@ -310,7 +322,7 @@ function LobbyScreen() {
           </div>
         );
       })}
-
+      
       {isEditOpen && isHost && roomInfo && (
         <CreateRoomModal
           mode="edit"

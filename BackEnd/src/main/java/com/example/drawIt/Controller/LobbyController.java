@@ -89,6 +89,8 @@ public class LobbyController {
         return ResponseEntity.ok(response);
     }
 
+    
+
     @GetMapping("/api/lobbies")
     public List<LobbyResponseDTO> getLobbyList() {
         return lobbyService.getAllRooms().stream().map(lobby -> {
