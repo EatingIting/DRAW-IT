@@ -16,6 +16,9 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Controller
 @RequiredArgsConstructor
@@ -25,6 +28,8 @@ public class SocketController {
     private final LobbyService lobbyService;
     private final SimpMessagingTemplate messagingTemplate;
     private final GameStateManager gameStateManager;
+
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     @MessageMapping("/lobby/{roomId}/join")
     public void join(@DestinationVariable String roomId, @Payload SocketJoinDTO dto, StompHeaderAccessor accessor) {
@@ -100,6 +105,7 @@ public class SocketController {
 
     @MessageMapping("/lobby/{roomId}/timeover")
     public void timeOver(@DestinationVariable String roomId) {
+        processNextRound(roomId);
         GameState state = gameStateManager.getGame(roomId);
         if (state == null) return;
         var users = lobbyUserStore.getUsers(roomId);
@@ -170,8 +176,93 @@ public class SocketController {
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId + "/draw", Map.of("type", "CLEAR", "userId", userIdObj));
     }
 
+    /* =========================
+       채팅 (정답 체크 로직)
+    ========================= */
     @MessageMapping("/chat/bubble")
     public void chatBubble(@Payload Map<String, Object> payload) {
-        messagingTemplate.convertAndSend("/topic/chat/bubble", Map.of("type", "CHAT_BUBBLE", "userId", payload.get("userId"), "message", payload.get("message")));
+        String roomId = (String) payload.get("lobbyId");
+        String userId = (String) payload.get("userId");
+        String message = (String) payload.get("message");
+
+        // 1. 일반 채팅 전송
+        messagingTemplate.convertAndSend(
+                "/topic/chat/bubble",
+                Map.of("type", "CHAT_BUBBLE", "userId", userId, "message", message)
+        );
+
+        // 2. 정답 체크
+        GameState state = gameStateManager.getGame(roomId);
+        if (state != null && message.trim().equals(state.getCurrentWord())) {
+
+            // 출제자가 본인 답을 말하는 건 무시
+            if(userId.equals(state.getDrawerUserId())) return;
+
+            // 정답자의 닉네임 조회
+            String winnerNickname = lobbyUserStore.getUsers(roomId).stream()
+                    .filter(u -> u.get("userId").equals(userId))
+                    .map(u -> (String) u.get("nickname"))
+                    .findFirst()
+                    .orElse("(알수없음)");
+
+            System.out.println("🎉 정답자 발생! User: " + winnerNickname);
+
+            // 1) 모든 유저에게 정답자 알림 (닉네임 포함)
+            messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                    "type", "CORRECT_ANSWER",
+                    "winnerUserId", userId,
+                    "winnerNickname", winnerNickname, // ✅ 닉네임 추가 전송
+                    "answer", state.getCurrentWord()
+            ));
+
+            // 2) 4초 뒤에 다음 라운드 진행
+            scheduler.schedule(() -> {
+                processNextRound(roomId);
+            }, 4, TimeUnit.SECONDS);
+        }
+    }
+
+    private void processNextRound(String roomId) {
+        GameState state = gameStateManager.getGame(roomId);
+        if (state == null) return;
+        var users = lobbyUserStore.getUsers(roomId);
+        if (users.isEmpty()) {
+            gameStateManager.removeGame(roomId);
+            return;
+        }
+
+        // 라운드 증가
+        int nextRound = state.getCurrentRound() + 1;
+
+        // 10라운드 종료 체크
+        if (nextRound > GameState.MAX_ROUND) {
+            messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                    "type", "GAME_OVER"
+            ));
+            gameStateManager.removeGame(roomId);
+            return;
+        }
+        state.setCurrentRound(nextRound);
+
+        // 새 출제자 선정 (10라운드 규칙 적용)
+        String newDrawer = gameStateManager.pickNextDrawer(state, users);
+        state.setDrawerUserId(newDrawer);
+
+        // 새 단어
+        String newWord = gameStateManager.pickRandomWord();
+        state.setCurrentWord(newWord);
+
+        // 시간 갱신
+        long endTime = System.currentTimeMillis() + 60000;
+        state.setRoundEndTime(endTime);
+
+        // 캔버스 초기화 이벤트 등은 프론트에서 DRAWER_CHANGED 받으면 처리함
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                "type", "DRAWER_CHANGED",
+                "drawerUserId", newDrawer,
+                "word", newWord,
+                "roundEndTime", endTime,
+                "currentRound", nextRound
+        ));
     }
 }

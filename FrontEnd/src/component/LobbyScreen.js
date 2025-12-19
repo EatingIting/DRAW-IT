@@ -35,15 +35,12 @@ function LobbyScreen() {
   const [roomInfo, setRoomInfo] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
 
-  /* =========================
-     ✅ Chat Bubble (추가)
-  ========================= */
+  /* Chat Bubble */
   const [chatBubbles, setChatBubbles] = useState({});
   const userCardRefs = useRef({});
 
   const maxPlayers = 10;
   const clientRef = useRef(null);
-
   const bubbleTimeoutRef = useRef({});
 
   // 방 정보 REST 로드
@@ -77,17 +74,13 @@ function LobbyScreen() {
           const data = JSON.parse(message.body);
 
           if (data.type === "USER_UPDATE") {
-            const sortedUsers = (data.users || []).sort((a, b) => {
-              // a가 방장이면 앞으로(-1), b가 방장이면 뒤로(1), 아니면 순서 유지(0)
-              if (a.host && !b.host) return -1;
-              if (!a.host && b.host) return 1;
-              return 0;
-            });
-
-            setPlayers(sortedUsers); // 정렬된 리스트를 상태에 저장
+            // ✅ 서버에서 이미 joinedAt 순서로 정렬해서 보내주므로 그대로 사용
+            const serverSortedUsers = data.users || [];
+            
+            setPlayers(serverSortedUsers);
 
             setIsHost(
-              sortedUsers.some(
+              serverSortedUsers.some(
                 (u) => u.host === true && u.userId === userIdRef.current
               )
             );
@@ -112,9 +105,6 @@ function LobbyScreen() {
           }
         });
 
-        /* =========================
-           ✅ FLOAT CHAT BUBBLE SUBSCRIBE (추가)
-        ========================= */
         client.subscribe("/topic/chat/bubble", (message) => {
           const data = JSON.parse(message.body);
           if (data.type !== "CHAT_BUBBLE") return;
@@ -132,11 +122,9 @@ function LobbyScreen() {
               delete copy[uid];
               return copy;
             });
-            // 타이머 완료 후 Ref에서도 제거 (메모리 관리)
             delete bubbleTimeoutRef.current[uid]; 
           }, 3000);
 
-          // 저장해둬야 다음 메시지 올 때 취소 가능
           bubbleTimeoutRef.current[uid] = timeoutId;
         });
 
@@ -196,10 +184,18 @@ function LobbyScreen() {
     setChatMessage("");
   };
 
-  const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
-  const half = Math.ceil(maxPlayers / 2);
-  const leftSlots = slots.slice(0, half);
-  const rightSlots = slots.slice(half);
+  // ============================================================
+  // ✅ [수정] 유저 슬롯 배치 로직 (지그재그 배치: 좌->우->좌->우)
+  // ============================================================
+  
+  // 1. 전체 슬롯 생성 (최대 10명)
+  const totalSlots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
+
+  // 2. 왼쪽 컬럼: 짝수 인덱스 (0, 2, 4...)
+  const leftSlots = totalSlots.filter((_, i) => i % 2 === 0);
+
+  // 3. 오른쪽 컬럼: 홀수 인덱스 (1, 3, 5...)
+  const rightSlots = totalSlots.filter((_, i) => i % 2 === 1);
 
   const renderUserCard = (user, index) => (
     <div
@@ -232,7 +228,11 @@ function LobbyScreen() {
 
       <div className="play-area">
         <div className="play-grid">
-          <div className="user-column left">{leftSlots.map(renderUserCard)}</div>
+          
+          {/* ✅ 왼쪽 컬럼 (짝수번째 유저들) */}
+          <div className="user-column left">
+            {leftSlots.map((u, i) => renderUserCard(u, i * 2))}
+          </div>
 
           <div className="lobby-center">
             <div className="logo-placeholder">LOGO</div>
@@ -264,7 +264,11 @@ function LobbyScreen() {
             )}
           </div>
 
-          <div className="user-column right">{rightSlots.map(renderUserCard)}</div>
+          {/* ✅ 오른쪽 컬럼 (홀수번째 유저들) */}
+          <div className="user-column right">
+            {rightSlots.map((u, i) => renderUserCard(u, i * 2 + 1))}
+          </div>
+          
         </div>
       </div>
 
@@ -279,9 +283,6 @@ function LobbyScreen() {
         <button onClick={handleSendMessage}>전송</button>
       </div>
 
-      {/* =========================
-         ✅ FLOAT CHAT BUBBLES (추가)
-      ========================= */}
       {Object.entries(chatBubbles).map(([uid, message]) => {
         const el = userCardRefs.current[uid];
         if (!el) return null;
