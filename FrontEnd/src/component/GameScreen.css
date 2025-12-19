@@ -236,11 +236,15 @@
 
 /* ✅ 타이머 애니메이션 바 */
 .timer-bar {
-  width: 100%;
   height: 100%;
-  background-color: #ff5252; 
-  transform-origin: left; 
-  animation: shrink 60s linear forwards;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    #ff6b6b 0%,
+    #fa5252 50%,
+    #e03131 100%
+  );
+  transition: width 0.1s linear;
 }
 
 @keyframes shrink {
@@ -584,7 +588,7 @@
   color: #1971c2; 
   font-weight: 900;
   font-size: 2rem;
-  text-decoration: underline;
+  text-decoration: none !important;
   text-underline-offset: 4px;
 }
 

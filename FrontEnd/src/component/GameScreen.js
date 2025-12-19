@@ -37,6 +37,9 @@ function GameScreen({ maxPlayers = 10 }) {
 
   const stompRef = useRef(null);
 
+  // 소켓 연결 후 첫 업데이트인지 확인하는 변수
+  const isFirstSocketUpdate = useRef(true);
+
   const [players, setPlayers] = useState([]);
   const [isDrawer, setIsDrawer] = useState(false);
   const [keyword, setKeyword] = useState(""); 
@@ -52,17 +55,18 @@ function GameScreen({ maxPlayers = 10 }) {
   //현재 출제자 ID 저장 (별 표시용)
   const [currentDrawerId, setCurrentDrawerId] = useState(null);
 
-  // 정답 알림 모달 상태 (visible: 보임여부, winner: 정답자이름, answer: 정답)
+  // 정답 알림 모달 상태
   const [answerModal, setAnswerModal] = useState({ visible: false, winner: '', answer: '' });
 
-  // 출제자 알림 모달 (visible: 보임여부, word: 주제어)
-  const [drawerModal, setDrawerModal] = useState({ visible: false, keyword: '' });
-
-  //시간 초과 알림 모달
+  // 시간 초과 알림 모달
   const [timeOverModal, setTimeOverModal] = useState(false);
 
-  //User 알림 모달
-  const [guesserModal, setGuesserModal] = useState(false);
+  // 출제자, 유저한테 뜨는 모달
+  const [roundModal, setRoundModal] = useState({
+    visible: false,
+    role: null,   // 'drawer' | 'guesser'
+    word: ''
+  });
 
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
@@ -87,11 +91,13 @@ function GameScreen({ maxPlayers = 10 }) {
   const userCardRefs = useRef({});
   const [chatMessage, setChatMessage] = useState('');
   const bubbleTimeoutRef = useRef({});
-  
-  // 타이머 DOM Ref
+
+  const roundModalTimerRef = useRef(null);
+  const [roundFinished, setRoundFinished] = useState(false);
   const timerBarRef = useRef(null);
 
   const handleLeaveGame = () => {
+    // 1. 소켓 먼저 끊기 (중복 메시지 수신 방지)
     if (stompRef.current?.connected) {
       stompRef.current.publish({
         destination: `/app/lobby/${lobbyId}/leave`,
@@ -99,6 +105,7 @@ function GameScreen({ maxPlayers = 10 }) {
       });
       stompRef.current.deactivate();
     }
+    // 2. 페이지 이동
     navigate('/join');
   };
 
@@ -123,6 +130,24 @@ function GameScreen({ maxPlayers = 10 }) {
     currentStrokeRef.current = [];
   };
 
+  const showRoundModal = (drawerUserId, word) => {
+    if (roundModalTimerRef.current) {
+      clearTimeout(roundModalTimerRef.current);
+    }
+
+    const isMeDrawer = String(drawerUserId) === String(userId);
+
+    setRoundModal({
+      visible: true,
+      role: isMeDrawer ? 'drawer' : 'guesser',
+      word: word || '???',
+    });
+
+    roundModalTimerRef.current = setTimeout(() => {
+      setRoundModal((prev) => ({ ...prev, visible: false }));
+    }, 3000);
+  };
+
   useEffect(() => {
     if (!lobbyId) return;
     const fetchGameData = async () => {
@@ -137,10 +162,6 @@ function GameScreen({ maxPlayers = 10 }) {
           })).sort((a, b) => (a.host === b.host ? 0 : a.host ? -1 : 1));
           
           setPlayers(mappedUsers);
-          if (data.drawerUserId) {
-             const me = String(data.drawerUserId) === String(userId);
-             setIsDrawer(me);
-          }
         }
       } catch (err) {
         console.error("데이터 로드 실패:", err);
@@ -149,10 +170,18 @@ function GameScreen({ maxPlayers = 10 }) {
     fetchGameData();
   }, [lobbyId, userId]);
 
-  const prevDrawerIdRef = useRef(null);
+  useEffect(() => {
+    return () => {
+      if (roundModalTimerRef.current) {
+        clearTimeout(roundModalTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!userId || !nickname || !lobbyId) return;
+
+    isFirstSocketUpdate.current = true;
 
     const client = new Client({
       webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
@@ -163,29 +192,11 @@ function GameScreen({ maxPlayers = 10 }) {
         client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
           const data = JSON.parse(msg.body);
 
-          const updateDrawerState = (newDrawerId, newWord, endTime, triggerModal = false) => {
-            if (!newDrawerId) return;
-            const me = String(newDrawerId) === String(userId);
-            setIsDrawer(me);
-            if (newWord) setKeyword(newWord);
-
+          const updateDrawerState = (newDrawerId, newWord, endTime) => {
+            setIsDrawer(String(newDrawerId) === String(userId));
             setCurrentDrawerId(newDrawerId);
-
-            if (endTime !== undefined) {
-                setRoundEndTime(endTime);
-            }
-
-            // 여기가 핵심입니다! (triggerModal 사용)
-            if (me && triggerModal) {
-              console.log("🔥 모달 띄우기 발동!"); // 디버깅용 로그
-              setDrawerModal({ visible: true, keyword: newWord || "???" });
-                
-              client.publish({ destination: `/app/draw/${lobbyId}/clear`, body: JSON.stringify({ userId }) });
-              setPenColor('#000000ff');
-              setActiveTool('pen');
-            }
-            
-            prevDrawerIdRef.current = String(newDrawerId);
+            if (newWord) setKeyword(newWord);
+            if (endTime !== undefined) setRoundEndTime(endTime);
           };
 
           if (data.type === 'CORRECT_ANSWER') {
@@ -194,14 +205,12 @@ function GameScreen({ maxPlayers = 10 }) {
              const answer = data.answer;
              
              setWinnerId(winnerId);
-
              setAnswerModal({ visible: true, winner: winnerName, answer: answer });
-
-             setRoundEndTime(0); //정답자가 나오면 타이머 중지
-
+             setRoundEndTime(0);
+             setRoundFinished(true);
              setTimeout(() => {
                  setAnswerModal(prev => ({ ...prev, visible: false }));
-             }, 1500); //1.5초 뒤에 모달 닫기
+             }, 1500);
           }
 
           if (data.type === 'USER_UPDATE') {
@@ -212,76 +221,121 @@ function GameScreen({ maxPlayers = 10 }) {
             })).sort((a, b) => (a.host === b.host ? 0 : a.host ? -1 : 1));
             
             setPlayers(mappedUsers);
-            if (data.gameStarted) setIsGameStarted(true);
+            console.log(`[USER_UPDATE] 인원: ${mappedUsers.length}, 게임중: ${data.gameStarted}`);
 
+            // 🔥 [게임 중 혼자 남음 처리 수정]
+            // alert는 비동기 처리 중 씹힐 수 있으므로 window.confirm이나 확실한 로직 필요
             if (data.gameStarted && mappedUsers.length < 2) {
-                alert("유저가 없습니다. 세션을 종료합니다.");
-                handleLeaveGame();
-                return; 
+                // 브라우저 렌더링 사이클 확보를 위해 0ms setTimeout 사용
+                setTimeout(() => {
+                    alert("모든 유저가 나갔습니다. 게임을 종료합니다.");
+                    handleLeaveGame();
+                }, 0);
+                return;
             }
             
-            if (data.drawerUserId) updateDrawerState(data.drawerUserId, data.word, data.roundEndTime, false);
+            if (data.gameStarted) {
+                setIsGameStarted(true);
+                if (data.drawerUserId) {
+                    updateDrawerState(data.drawerUserId, data.word, data.roundEndTime, false);
+
+                    if (isFirstSocketUpdate.current) {
+                        setAnswerModal({ visible: false, winner: '', answer: '' });
+                        setTimeOverModal(false);
+                        setTimeout(() => {
+                             showRoundModal(data.drawerUserId, data.word);
+                        }, 300);
+                    }
+                }
+            } else {
+                 if (data.gameStarted && mappedUsers.length < 2) {
+                    // 여기도 동일하게 처리
+                    setTimeout(() => {
+                        alert("유저가 없습니다. 세션을 종료합니다.");
+                        handleLeaveGame();
+                    }, 0);
+                    return; 
+                 }
+            }
+            isFirstSocketUpdate.current = false;
           }
 
           if (data.type === 'GAME_START') {
+            console.log("🔥 GAME_START Event Received", data); 
+
+            const targetDrawerId = data.drawerUserId || data.drawerId;
+            const targetWord = data.word || data.keyword;
+            const isMeDrawer = String(targetDrawerId) === String(userId);
+
             setIsGameStarted(true);
-            resetCanvasLocal();
-            updateDrawerState(data.drawerUserId, data.word, 0, true);
-            setRoundEndTime(0);
+            setIsDrawer(isMeDrawer);
+            setCurrentDrawerId(targetDrawerId);
+            setKeyword(targetWord);
+
+            setAnswerModal({ visible: false, winner: '', answer: '' });
+            setTimeOverModal(false);
+
+            showRoundModal(targetDrawerId, targetWord);
+            isFirstSocketUpdate.current = false;
           }
 
           if (data.type === 'ROUND_START') {
-             setDrawerModal(prev => ({ ...prev, visible: false }));
-             setGuesserModal(false);
-             
-             setRoundEndTime(data.roundEndTime);
+            setRoundEndTime(data.roundEndTime);
           }
 
           if (data.type === 'DRAWER_CHANGED') {
+            setRoundFinished(false);
             setWinnerId(null);
-            setRoundEndTime(0); 
+            setRoundEndTime(0);
             resetCanvasLocal();
-            
-            updateDrawerState(data.drawerUserId, data.word, 0, false); 
+            setAnswerModal({ visible: false, winner: '', answer: '' });
+            setTimeOverModal(false);
 
-            // ✅ [동시 시작] 1초 뒤에 이전 모달 끄고 & 새 모달 동시에 켜기
-            setTimeout(() => {
-                // 1. 이전 결과 모달들 끄기
-                setAnswerModal(prev => ({ ...prev, visible: false }));
-                setTimeOverModal(false);
+            const targetDrawerId = data.drawerUserId || data.drawerId;
+            const targetWord = data.word || data.keyword;
 
-                // 2. 역할에 맞는 모달 켜기 (닫는 타이머 삭제!)
-                if (String(data.drawerUserId) === String(userId)) {
-                    // [출제자]
-                    setDrawerModal({ visible: true, keyword: data.word || "???" });
-                    
-                    client.publish({ destination: `/app/draw/${lobbyId}/clear`, body: JSON.stringify({ userId }) });
-                    setPenColor('#000000ff');
-                    setActiveTool('pen');
-                } else {
-                    // [맞추는 사람]
-                    setGuesserModal(true);
-                }
-            }, 1000); // 1초 대기 후 등장이 가장 적절
+            updateDrawerState(targetDrawerId, targetWord, 0);
+
+            showRoundModal(targetDrawerId, targetWord);
+
+            if (String(targetDrawerId) === String(userId)) {
+              stompRef.current.publish({
+                destination: `/app/draw/${lobbyId}/clear`,
+                body: JSON.stringify({ userId }),
+              });
+              setPenColor('#000000ff');
+              setActiveTool('pen');
+            }
           }
 
           if (data.type === 'ROOM_DESTROYED') {
-            alert('방이 삭제되었습니다.');
-            navigate('/');
+            setTimeout(() => {
+                alert('방이 삭제되었습니다.');
+                navigate('/');
+            }, 0);
           }
 
-          if(data.type === 'TIME_OVER') {
+          if (data.type === 'TIME_OVER') {
             setTimeOverModal(true);
             setRoundEndTime(0);
+            setRoundFinished(true);
+            setRoundModal({ visible: false, role: null, word: '' });
+            if (roundModalTimerRef.current) {
+              clearTimeout(roundModalTimerRef.current);
+              roundModalTimerRef.current = null;
+            }
           }
 
           if (data.type === 'GAME_OVER') {
-            setTimeOverModal(false); //게임 끝나면 모달 끄기
-            alert(`게임이 종료되었습니다.`);
-            handleLeaveGame();
+            setTimeOverModal(false);
+            setTimeout(() => {
+                alert(`게임이 종료되었습니다.`);
+                handleLeaveGame();
+            }, 0);
           }
         });
 
+        // ... (draw, history, chat 등 기존 구독 로직 동일)
         client.subscribe(`/topic/lobby/${lobbyId}/draw`, (msg) => {
             const evt = JSON.parse(msg.body);
             applyRemoteDraw(evt);
@@ -326,61 +380,45 @@ function GameScreen({ maxPlayers = 10 }) {
     return () => {
       if (client) client.deactivate();
     };
-    // eslint-disable-next-line
   }, [lobbyId, userId, nickname, navigate]);
 
-
-  // 타이머 애니메이션 동기화
+  // 🔥 [수정] 타이머 안전장치 추가 (에러 방지 핵심)
   useEffect(() => {
-    // 게임 중이 아니거나 시간이 설정되지 않았으면 100% 유지
-    if (!isGameStarted || !roundEndTime || !timerBarRef.current) {
-        if (timerBarRef.current) {
-            timerBarRef.current.style.width = '100%';
-            timerBarRef.current.style.animation = 'none';
-        }
-        return;
-    }
+    // 타이머바 DOM 요소가 없으면 애니메이션 시작조차 하지 않음
+    if (!isGameStarted || !roundEndTime) return;
 
-    const GAME_DURATION = 60000; // 전체 게임 시간 (60초)
-    const now = Date.now();
-    const remainingTime = roundEndTime - now; // 남은 시간
-    
-    // 이미 지난 시간 (Elapsed Time)
-    const elapsed = GAME_DURATION - remainingTime;
+    const GAME_DURATION = 60000;
+    let rafId;
 
-    // 애니메이션 리셋 (리플로우 강제)
-    timerBarRef.current.style.animation = 'none';
-    void timerBarRef.current.offsetWidth;
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = roundEndTime - now;
 
-    if (remainingTime <= 0) {
+      // DOM 요소가 존재하는지 매 프레임 확인
+      if (!timerBarRef.current) {
+          // 컴포넌트가 언마운트되었거나 페이지 이동 중이라면 루프 종료
+          return;
+      }
+
+      if (remaining <= 0) {
         timerBarRef.current.style.width = '0%';
-    } else {
-        // 애니메이션은 항상 60초 동안 100% -> 0%로 설정
-        timerBarRef.current.style.animation = `shrink ${GAME_DURATION / 1000}s linear forwards`;
-        
-        // 이미 지난 시간만큼 음수 딜레이를 줘서 애니메이션을 중간부터 시작시킴
-        timerBarRef.current.style.animationDelay = `-${elapsed / 1000}s`;
-    }
+        return;
+      }
+
+      const percent = Math.max(0, (remaining / GAME_DURATION) * 100);
+      timerBarRef.current.style.width = `${percent}%`;
+      
+      rafId = requestAnimationFrame(updateTimer);
+    };
+
+    updateTimer();
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [roundEndTime, isGameStarted]);
 
-  useEffect(() => {
-    // 조건: 게임시작 + 출제자 + 대기시간 + 모달꺼짐 + 시간초과OFF + 정답모달OFF + ★승자없음★
-    if (isGameStarted && 
-        isDrawer && 
-        roundEndTime === 0 && 
-        !drawerModal.visible && 
-        !timeOverModal && 
-        !answerModal.visible &&
-        !winnerId) { // 정답자가 나와있는 상태면 절대 켜지 마! (이전 출제자 보호)
-        
-        setDrawerModal(prev => ({ 
-            ...prev, 
-            visible: true, 
-            keyword: keyword || prev.keyword || "???" 
-        }));
-    }
-  }, [isGameStarted, isDrawer, roundEndTime, drawerModal.visible, keyword, timeOverModal, answerModal.visible, winnerId]); // 의존성 추가
-
+  // ... (나머지 로직 동일)
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -393,6 +431,7 @@ function GameScreen({ maxPlayers = 10 }) {
       pendingHistoryRef.current = [];
     }
   }, []);
+
   useEffect(() => {
     if (!ctxRef.current) return;
     if (activeTool === 'eraser') {
@@ -404,6 +443,7 @@ function GameScreen({ maxPlayers = 10 }) {
       ctxRef.current.lineWidth = penWidth;
     }
   }, [activeTool, penColor, penWidth, eraserWidth]);
+
   const redrawAll = () => {
      const ctx = ctxRef.current;
      const canvas = canvasRef.current;
@@ -442,12 +482,14 @@ function GameScreen({ maxPlayers = 10 }) {
         ctx.lineWidth = penWidth;
      }
   };
+
   const publishDraw = (evt) => {
     stompRef.current?.publish({
       destination: `/app/draw/${lobbyId}`,
       body: JSON.stringify({ ...evt, userId }),
     });
   };
+
   const applyRemoteDraw = (evt, isHistory = false) => {
     const isMe = String(evt.userId) === String(userId);
     if (!isHistory && isMe) return;
@@ -546,12 +588,14 @@ function GameScreen({ maxPlayers = 10 }) {
        }
     }
   };
+
   const calculateScale = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     scaleRef.current = { x: canvas.width / rect.width, y: canvas.height / rect.height };
   };
+
   const startDraw = (e) => {
     if (!isDrawer) return;
     calculateScale();
@@ -570,6 +614,7 @@ function GameScreen({ maxPlayers = 10 }) {
     currentStrokeRef.current = [{ x, y }];
     publishDraw({ type: 'START', x, y, tool: activeTool, color: penColor, lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth });
   };
+
   const draw = (e) => {
     if (!isDrawer || !drawing.current) return;
     const x = e.nativeEvent.offsetX * scaleRef.current.x;
@@ -579,6 +624,7 @@ function GameScreen({ maxPlayers = 10 }) {
     currentStrokeRef.current.push({ x, y });
     publishDraw({ type: 'MOVE', x, y, tool: activeTool, color: penColor, lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth });
   };
+
   const endDraw = () => {
     if (!drawing.current) return;
     drawing.current = false;
@@ -591,6 +637,7 @@ function GameScreen({ maxPlayers = 10 }) {
     }
     publishDraw({ type: 'END', tool: activeTool, color: penColor, lineWidth: activeTool === 'eraser' ? eraserWidth : penWidth, points: strokePoints });
   };
+
   const clearCanvas = () => {
     if (!isDrawer) return;
     const ctx = ctxRef.current;
@@ -599,18 +646,21 @@ function GameScreen({ maxPlayers = 10 }) {
     redoStackRef.current = [];
     stompRef.current?.publish({ destination: `/app/draw/${lobbyId}/clear`, body: JSON.stringify({ userId }) });
   };
+
   const handleUndo = () => {
     if (!isDrawer || historyRef.current.length === 0) return;
     redoStackRef.current.push(historyRef.current.pop());
     redrawAll();
     publishDraw({ type: 'UNDO' });
   };
+
   const handleRedo = () => {
     if (!isDrawer || redoStackRef.current.length === 0) return;
     historyRef.current.push(redoStackRef.current.pop());
     redrawAll();
     publishDraw({ type: 'REDO' });
   };
+
   const floodFill = (x, y, color) => {
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
@@ -633,6 +683,7 @@ function GameScreen({ maxPlayers = 10 }) {
     }
     ctx.putImageData(img, 0, 0);
   };
+
   const handleSendChat = () => {
     if (!chatMessage.trim()) return;
     stompRef.current?.publish({
@@ -648,17 +699,15 @@ function GameScreen({ maxPlayers = 10 }) {
 
   const renderUser = (u, index) => (
     <div
-      key={index} // React key는 고유해야 하므로 원래 인덱스 등 활용
+      key={index}
       className={`user-card ${!u ? 'empty' : ''} ${u && String(u.userId) === String(winnerId) ? 'winner' : ''}`}
       ref={(el) => { if (u && el) userCardRefs.current[u.userId] = el; }}
     >
       <div className="avatar" />
       <span className="username">
         {u ? u.nickname : 'Empty'}
-        {/* 방장 대신 현재 출제자에게 별 표시 */}
         {u && String(u.userId) === String(currentDrawerId) && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
       </span>
-      {/* ✅ [추가] 점수 표시 (유저가 있을 때만) */}
         {u && (
           <span className="user-score" style={{ fontSize: '12px', color: '#1971c2', fontWeight: 'bold' }}>
             Score: {u.score || 0}
@@ -670,9 +719,8 @@ function GameScreen({ maxPlayers = 10 }) {
   return (
     <div className="game-wrapper">
        
-       {/* 정답자 모달 */}
        {answerModal.visible && createPortal(
-         <div className="answer-modal-overlay">
+         <div className="answer-modal-overlay" style={{ zIndex: 99999 }}>
             <div className="answer-modal-content">
                 <div className="confetti">🎉</div>
                 <h2>정답자가 나왔습니다!</h2>
@@ -685,9 +733,8 @@ function GameScreen({ maxPlayers = 10 }) {
          document.body
        )}
 
-       {/* 시간 초과 모달 */}
        {timeOverModal && createPortal(
-         <div className="answer-modal-overlay">
+         <div className="answer-modal-overlay" style={{ zIndex: 99999 }}>
             <div className="answer-modal-content">
                 <div className="confetti" style={{ fontSize: '3rem' }}>⌛️</div>
                 <h2>시간 초과!</h2>
@@ -702,40 +749,39 @@ function GameScreen({ maxPlayers = 10 }) {
          document.body
        )}
 
-       {/* 출제자 알림 모달 */}
-       {drawerModal.visible && createPortal(
-         <div className="answer-modal-overlay"> {/* 스타일 재사용 */}
-            <div className="answer-modal-content">
+       {roundModal.visible && createPortal(
+        <div className="answer-modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="answer-modal-content">
+
+            {roundModal.role === 'drawer' ? (
+              <>
                 <h2>당신이 출제자 입니다!</h2>
                 <div className="modal-info">
-                    <p style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#333' }}>
-                        주제어: <span className="highlight-text">{drawerModal.keyword}</span>
-                    </p>
-                    <p style={{ marginTop: '15px' }}>그림을 그려주세요 🎨</p>
+                  <p style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>
+                    주제어: <span className="highlight-text">{roundModal.word}</span>
+                  </p>
+                  <p style={{ marginTop: '15px' }}>그림을 그려주세요 🎨</p>
                 </div>
-            </div>
-         </div>,
-         document.body
-       )}
-
-       {/* 맞추는 사람 알림 모달 */}
-       {guesserModal && createPortal(
-         <div className="answer-modal-overlay">
-            <div className="answer-modal-content">
+              </>
+            ) : (
+              <>
                 <div className="confetti" style={{ fontSize: '3rem' }}>🤔</div>
                 <h2>그림을 맞춰보세요!</h2>
                 <div className="modal-info">
-                    <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#333' }}>
-                        출제자가 그림을 그리고 있습니다.
-                    </p>
-                    <p style={{ marginTop: '10px', color: '#666' }}>
-                        채팅창에 정답을 입력하세요! ⌨️
-                    </p>
+                  <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                    출제자가 그림을 그리고 있습니다.
+                  </p>
+                  <p style={{ marginTop: '10px', color: '#666' }}>
+                    채팅창에 정답을 입력하세요! ⌨️
+                  </p>
                 </div>
-            </div>
-         </div>,
-         document.body
-       )}
+              </>
+            )}
+
+          </div>
+        </div>,
+        document.body
+      )}
 
        <button className="back-btn" onClick={handleLeaveGame}>
          <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -746,12 +792,10 @@ function GameScreen({ maxPlayers = 10 }) {
        <div className="game-area">
           <div className="game-grid">
              
-             {/* ✅ [왼쪽 컬럼] 짝수 인덱스 유저들 (0:방장, 2, 4...) */}
              <div className="user-column left">
                 {leftUsers.map((u, i) => renderUser(u, i * 2))} 
              </div>
              
-             {/* 중앙 보드 영역 (기존 유지) */}
              <div className="center-board-area">
                 <div className="board-wrapper">
                     <div className="canvas-group">
@@ -778,36 +822,34 @@ function GameScreen({ maxPlayers = 10 }) {
                             </div>
                           )}
                           <div className="tool-box">
-                              {/* ... (도구함 내부 버튼들 기존 동일) ... */}
-                              {showModal && activeTool === 'pen' && <PenSettings color={penColor} setColor={setPenColor} width={penWidth} setWidth={setPenWidth} onClose={() => setShowModal(false)} />}
-                              {showModal && activeTool === 'fill' && <FillSettings color={fillColor} setColor={setFillColor} onClose={() => setShowModal(false)} />}
-                              {showModal && activeTool === 'eraser' && <EraserSettings width={eraserWidth} setWidth={setEraserWidth} onClose={() => setShowModal(false)} />}
-                              
-                              <div className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`} onClick={() => handleToolClick('pen')}><PenIcon color={penColor} /></div>
-                              <div className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`} onClick={() => handleToolClick('fill')}><img src="/svg/fill.svg" alt="fill" /></div>
-                              <div className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} onClick={() => handleToolClick('eraser')}><img src="/svg/eraser.svg" alt="eraser" /></div>
-                              
-                              <div className="tool-btn" onClick={handleUndo} title="Undo">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M9 14 4 9l5-5"/>
-                                  <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
-                                </svg>
-                              </div>
+                             {showModal && activeTool === 'pen' && <PenSettings color={penColor} setColor={setPenColor} width={penWidth} setWidth={setPenWidth} onClose={() => setShowModal(false)} />}
+                             {showModal && activeTool === 'fill' && <FillSettings color={fillColor} setColor={setFillColor} onClose={() => setShowModal(false)} />}
+                             {showModal && activeTool === 'eraser' && <EraserSettings width={eraserWidth} setWidth={setEraserWidth} onClose={() => setShowModal(false)} />}
+                             
+                             <div className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`} onClick={() => handleToolClick('pen')}><PenIcon color={penColor} /></div>
+                             <div className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`} onClick={() => handleToolClick('fill')}><img src="/svg/fill.svg" alt="fill" /></div>
+                             <div className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} onClick={() => handleToolClick('eraser')}><img src="/svg/eraser.svg" alt="eraser" /></div>
+                             
+                             <div className="tool-btn" onClick={handleUndo} title="Undo">
+                               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                 <path d="M9 14 4 9l5-5"/>
+                                 <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>
+                               </svg>
+                             </div>
 
-                              <div className="tool-btn" onClick={handleRedo} title="Redo">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="m15 14 5-5-5-5"/>
-                                  <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
-                                </svg>
-                              </div>
-                              <div className="tool-btn delete-btn" onClick={clearCanvas}>🗑</div>
+                             <div className="tool-btn" onClick={handleRedo} title="Redo">
+                               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                 <path d="m15 14 5-5-5-5"/>
+                                 <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/>
+                               </svg>
+                             </div>
+                             <div className="tool-btn delete-btn" onClick={clearCanvas}>🗑</div>
                           </div>
                        </div>
                     )}
                 </div>
              </div>
              
-             {/* ✅ [오른쪽 컬럼] 홀수 인덱스 유저들 (1, 3, 5...) */}
              <div className="user-column right">
                 {rightUsers.map((u, i) => renderUser(u, i * 2 + 1))}
              </div>
@@ -815,12 +857,11 @@ function GameScreen({ maxPlayers = 10 }) {
           </div>
        </div>
        
-       {/* ... (말풍선, 채팅바 로직 기존 동일) ... */}
        {Object.entries(chatBubbles).map(([uid, msg]) => {
-          const el = userCardRefs.current[uid];
-          if (!el) return null;
-          const rect = el.getBoundingClientRect();
-          return (
+         const el = userCardRefs.current[uid];
+         if (!el) return null;
+         const rect = el.getBoundingClientRect();
+         return (
              <div key={uid} className="chat-bubble-float" style={{ position: 'fixed', top: rect.top + rect.height / 2, left: rect.right + 12, transform: 'translateY(-50%)', zIndex: 9999, maxWidth: '220px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', pointerEvents: 'none' }}>
                 {msg}
              </div>

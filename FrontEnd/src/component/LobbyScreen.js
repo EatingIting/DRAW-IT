@@ -74,16 +74,11 @@ function LobbyScreen() {
           const data = JSON.parse(message.body);
 
           if (data.type === "USER_UPDATE") {
-            // ✅ 서버에서 이미 joinedAt 순서로 정렬해서 보내주므로 그대로 사용
             const serverSortedUsers = data.users || [];
             
             setPlayers(serverSortedUsers);
 
-            setIsHost(
-              serverSortedUsers.some(
-                (u) => u.host === true && u.userId === userIdRef.current
-              )
-            );
+            setIsHost(data.hostUserId === userIdRef.current);
           }
 
           if (data.type === "ROOM_UPDATED") {

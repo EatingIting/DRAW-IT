@@ -117,13 +117,10 @@ public class SocketController {
         GameState state = gameStateManager.createGame(roomId, drawerUserId);
         state.setRoundEndTime(0);
 
-        // ✅ [확인] createGame 안에서 roundEndTime이 설정되므로, 여기서 get 해서 보냄
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "GAME_START",
                 "drawerUserId", drawerUserId,
-                "word", state.getCurrentWord(),
-                "gameStarted", true,
-                "roundEndTime", 0L
+                "word", state.getCurrentWord()
         ));
 
         scheduler.schedule(new Runnable() {
@@ -162,6 +159,25 @@ public class SocketController {
     @MessageMapping("/lobby/{roomId}/leave")
     public void leave(@DestinationVariable String roomId, @Payload Map<String, String> payload) {
         lobbyUserStore.leaveRoom(roomId, payload.get("userId"));
+
+        Lobby lobby = lobbyService.getLobby(roomId);
+        GameState state = gameStateManager.getGame(roomId);
+        boolean gameStarted = (state != null);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("type", "USER_UPDATE");
+        response.put("users", lobbyUserStore.getUsers(roomId));
+        if (lobby != null) {
+            response.put("hostUserId", lobby.getHostUserId());
+        }
+        response.put("gameStarted", gameStarted);
+
+        if (state != null) {
+            response.put("drawerUserId", state.getDrawerUserId());
+            response.put("word", state.getCurrentWord());
+            response.put("roundEndTime", state.getRoundEndTime());
+        }
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, response);
     }
 
     // (draw, clear, chatBubble 메서드는 기존과 동일하므로 생략하지 않고 그대로 둠)
@@ -323,7 +339,10 @@ public class SocketController {
 
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "ROUND_START",
-                "roundEndTime", endTime
+                "roundEndTime", endTime,
+                "drawerUserId", state.getDrawerUserId(),
+                "word", state.getCurrentWord(),
+                "currentRound", state.getCurrentRound()
         ));
 
         // ✅ 현재 라운드 번호를 기억해둠 (예: 1라운드)
