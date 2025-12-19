@@ -16,11 +16,13 @@ public class LobbyService {
 
     private final LobbyRepository lobbyRepository;
 
+    /* ============================================================
+       방 생성
+    ============================================================ */
     @Transactional
     public Lobby createLobby(CreateLobbyDTO dto) {
-
         if (lobbyRepository.existsById(dto.getId())) {
-            throw new IllegalArgumentException("이미 존재하는 방");
+            throw new IllegalArgumentException("이미 존재하는 방 ID입니다.");
         }
 
         Lobby lobby = new Lobby();
@@ -30,34 +32,56 @@ public class LobbyService {
         lobby.setPassword(dto.getPassword());
         lobby.setHostUserId(dto.getHostUserId());
         lobby.setHostNickname(dto.getHostNickname());
+        lobby.setGameStarted(false); // 초기값은 대기중
 
         return lobbyRepository.save(lobby);
     }
 
+    /* ============================================================
+       방 상세 조회
+    ============================================================ */
     @Transactional(readOnly = true)
     public Lobby getLobby(String lobbyId) {
         return lobbyRepository.findById(lobbyId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 방"));
     }
 
+    /* ============================================================
+       전체 방 목록 조회
+    ============================================================ */
     @Transactional(readOnly = true)
     public List<Lobby> getAllRooms() {
         return lobbyRepository.findAll();
     }
 
+    /* ============================================================
+       방 정보 수정 (옵션 변경 등)
+    ============================================================ */
     @Transactional
     public Lobby updateLobby(String lobbyId, UpdateLobbyDTO dto) {
         Lobby lobby = lobbyRepository.findById(lobbyId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 방"));
 
-        // null/빈값 방어 (원하시면 더 엄격하게 검증 가능)
         if (dto.getName() != null) lobby.setName(dto.getName());
         if (dto.getMode() != null) lobby.setMode(dto.getMode());
 
-        // password는 "비번 끄면 null"로 내려오는 걸 그대로 반영
+        // 비밀번호 변경 (빈 값이면 비밀번호 해제)
         lobby.setPassword(dto.getPassword());
 
-        return lobby; // @Transactional이라 dirty checking으로 자동 update
+        return lobby; // Dirty Checking으로 자동 저장
+    }
+
+    /* ============================================================
+       🔥 [핵심] 게임 상태 변경 (대기중 <-> 게임중)
+       isStarted: true(게임중), false(대기중)
+    ============================================================ */
+    @Transactional
+    public void updateGameStatus(String lobbyId, boolean isStarted) {
+        Lobby lobby = lobbyRepository.findById(lobbyId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 방"));
+
+        lobby.setGameStarted(isStarted);
+        lobbyRepository.save(lobby); // DB에 확실하게 저장
     }
 
     @Transactional

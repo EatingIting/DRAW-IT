@@ -1,219 +1,272 @@
 @charset "utf-8";
 
-/* =========================================
-   1. 전체 레이아웃 & 배경 설정
-   ========================================= */
+/* ============================================================
+   1. 전체 레이아웃 (배경 및 정렬)
+   ============================================================ */
 .join-wrapper {
     width: 100%;
     min-height: 100vh;
-    background-color: #347433; /* Draw-It 메인 테마 색상 (진한 초록) */
+    background-color: #347433; /* 메인 테마 색상 */
+    
     display: flex;
     flex-direction: column;
-    align-items: center;       /* 가로 중앙 정렬 */
+    align-items: center;
+    
     padding: 20px;
     box-sizing: border-box;
-    position: relative;        /* 자식 요소(back-btn)의 기준점 */
-    font-family: 'Malgun Gothic', sans-serif;
+    position: relative;
+    font-family: 'Malgun Gothic', 'Jua', sans-serif;
 }
 
-/* =========================================
-   2. UI 컨트롤 요소 (버튼 등)
-   ========================================= */
-/* 좌측 상단 뒤로가기 버튼 */
-.back-btn-top {
-    position: absolute;        /* 절대 위치 고정 */
-    top: 25px;
-    left: 25px;
-    background-color: rgba(0, 0, 0, 0.4); /* 반투명 검정 배경 */
-    color: white;
-    border: 2px solid rgba(255, 255, 255, 0.6);
-    padding: 10px 20px;
-    border-radius: 30px;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 100;              /* 다른 요소보다 항상 위에 위치 */
-    transition: transform 0.2s, background-color 0.2s;
-}
-
-.back-btn-top:hover {
-    background-color: white;
-    color: #347433;
-    transform: scale(1.05);    /* 마우스 오버 시 살짝 커짐 */
-}
-
-/* =========================================
-   3. 헤더 영역 (로고 및 타이틀)
-   ========================================= */
-.join-header-container {
+/* --- 뒤로가기 버튼 (좌측 상단 고정) --- */
+.back-btn {
+    position: absolute;
+    top: 30px;
+    left: 30px;
+    z-index: 100;
+    
+    width: 56px;
+    height: 56px;
+    background: #fff;
+    border: 3px solid #ddd; /* 테두리 조금 더 선명하게 */
+    border-radius: 50%;
+    
     display: flex;
-    flex-direction: column;    /* 세로로 배치 (로고 위, 타이틀 아래) */
     align-items: center;
     justify-content: center;
-    padding-top: -40px;
-    margin-bottom: 40px;
-    position: relative;
+    
+    color: #333;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+}
+
+.back-btn:hover { 
+    transform: scale(1.1); 
+    background: #f8f9fa; 
+}
+.back-btn:active { 
+    transform: scale(0.95); 
+}
+
+/* ============================================================
+   2. 헤더 영역 (로고 + 타이틀)
+   ============================================================ */
+.join-header-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 30px;
     z-index: 10;
 }
 
 .join-logo {
-    width: 250px;
+    width: 280px; /* 로고 크기 적당히 조절 */
     height: auto;
-    display: block;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); /* 로고 입체감 */
-}
-
-.title-area {
-    display: flex;
-    justify-content: center;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+    margin-bottom: 10px;
 }
 
 .join-title {
     font-size: 1.8rem;
     font-weight: 900;
     color: #ffffff;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.4); /* 글자 그림자 */
-    background-color: rgba(0, 0, 0, 0.25);    /* 글자 배경 반투명 박스 */
-    padding: 10px 30px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+    background-color: rgba(0, 0, 0, 0.3); /* 가독성을 위한 배경 */
+    padding: 8px 30px;
     border-radius: 50px;
 }
 
-/* =========================================
-   4. 방 목록 컨테이너 (Glassmorphism)
-   ========================================= */
+/* ============================================================
+   3. 방 목록 컨테이너 (유리창 효과)
+   ============================================================ */
 .room-list-box {
     width: 100%;
-    max-width: 1200px;
-    background-color: rgba(255, 255, 255, 0.15); /* 유리창 같은 반투명 효과 */
-    border: 3px solid rgba(255, 255, 255, 0.3);  /* 연한 테두리 */
-    border-radius: 25px;
+    max-width: 1200px; /* 너무 넓게 퍼지지 않도록 제한 */
+    
+    background-color: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 24px;
+    
     padding: 30px;
     box-sizing: border-box;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);   /* 깊은 그림자 */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    
+    /* 내용이 많아지면 스크롤 생기지 않고 늘어나도록 설정 */
+    min-height: 400px; 
 }
 
+/* 그리드 레이아웃: 화면 크기에 따라 카드 개수 자동 조절 */
 .room-grid-container {
     display: grid;
-    /* 반응형 그리드: 최소 280px 유지, 화면 크기에 따라 열 개수 자동 조절 */
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 25px;
+    gap: 20px;
 }
 
-/* =========================================
-   5. 방 카드 디자인 (핵심 로직 포함)
-   ========================================= */
+/* 방이 없을 때 메시지 스타일 */
+.empty-message {
+    grid-column: 1 / -1; /* 전체 가로폭 차지 */
+    text-align: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.2rem;
+    margin-top: 50px;
+}
+
+/* ============================================================
+   4. 방 카드 디자인 (핵심)
+   ============================================================ */
 .room-card {
-    /* [색상 자동 계산 로직]
-       --ratio (0~1): 인원 비율
-       Hue: 120(초록)에서 0(빨강)까지 비율에 따라 변화
-       Saturation: 100% (가장 선명함)
-       Lightness: 85% (색감을 살리면서 텍스트 가독성 확보)
-    */
-    background-color: hsl(calc(120 * (1 - var(--ratio))), 100%, 85%);
-    
-    /* 테두리는 배경보다 훨씬 진하게(Lightness 60%) 설정하여 경계 구분 */
-    border: 3px solid hsl(calc(120 * (1 - var(--ratio))), 70%, 60%);
+    /* [자동 색상] 비율(--ratio)에 따라 초록(120) -> 빨강(0)으로 변화 */
+    background-color: hsl(calc(120 * (1 - var(--ratio))), 90%, 85%);
+    border: 3px solid hsl(calc(120 * (1 - var(--ratio))), 60%, 55%);
     
     border-radius: 20px;
-    padding: 20px;
-    height: 200px;
+    padding: 16px;
+    height: 190px; /* 높이 고정 */
+    
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    box-shadow: 0 5px 10px rgba(0,0,0,0.1);
-    transition: transform 0.2s, background-color 0.2s;
-}
-
-/* 카드 호버 효과 */
-.room-card:hover {
-    transform: translateY(-5px); /* 위로 떠오름 */
     
-    /* 호버 시 Lightness를 85% -> 78%로 낮춰 색상을 더 진하게 만듦 */
-    background-color: hsl(calc(120 * (1 - var(--ratio))), 100%, 78%);
-    box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
-/* 카드 내부 요소들 */
+.room-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+
+/* --- 카드 상단 (제목 + 뱃지) --- */
 .room-card-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    
+    padding-bottom: 8px;
     border-bottom: 2px dashed rgba(0,0,0,0.1);
-    padding-bottom: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
+    gap: 10px;
+}
+
+/* 제목 영역 (왼쪽) - 공간 유연하게 차지 */
+.card-header-left {
+    display: flex;
+    align-items: center;
+    flex: 1;      /* 남은 공간 모두 차지 */
+    min-width: 0; /* 말줄임표 작동을 위한 필수 설정 */
 }
 
 .room-name {
     font-size: 1.2rem;
     font-weight: 800;
-    color: #333;
-    overflow: hidden;
-    text-overflow: ellipsis; /* 긴 제목 ... 처리 */
+    color: #2d3436;
+    
+    /* 긴 제목 처리 */
     white-space: nowrap;
-    max-width: 70%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.room-status {
-    font-size: 0.9rem;
-    font-weight: 900;
-    color: #555;
-    background-color: rgba(255,255,255, 0.6);
-    padding: 5px 10px;
-    border-radius: 10px;
+.lock-icon {
+    font-size: 1rem;
+    margin-left: 6px;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
 }
 
-/* 만원일 때 인원수 스타일 */
-.room-status.full {
-    color: #d63031;
-    background-color: #ffeaa7;
+/* 뱃지 영역 (오른쪽) - 고정 크기 유지 */
+.card-header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0; /* 줄어들지 않음 */
 }
 
+/* --- 카드 중단 (정보) --- */
 .room-card-middle {
     flex-grow: 1;
-    text-align: center;
     display: flex;
     flex-direction: column;
     justify-content: center;
-}
-
-.owner-name {
-    font-size: 0.85rem;
-    color: #777;
-    margin-bottom: 5px;
-}
-
-.room-desc {
-    font-size: 1rem;
-    font-weight: bold;
+    align-items: center;
+    gap: 5px;
     color: #444;
 }
 
-/* =========================================
-   6. 입장 버튼 스타일
-   ========================================= */
+.owner-name, .room-desc {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+/* --- 카드 하단 (버튼) --- */
 .room-join-btn {
     width: 100%;
-    height: 45px;
-    background-color: #3b82f6; /* 기본 파란색 */
+    height: 42px;
+    background-color: #0984e3;
     color: white;
+    
     border: none;
-    border-radius: 10px;
-    font-size: 1.05rem;
+    border-radius: 12px;
+    
+    font-size: 1rem;
     font-weight: 800;
     cursor: pointer;
-    box-shadow: 0 4px 0 #2563eb; /* 입체 버튼 그림자 */
+    box-shadow: 0 4px 0 #0768b5;
     transition: all 0.1s;
 }
 
 .room-join-btn:active {
-    box-shadow: 0 2px 0 #2563eb;
-    transform: translateY(2px);  /* 클릭 시 눌리는 효과 */
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #0768b5;
 }
 
-/* 만원(Disabled) 버튼 스타일 */
+/* 비활성화 버튼 (만원일 때) */
 .room-join-btn.disabled {
-    background-color: #b2bec3;   /* 회색 */
-    box-shadow: none;            /* 그림자 제거 */
-    cursor: not-allowed;         /* 금지 커서 */
+    background-color: #b2bec3;
     color: #636e72;
+    box-shadow: none;
+    cursor: not-allowed;
     transform: none;
+}
+
+/* ============================================================
+   5. 상태 뱃지 디자인 (대기중 / 게임중)
+   ============================================================ */
+.state-badge {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 8px;
+    box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+}
+
+.state-badge.waiting {
+    background-color: #00b894; /* 민트색 */
+}
+
+.state-badge.playing {
+    background-color: #ff7675; /* 붉은색 */
+    animation: pulse 1.5s infinite;
+}
+
+/* 게임중일 때 두근두근 효과 */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* 인원수 뱃지 */
+.room-status {
+    font-size: 0.85rem;
+    font-weight: 700;
+    background-color: rgba(255,255,255,0.7);
+    padding: 4px 8px;
+    border-radius: 8px;
+    color: #333;
+}
+.room-status.full {
+    color: #d63031;
+    background-color: #ffeaa7;
 }

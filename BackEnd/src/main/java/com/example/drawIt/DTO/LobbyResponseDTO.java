@@ -16,6 +16,14 @@ public class LobbyResponseDTO {
     private String mode;
     private String hostNickname;
     private boolean gameStarted;
+    // 인원 수 추가된 필드
+    private int currentCount;
+    private int maxCount;
+    // 자물쇠 필드
+    private boolean passwordEnabled;
+
+    public void setCurrentCount(int currentCount) { this.currentCount = currentCount; }
+    public void setMaxCount(int maxCount) { this.maxCount = maxCount; }
 
     public LobbyResponseDTO(Lobby lobby) {
         this.id = lobby.getId();
@@ -23,5 +31,7 @@ public class LobbyResponseDTO {
         this.mode = lobby.getMode();
         this.hostNickname = lobby.getHostNickname();
         this.gameStarted = lobby.isGameStarted();
+        // 비밀번호가 존재하고, 공백이 아니면 true
+        this.passwordEnabled = lobby.getPassword() != null && !lobby.getPassword().isBlank();
     }
 }
