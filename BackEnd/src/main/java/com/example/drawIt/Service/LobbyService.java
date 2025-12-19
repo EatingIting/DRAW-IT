@@ -83,4 +83,11 @@ public class LobbyService {
         lobby.setGameStarted(isStarted);
         lobbyRepository.save(lobby); // DB에 확실하게 저장
     }
+
+    @Transactional
+    public void markGameStarted(String lobbyId) {
+        Lobby lobby = lobbyRepository.findById(lobbyId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 방"));
+        lobby.setGameStarted(true);
+    }
 }

@@ -1,3 +1,5 @@
+/* LobbyScreen.css */
+
 /* =========================================
    :root - 게임 테마 변수 정의
    ========================================= */
@@ -79,123 +81,91 @@
   box-sizing: border-box;
 }
 
-/* =========================================
-   3. 메인 플레이 영역 (중앙 정렬 & 그리드)
-   ========================================= */
-
 /* ★ 핵심 레이아웃: 좌우 유저를 바깥으로 밀어내기 ★ */
 .play-grid {
   display: grid;
-  
-  /* ✨ [수정 1] 컬럼 정의 변경 */
-  /* 기존: 240px 340px 240px (중앙이 고정되어 유연하지 않음) */
-  /* 변경: 양옆은 유저 카드 크기만큼 고정(240px), 중앙은 남는 공간(1fr) 차지 */
-  grid-template-columns: 240px 1fr 240px; 
-  
-  /* ✨ [수정 2] 간격 대폭 확대 */
-  /* 기존: gap: 120px; (말풍선 뜨기에 애매함) */
-  /* 변경: gap: 260px; (말풍선 너비 220px + 여유공간 확보!) */
-  gap: 260px; 
+  /* 좌측(240px) - 중앙(340px) - 우측(240px) */
+  grid-template-columns: 240px 340px 240px; 
+  gap: 120px; /* 중앙과 유저 리스트 사이의 간격을 넓게 설정 */
   
   align-items: center;
-  width: 100%; /* 전체 너비 사용 */
-  max-width: 1600px; /* 너무 넓어지지 않게 최대폭 제한 */
 }
 
 /* =========================================
-   4. 유저 리스트 (좌/우 컬럼) - 간격 수정
+   4. 유저 리스트 (좌/우 컬럼 & 카드 디자인)
    ========================================= */
 .user-column {
-    display: flex;
-    flex-direction: column;
-    gap: 15px; /* 🚨 100px -> 15px로 수정! (이게 핵심입니다) */
-    flex: 1; 
-    height: 100%;
-    justify-content: center; /* 중앙 정렬 */
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* 카드 사이 간격 */
+  width: 100%;
 }
 
 /* 왼쪽 컬럼은 오른쪽 정렬(중앙 향해), 오른쪽 컬럼은 왼쪽 정렬 */
 .user-column.left { align-items: flex-end; }   
 .user-column.right { align-items: flex-start; }
 
-/* =========================================
-   4. 유저 카드 디자인 (사진이랑 똑같이!)
-   ========================================= */
+/* 유저 카드 (채워진 상태) */
 .user-card {
-    /* 내부 정렬: 세로로 배치 (이미지 -> 이름 -> 점수) */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    
-    /* 카드 크기: 너무 길지 않게 딱 적당히 고정 */
-    width: 140px;
-    height: 190px; /* 비율(aspect-ratio) 대신 높이를 고정하는 게 안전해요 */
-    
-    background-color: #ffffff;
-    border: 3px solid #000000; /* 깔끔한 검은 테두리 */
-    border-radius: 15px;       /* 둥근 모서리 */
-    
-    padding: 10px;             /* 안쪽 여백 */
-    box-sizing: border-box;
-    gap: 8px;                  /* 사진, 이름, 점수 사이 간격 */
-    
-    /* 그림자 (살짝 입체감) */
-    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.2);
-    transition: transform 0.2s;
-    
-    /* 공간 부족해도 찌그러지지 않게 방어 */
-    flex-shrink: 0; 
+  width: 100%;
+  max-width: 220px;
+  height: 52px;
+  
+  background: #fff;
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  
+  transition: transform 0.2s;
+  cursor: default;
 }
 
-/* 마우스 올렸을 때 살짝 움직이기 */
 .user-card:not(.empty):hover {
-    transform: translateY(-5px);
+  transform: scale(1.05);
+  z-index: 10;
 }
 
-/* --- 내용물 스타일 --- */
-
-/* 1. 아바타 (동그라미) */
-.avatar {
-    width: 70px;   /* 크기 적당하게 키움 */
-    height: 70px;
-    background-color: #eee; /* 이미지 없을 때 배경색 */
-    border-radius: 50%;     /* 완전 동그라미 */
-    object-fit: cover;
-    border: 2px solid #ddd; /* 아바타 테두리 살짝 */
-}
-
-/* 2. 닉네임 */
-.username {
-    font-size: 16px;
-    font-weight: 800;
-    color: #333;
-    text-align: center;
-    
-    /* 긴 이름은 ... 처리 */
-    width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* 3. 스코어 (새로 추가!) */
-/* HTML에 <div className="user-score">...</div> 가 있어야 보여요! */
-.user-score {
-    font-size: 14px;
-    color: #555;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-/* 빈 카드 스타일 (Empty) */
+/* 유저 카드 (Empty 상태) */
 .user-card.empty {
-    background-color: rgba(255, 255, 255, 0.2); /* 투명하게 */
-    border: 2px dashed rgba(255, 255, 255, 0.5); /* 점선 */
-    box-shadow: none;
+  background: rgba(255, 255, 255, 0.4); /* 반투명 배경 */
+  border-color: rgba(0, 0, 0, 0.2);      /* 흐릿한 테두리 */
+  box-shadow: none;                      /* 그림자 제거 (납작하게) */
 }
+
+.user-card.empty .avatar {
+  background-color: #adb5bd;
+  border-color: #868e96;
+}
+
+.user-card.empty .username {
+  color: #dee2e6; /* 글자색 흐리게 */
+  font-weight: 500;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+}
+
+/* 공통 요소 */
+.avatar {
+  width: 32px;
+  height: 32px;
+  background-color: #eee;
+  border: 2px solid var(--game-border-color);
+  border-radius: 50%;
+}
+
+.username {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* 긴 이름 말줄임표 */
+}
+
 /* =========================================
    5. 중앙 정보 영역 (로고, 방 정보, 버튼들)
    ========================================= */
@@ -409,44 +379,70 @@
   box-shadow: 0 0 0 #e67700;
 }
 
-/* LobbyScreen.css 맨 아래쪽 말풍선 부분 교체 */
+/* 말풍선 */
 
-/* =========================================
-   ✅ 말풍선 스타일 (부드러운 버전)
-   ========================================= */
 .chat-bubble-float {
-    /* 배경 및 폰트 */
-    background-color: #fff;
-    color: #2c3e50; /* 완전 검정보다 약간 부드러운 색 */
-    font-family: 'Jua', sans-serif;
-    font-size: 17px; /* 글씨 살짝 키움 */
-    font-weight: normal;
-    
-    text-align: center;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-width: 220px; /* 최대 너비 유지 */
-    
-    /* ✨ [디자인 변경] 딱딱한 테두리 대신 부드러운 그림자 강조 */
-    padding: 12px 18px;
-    border: none; /* 테두리 없앰 */
-    border-radius: 24px; /* 더 둥글게 */
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15), 0 0 0 3px #e9ecef; /* 부드러운 외곽선 효과 */
-    
-    position: fixed; 
-    z-index: 9999;
-    pointer-events: none;
-    animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-/* (... 아래 애니메이션 키프레임 등은 그대로 유지 ...) */
+  background: white;
+  padding: 10px 14px;
+  border-radius: 12px;
+  
+  /* ✅ 게임 테마에 맞춘 테두리와 그림자 추가 */
+  border: 3px solid #2c2c2c;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2); 
 
-@keyframes popInRight {
-    0% { 
-        opacity: 0; 
-        transform: translate(-100%, -50%) scale(0.8); 
-    }
-    100% { 
-        opacity: 1; 
-        transform: translate(-100%, -50%) scale(1); 
-    }
+  font-size: 14px;
+  font-weight: 700; /* 폰트 굵게 */
+  color: #333;
+
+  max-width: 200px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+
+  pointer-events: none;
+  position: fixed;
+  z-index: 9999;
+}
+
+/* ✅ 꺾인 꼬리 만들기 (테두리 부분) */
+.chat-bubble-float::before {
+  content: "";
+  position: absolute;
+  left: -10px; /* 위치 조정 */
+  top: 50%;
+  
+  width: 14px;
+  height: 14px;
+  background: #2c2c2c; /* 테두리 색상 */
+  
+  /* 회전(rotate)과 비틀기(skew)로 꺾인 모양 생성 */
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
+  
+  /* 꼬리 끝을 살짝 둥글게 */
+  border-bottom-left-radius: 4px;
+  z-index: -2; /* 말풍선 뒤로 */
+}
+
+/* ✅ 꺾인 꼬리 만들기 (흰색 채움 부분) */
+.chat-bubble-float::after {
+  content: "";
+  position: absolute;
+  left: -6px; /* 테두리보다 살짝 안쪽으로 */
+  top: 50%;
+  
+  width: 14px;
+  height: 14px;
+  background: white; /* 말풍선 배경색 */
+  
+  /* before와 동일한 각도로 변형하여 덮어씌움 */
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
+  z-index: -1;
+}
+
+/* 등장 애니메이션 */
+@keyframes bubbleFloat {
+  0% { opacity: 0; transform: translateY(6px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
 }

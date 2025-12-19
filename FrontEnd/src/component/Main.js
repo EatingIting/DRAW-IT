@@ -73,6 +73,7 @@ function Main() {
             className="nickname-input"
             placeholder="닉네임 입력"
             value={nickname}
+            maxLength={5}
             onChange={(e) => setNickname(e.target.value)}
           />
         </div>
