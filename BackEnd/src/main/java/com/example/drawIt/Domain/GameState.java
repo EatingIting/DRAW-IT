@@ -23,12 +23,14 @@ public class GameState {
     private List<DrawEvent> drawEvents = new CopyOnWriteArrayList<>();
     private Stack<DrawEvent> redoStack = new Stack<>();
 
-    private Set<String> drawnUserIds = new HashSet<>();
+    private Map<String, Integer> drawCounts = new HashMap<>();
+
+    private Set<String> usedWords = new HashSet<>(); //이미 출제된 단어 목록 (중복 방지용)
 
     // ✅ 생성자 수정: roomId와 drawerUserId 두 개를 받도록 변경
     public GameState(String roomId, String drawerUserId) {
         this.roomId = roomId;
         this.drawerUserId = drawerUserId;
-        this.drawnUserIds.add(drawerUserId);
+        this.drawCounts.put(drawerUserId, 1);
     }
 }

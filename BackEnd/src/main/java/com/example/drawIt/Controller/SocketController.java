@@ -50,7 +50,7 @@ public class SocketController {
         payload.put("drawerUserId", drawerUserId);
         if(gameStarted && currentWord != null) payload.put("word", currentWord);
 
-        // ✅ [추가] 중간 입장 시 타이머 동기화
+        // 중간 입장 시 타이머 동기화
         if (gameStarted) {
             payload.put("roundEndTime", state.getRoundEndTime());
         }
@@ -93,14 +93,23 @@ public class SocketController {
 
         String drawerUserId = gameStateManager.pickRandomDrawer(users);
         GameState state = gameStateManager.createGame(roomId, drawerUserId);
+        state.setRoundEndTime(0);
 
         // ✅ [확인] createGame 안에서 roundEndTime이 설정되므로, 여기서 get 해서 보냄
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "GAME_START",
                 "drawerUserId", drawerUserId,
                 "word", state.getCurrentWord(),
-                "roundEndTime", state.getRoundEndTime() // ✅ 시간 전송
+                "gameStarted", true,
+                "roundEndTime", 0L
         ));
+
+        scheduler.schedule(new Runnable() {
+            @Override
+            public void run() {
+                startRealGame(roomId);
+            }
+        }, 3, TimeUnit.SECONDS);
     }
 
     @MessageMapping("/lobby/{roomId}/timeover")
@@ -207,6 +216,18 @@ public class SocketController {
 
             System.out.println("🎉 정답자 발생! User: " + winnerNickname);
 
+            lobbyUserStore.addScore(roomId, userId, 10);
+
+            if(state.getDrawerUserId() != null) { //출제자가 방에 남아있을 경우
+                lobbyUserStore.addScore(roomId, state.getDrawerUserId(), 5);
+            }
+
+            messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                    "type", "USER_UPDATE",
+                    "users", lobbyUserStore.getUsers(roomId), // 갱신된 점수 포함
+                    "gameStarted", true
+            ));
+
             // 1) 모든 유저에게 정답자 알림 (닉네임 포함)
             messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                     "type", "CORRECT_ANSWER",
@@ -248,21 +269,73 @@ public class SocketController {
         String newDrawer = gameStateManager.pickNextDrawer(state, users);
         state.setDrawerUserId(newDrawer);
 
-        // 새 단어
-        String newWord = gameStateManager.pickRandomWord();
+        // 중복 없는 단어
+        String newWord = gameStateManager.getUniqueWord(state);
         state.setCurrentWord(newWord);
 
-        // 시간 갱신
-        long endTime = System.currentTimeMillis() + 60000;
-        state.setRoundEndTime(endTime);
+        state.setRoundEndTime(0);
 
-        // 캔버스 초기화 이벤트 등은 프론트에서 DRAWER_CHANGED 받으면 처리함
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "DRAWER_CHANGED",
                 "drawerUserId", newDrawer,
                 "word", newWord,
-                "roundEndTime", endTime,
-                "currentRound", nextRound
+                "currentRound", state.getCurrentRound()
         ));
+
+        // 3. 3초 뒤에 "진짜 시작" 신호 예약
+        scheduler.schedule(new Runnable() {
+            @Override
+            public void run() {
+                startRealGame(roomId);
+            }
+        }, 3, TimeUnit.SECONDS);
+    }
+
+    private void startRealGame(String roomId) {
+        GameState state = gameStateManager.getGame(roomId);
+        if (state == null) return;
+
+        long duration = 60000;
+        long endTime = System.currentTimeMillis() + duration;
+        state.setRoundEndTime(endTime);
+
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                "type", "ROUND_START",
+                "roundEndTime", endTime
+        ));
+
+        // ✅ 현재 라운드 번호를 기억해둠 (예: 1라운드)
+        final int currentRound = state.getCurrentRound();
+
+        // 60초 뒤에 실행될 때, 이 라운드 번호를 들고 갑니다.
+        scheduler.schedule(() -> {
+            checkAndTimeOver(roomId, currentRound);
+        }, duration, TimeUnit.MILLISECONDS);
+    }
+
+    private void checkAndTimeOver(String roomId, int scheduledRound) {
+        GameState state = gameStateManager.getGame(roomId);
+        if (state == null) return;
+
+        if (state.getCurrentRound() != scheduledRound) {
+            return;
+        }
+
+        System.out.println("⏰ 시간 초과! (Room: " + roomId + ")");
+
+        // 바로 processNextRound를 호출하지 않고, TIME_OVER 메시지 전송
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                "type", "TIME_OVER"
+        ));
+
+        // 3초 뒤에 다음 라운드로 넘어가도록 스케줄링
+        scheduler.schedule(() -> {
+            // 3초 뒤에 실제로 다음 라운드 진행
+            // (혹시 그 사이 방이 폭파됐거나 상태 변했을 수 있으니 체크)
+            GameState currentState = gameStateManager.getGame(roomId);
+            if (currentState != null && currentState.getCurrentRound() == scheduledRound) {
+                processNextRound(roomId);
+            }
+        }, 3, TimeUnit.SECONDS);
     }
 }

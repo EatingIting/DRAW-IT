@@ -144,19 +144,28 @@ public class LobbyUserStore {
             if (currentUsers.size() >= 2) {
                 String newDrawer = gameStateManager.pickRandomDrawer(currentUsers);
                 state.setDrawerUserId(newDrawer);
-                String newWord = gameStateManager.pickRandomWord();
+                String newWord = gameStateManager.getUniqueWord(state);
                 state.setCurrentWord(newWord);
-
-                // ✅ 턴 종료 시간 갱신 (60초)
-                long endTime = System.currentTimeMillis() + 60000;
-                state.setRoundEndTime(endTime);
+                state.setRoundEndTime(0);
 
                 messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                         "type", "DRAWER_CHANGED",
                         "drawerUserId", newDrawer,
-                        "word", newWord,
-                        "roundEndTime", endTime
+                        "word", newWord
                 ));
+
+                // 3초 뒤 시작 신호
+                new Timer().schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        long endTime = System.currentTimeMillis() + 60000;
+                        state.setRoundEndTime(endTime);
+                        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                                "type", "ROUND_START",
+                                "roundEndTime", endTime
+                        ));
+                    }
+                }, 3000);
             } else if (currentUsers.isEmpty()) {
                 gameStateManager.removeGame(roomId);
             }
@@ -193,8 +202,22 @@ public class LobbyUserStore {
                 .map(u -> Map.<String, Object>of(
                         "userId", u.getUserId(),
                         "nickname", u.getNickname(),
-                        "host", u.isHost()
+                        "host", u.isHost(),
+                        "score", u.getScore()
                 ))
                 .collect(Collectors.toList());
     }
+
+    //점수 추가 메서드
+    public void addScore(String roomId, String userId, int score) {
+        Map<String, UserSessionState> users = rooms.get(roomId);
+        if(users != null) {
+            UserSessionState user = users.get(userId);
+            if(user != null) {
+                user.setScore(user.getScore() + score);
+            }
+        }
+    }
+
+
 }
