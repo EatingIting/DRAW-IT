@@ -159,6 +159,11 @@ function GameScreen({ maxPlayers = 10 }) {
     }
   };
 
+  const playersRef = useRef([]); // 최신 플레이어 상태를 담을 Ref
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players])
+
 
   useEffect(() => {
     if (!lobbyId) return;
@@ -332,7 +337,7 @@ function GameScreen({ maxPlayers = 10 }) {
 
             setTimeOverModal(false); //게임 끝나면 모달 끄기
             alert(`게임이 종료되었습니다.`);
-            handleLeaveGame();
+            navigate(`/vote/${lobbyId}`, { state: { players: players } });
           }
         });
 

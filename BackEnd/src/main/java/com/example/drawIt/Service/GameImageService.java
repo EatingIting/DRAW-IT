@@ -3,6 +3,7 @@ import com.example.drawIt.DTO.GameImageDTO;
 import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -68,8 +69,49 @@ public class GameImageService {
     }
 
     // 게임 종료 시 해당 방의 모든 이미지 리스트 반환
+
     public List<Map<String, String>> getGallery(String lobbyId) {
-        return roomGallery.getOrDefault(lobbyId, new ArrayList<>());
+        List<Map<String, String>> galleryList = new ArrayList<>();
+
+        // 1. 해당 로비의 폴더 경로
+        File folder = new File(GAME_IMG_DIR + lobbyId);
+
+        // 2. 폴더가 없거나 파일이 없으면 빈 리스트 반환
+        if (!folder.exists() || !folder.isDirectory()) {
+            return galleryList;
+        }
+
+        File[] files = folder.listFiles();
+        if (files == null) return galleryList;
+
+        // 3. 파일 목록을 순회하며 DTO(Map) 생성
+        for (File file : files) {
+            if (file.isFile()) {
+                String filename = file.getName();
+
+                // 🔥 [핵심 변경] 프론트엔드가 바로 쓸 수 있는 URL 생성
+                // GameImageController의 @GetMapping("/game/image/{lobbyId}/{filename}") 주소와 일치해야 함
+                String accessUrl = "http://localhost:8080/game/image/" + lobbyId + "/" + filename;
+
+                // 파일명에서 정보 파싱 (예: uuid_닉네임_주제어.jpg)
+                // (기존에 파싱 로직이 있다면 그대로 사용하세요. 여기서는 예시로 간단히 처리합니다.)
+                String[] parts = filename.split("_");
+                String nickname = (parts.length > 1) ? parts[1] : "Unknown";
+                String keyword = (parts.length > 2) ? parts[2].replace(".jpg", "").replace(".png", "") : "Unknown";
+
+                Map<String, String> map = new HashMap<>();
+                map.put("filename", filename);
+                map.put("nickname", nickname);
+                map.put("keyword", keyword);
+
+                // ✅ 완성된 URL을 담아서 보냄
+                map.put("imageUrl", accessUrl);
+
+                galleryList.add(map);
+            }
+        }
+
+        return galleryList;
     }
 
     // 방 삭제 시 데이터 정리 (메모리 누수 방지)

@@ -24,6 +24,7 @@ public class MonRnkController {
             @RequestParam(defaultValue = "0") int page, // 페이지 번호 (기본 0)
             @RequestParam(defaultValue = "8") int size  // 페이지 크기 (기본 8)
     ) {
+        System.out.println("getMonRnk 진입");
         // PageRequest 생성
         Pageable pageable = PageRequest.of(page, size);
 

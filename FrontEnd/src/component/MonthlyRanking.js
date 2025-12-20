@@ -55,6 +55,15 @@ const MonthlyRanking = () => {
           params: { page: page, size: 8 }
         });
 
+        if(response.status !== 200){
+          console.error("서버 응답 에러:", response);
+          setIsLoading(false);
+          return;
+        }
+
+        console.log(response.data);
+        
+
         const mappedData = response.data.map((item) => ({
           id: item.imgId,
           topic: item.topic,

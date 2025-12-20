@@ -21,6 +21,8 @@ public class ImageController {
     public ResponseEntity<Resource> serveFile(@PathVariable String date,
                                               @PathVariable String filename) {
         try {
+            System.out.println("날짜: " + date);
+            System.out.println("파일명: " + filename);
             Path file = Paths.get(BASE_DIR + date + "/" + filename);
             Resource resource = new UrlResource(file.toUri());
 

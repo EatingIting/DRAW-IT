@@ -44,6 +44,8 @@ public class GameImageController {
 
         List<Map<String, String>> gallery = gameImageService.getGallery(lobbyId);
 
+        System.out.println(gallery.toString());
+
         System.out.println("   -> 총 " + gallery.size() + "장의 그림 정보를 반환합니다.");
         return ResponseEntity.ok(gallery);
     }
