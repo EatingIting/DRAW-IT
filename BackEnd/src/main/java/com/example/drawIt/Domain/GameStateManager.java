@@ -21,7 +21,7 @@ public class GameStateManager {
     public GameState createGame(String roomId, String drawerUserId) {
         GameState state = new GameState(roomId, drawerUserId);
         String word = getUniqueWord(state);
-        state.setCurrentWord(pickRandomWord());
+        state.setCurrentWord(word);
 
         // ✅ [추가] 게임 생성 시 종료 시간 설정 (60초)
         state.setRoundEndTime(System.currentTimeMillis() + 60000);

@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { nanoid } from 'nanoid'; // ✅ 이거 꼭 필요함!
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../api/config';
 import CreateRoomModal from './CreateRoomModal';
 import './Main.css';
-import { API_BASE_URL } from '../api/config';
 
 const ROOM_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 const ROOM_ID_LENGTH = 8;
@@ -50,6 +50,8 @@ function Main() {
     if (isJoinDisabled) return;
     try {
       await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
+
+      // 3. 방으로 이동하면서 닉네임 정보를 state로도 전달 (안전장치)
       navigate(`/lobby/${roomId}`, { state: { nickname: nickname.trim() } });
     } catch (error) {
       if (error.response?.status === 404) alert('존재하지 않는 방입니다.');
@@ -79,17 +81,17 @@ function Main() {
         </div>
 
         <div className="btn-group">
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setIsCreateModalOpen(true)}
             disabled={!hasNickname}
             style={{ opacity: !hasNickname ? 0.5 : 1, cursor: !hasNickname ? 'not-allowed' : 'pointer' }}
           >
             방만들기
           </button>
-          
-          <button 
-            type="button" 
+
+          <button
+            type="button"
             onClick={() => navigate('/join')}
             disabled={!hasNickname}
             style={{ opacity: !hasNickname ? 0.5 : 1, cursor: !hasNickname ? 'not-allowed' : 'pointer' }}
@@ -119,12 +121,15 @@ function Main() {
         </div>
       </div>
 
+      <div className='monthlyRanking' onClick={() => navigate('/ranking')}>
+        <img src="/img/monRank.png" className="rankLogo" alt="MonthlyRanking"/>
+      </div>
+
+      {/* 방 생성 모달 */}
       {isCreateModalOpen && (
-        <CreateRoomModal 
-          onClose={() => setIsCreateModalOpen(false)} 
-          nickname={nickname.trim()} 
-          // (선택) CreateRoomModal이 userId를 prop으로 받는다면 이렇게 넘겨주세요
-          // userId={sessionStorage.getItem("userId")}
+        <CreateRoomModal
+          onClose={() => setIsCreateModalOpen(false)}
+          nickname={nickname.trim()} // 모달에도 닉네임 전달
         />
       )}
     </div>

@@ -588,7 +588,7 @@
   color: #1971c2; 
   font-weight: 900;
   font-size: 2rem;
-  text-decoration: none !important;
+  text-decoration: underline;
   text-underline-offset: 4px;
 }
 

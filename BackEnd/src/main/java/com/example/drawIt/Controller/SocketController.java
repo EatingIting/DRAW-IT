@@ -32,26 +32,11 @@ public class SocketController {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     @MessageMapping("/lobby/{roomId}/join")
-    public void join(
-            @DestinationVariable String roomId,
-            @Payload SocketJoinDTO dto,
-            StompHeaderAccessor accessor
-    ) {
-        String sessionId = Objects.requireNonNull(
-                accessor.getSessionId(),
-                "STOMP sessionId is null"
-        );
-
-        lobbyUserStore.addUser(
-                roomId,
-                sessionId,
-                dto.getUserId(),
-                dto.getNickname()
-        );
+    public void join(@DestinationVariable String roomId, @Payload SocketJoinDTO dto, StompHeaderAccessor accessor) {
+        String sessionId = Objects.requireNonNull(accessor.getSessionId());
+        lobbyUserStore.addUser(roomId, sessionId, dto.getUserId(), dto.getNickname());
 
         Lobby lobby = lobbyService.getLobby(roomId);
-        String hostUserId = lobby.getHostUserId();
-
         GameState state = gameStateManager.getGame(roomId);
         boolean gameStarted = (state != null);
         String drawerUserId = (state != null) ? state.getDrawerUserId() : null;
@@ -70,15 +55,10 @@ public class SocketController {
             payload.put("roundEndTime", state.getRoundEndTime());
         }
 
-        messagingTemplate.convertAndSend(
-                "/topic/lobby/" + roomId,
-                payload
-        );
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, payload);
 
         // 히스토리 전송 로직 (생략 없이 기존과 동일하게 유지)
         if (state != null && !state.getDrawEvents().isEmpty()) {
-
-
             Map<String, Object> historyPayload = new HashMap<>();
             List<Map<String, Object>> activeHistory = new ArrayList<>();
             for (DrawEvent evt : state.getDrawEvents()) activeHistory.add(convertEventToMap(evt));
@@ -105,9 +85,7 @@ public class SocketController {
 
     @MessageMapping("/lobby/{roomId}/start")
     public void startGame(@DestinationVariable String roomId) {
-
         lobbyService.markGameStarted(roomId);
-
         var users = lobbyUserStore.getUsers(roomId);
         if (users == null || users.isEmpty()) {
             throw new IllegalStateException("게임 시작 불가: 유저 없음");
@@ -117,10 +95,13 @@ public class SocketController {
         GameState state = gameStateManager.createGame(roomId, drawerUserId);
         state.setRoundEndTime(0);
 
+        // ✅ [확인] createGame 안에서 roundEndTime이 설정되므로, 여기서 get 해서 보냄
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "GAME_START",
                 "drawerUserId", drawerUserId,
-                "word", state.getCurrentWord()
+                "word", state.getCurrentWord(),
+                "gameStarted", true,
+                "roundEndTime", 0L
         ));
 
         scheduler.schedule(new Runnable() {
@@ -141,7 +122,7 @@ public class SocketController {
 
         String newDrawer = gameStateManager.pickRandomDrawer(users);
         state.setDrawerUserId(newDrawer);
-        String newWord = gameStateManager.pickRandomWord();
+        String newWord = gameStateManager.getUniqueWord(state);
         state.setCurrentWord(newWord);
 
         // ✅ 시간 갱신
@@ -159,25 +140,6 @@ public class SocketController {
     @MessageMapping("/lobby/{roomId}/leave")
     public void leave(@DestinationVariable String roomId, @Payload Map<String, String> payload) {
         lobbyUserStore.leaveRoom(roomId, payload.get("userId"));
-
-        Lobby lobby = lobbyService.getLobby(roomId);
-        GameState state = gameStateManager.getGame(roomId);
-        boolean gameStarted = (state != null);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("type", "USER_UPDATE");
-        response.put("users", lobbyUserStore.getUsers(roomId));
-        if (lobby != null) {
-            response.put("hostUserId", lobby.getHostUserId());
-        }
-        response.put("gameStarted", gameStarted);
-
-        if (state != null) {
-            response.put("drawerUserId", state.getDrawerUserId());
-            response.put("word", state.getCurrentWord());
-            response.put("roundEndTime", state.getRoundEndTime());
-        }
-        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, response);
     }
 
     // (draw, clear, chatBubble 메서드는 기존과 동일하므로 생략하지 않고 그대로 둠)
@@ -311,6 +273,11 @@ public class SocketController {
         String newWord = gameStateManager.getUniqueWord(state);
         state.setCurrentWord(newWord);
 
+        // 새 라운드 시작 시, 이정 그림 히스토리 삭제
+        // 이걸 안 하면 데이터가 계속 쌓여서 나중에 렉 걸리고 튕김
+        state.getDrawEvents().clear();
+        state.getRedoStack().clear();
+
         state.setRoundEndTime(0);
 
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
@@ -339,10 +306,7 @@ public class SocketController {
 
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "ROUND_START",
-                "roundEndTime", endTime,
-                "drawerUserId", state.getDrawerUserId(),
-                "word", state.getCurrentWord(),
-                "currentRound", state.getCurrentRound()
+                "roundEndTime", endTime
         ));
 
         // ✅ 현재 라운드 번호를 기억해둠 (예: 1라운드)

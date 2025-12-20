@@ -1,0 +1,363 @@
+@font-face {
+    font-family: 'NeoDunggeunmo';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.3/NeoDunggeunmo.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+/* 전체 컨테이너 */
+.ranking-container {
+  position: relative;
+  background-color: #2F5A2D;
+  min-height: 100vh;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Rounded Mplus 1c', sans-serif;
+  overflow-x: hidden; /* 가로 스크롤 방지 */
+}
+
+.back-btn {
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  z-index: 2000; /* 404 메시지나 다른 요소보다 위에 오도록 설정 */
+  width: 56px;
+  height: 56px;
+  background: #fff;
+  
+  /* 변수 대신 직접 값 적용 (두꺼운 테두리) */
+  border: 4px solid #333; 
+  
+  border-radius: 50%;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.back-btn:hover { 
+  transform: scale(1.1); 
+  background: #f1f3f5; 
+}
+
+.back-btn:active { 
+  transform: scale(0.95); 
+  box-shadow: none; 
+}
+
+.nav-btn {
+  position: fixed;          /* ✅ 스크롤해도 화면에 고정 */
+  top: 50%;                 /* ✅ 화면 y축 중앙 */
+  transform: translateY(-50%); /* ✅ 정확히 중앙 맞춤 */
+
+  background: none;
+  border: none;
+  font-family: 'NeoDunggeunmo', sans-serif;
+  font-size: 2rem;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+
+  z-index: 1000;            /* ✅ 다른 요소 위로 */
+  transition: all 0.3s ease;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+.nav-btn:hover {
+  color: #FFD700; /* 호버시 금색으로 강조 */
+  transform: scale(1.2); /* 커지는 효과 */
+}
+
+/* 왼쪽 버튼 위치 */
+.prev-btn {
+  left: 5%; /* 화면 왼쪽에서 5% 떨어짐 */
+}
+
+/* 오른쪽 버튼 위치 */
+.next-btn {
+  right: 5%; /* 화면 오른쪽에서 5% 떨어짐 */
+}
+
+/* === 상단 Podium 영역 === */
+.podium-section {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  height: 500px; /* 높이 고정 */
+  margin: 40px auto 30px auto;
+  
+  /* ✨ 내부 컨텐츠(404 메시지) 중앙 정렬을 위한 Flex 설정 */
+  /* absolute 포지션인 기둥들(podium-item)은 이 Flex의 영향을 받지 않고 bottom:0을 유지합니다 */
+  display: flex;
+  justify-content: center;
+  align-items: center; 
+}
+
+.podium-item {
+  position: absolute; /* ✨ 절대 위치로 배치 */
+  bottom: 0;          /* 바닥에 붙임 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 280px;       /* 기둥 너비 */
+  
+  z-index: 1;
+
+  transform-origin: bottom;
+}
+
+/* === ✨ 위치 결정 클래스 === */
+
+/* 1등: 화면 정중앙(50%) */
+.pos-center {
+  left: 50%;
+  margin-left: -140px; /* 280px의 절반인 140px를 뺌 (transform 대체) */
+  z-index: 10;
+  
+  /* 크기 확대는 scale 대신 zoom이나 width 변경이 아닌, 
+     Framer Motion의 animate prop에서 처리되므로 여기선 transform 제거 */
+}
+
+/* 2등: 1등 기준으로 왼쪽으로 딱 붙게 배치 */
+.pos-left {
+  /* 50%에서 기둥 너비(280px)만큼 왼쪽으로 이동 */
+  left: calc(50% - 270px); 
+  margin-left: -140px; 
+  z-index: 5;
+}
+
+/* 3등: 1등 기준으로 오른쪽으로 딱 붙게 배치 */
+.pos-right {
+  /* 50%에서 기둥 너비(280px)만큼 오른쪽으로 이동 */
+  left: calc(50% + 270px); 
+  margin-left: -140px;
+  z-index: 5;
+}
+
+/* === 기둥 스타일 === */
+.pillar {
+  width: 100%;
+  border-radius: 8px 8px 0 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  gap: 3px;
+
+  
+  transition: height 0.6s ease, background 0.6s ease;
+}
+/* 눈 효과 */
+/* 눈 효과 */
+.snow-cap {
+  position: absolute;
+  top: -20px;
+  left: -5px;
+  right: -5px;
+  height: 50px;
+  background: white;
+  border-radius: 20px;
+  z-index: 10;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #333; 
+  font-weight: bold;
+}
+
+.ribbon {
+  position: absolute;
+  width: 20px;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-left: 2px solid rgba(255,255,255,0.5);
+  border-right: 2px solid rgba(255,255,255,0.5);
+}
+
+.rank-text, .recommend {
+  color: white;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  z-index: 2;
+}
+.rank-text { font-size: 1.5rem; }
+.recommend { font-size: 1.2rem; }
+
+/* === 색상 테마 (Rank에 따라 적용) === */
+.first .pillar {
+  background: linear-gradient(to bottom, #D42426, #8B0000);
+}
+.second .pillar {
+  background: linear-gradient(to bottom, #4CAF50, #2E7D32);
+}
+.third .pillar {
+  background: linear-gradient(to bottom, #CD7F32, #8D5524);
+}
+
+/* === 이미지 영역 === */
+.img-wrapper {
+  margin-bottom: 25px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* === 후광(Halo) 애니메이션 정의 === */
+@keyframes halo-glow {
+  0% {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+    border-color: #FFD700;
+  }
+  50% {
+    /* 빛이 퍼지는 효과 */
+    box-shadow: 0 0 30px 10px rgba(255, 215, 0, 0.6);
+    border-color: #FFF; /* 테두리도 밝게 빛남 */
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+    border-color: #FFD700;
+  }
+}
+
+/* === 랭킹 이미지 스타일 수정 === */
+.ranking-img {
+  width: 200px;
+  height: 200px;
+  object-fit: cover;
+  background: white;
+  border-radius: 25%;
+  border: 4px solid #FFD700;
+  /* 기본 그림자 */
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  
+  /* 부드러운 전환 */
+  transition: filter 0.3s ease; 
+  transform-origin: center center;
+}
+
+/* JS에서 추가한 클래스: 이미지가 렌더링 된 후 깜빡거리는 후광 효과 */
+.ranking-img.halo-active {
+  /* 2초 동안 무한 반복하여 빛남 */
+  animation: halo-glow 2s infinite ease-in-out;
+  /* 이미지가 등장하는 딜레이 이후부터 애니메이션이 자연스럽게 보이도록 설정됨 */
+}
+/* 1등일 때 테두리 색 변경 */
+.first .ranking-img {
+  border-color: #D42426;
+  /* 크기 조정은 transform scale로 대체되므로 width/height 직접 변경 제거 */
+}
+
+/* 1등은 더 강렬한 붉은빛 후광 (선택사항) */
+.first .ranking-img.halo-active {
+  animation: halo-glow-red 2s infinite ease-in-out;
+}
+
+@keyframes halo-glow-red {
+  0% { box-shadow: 0 0 10px rgba(212, 36, 38, 0.2); border-color: #D42426; }
+  50% { box-shadow: 0 0 40px 15px rgba(212, 36, 38, 0.6); border-color: #FF6B6B; }
+  100% { box-shadow: 0 0 10px rgba(212, 36, 38, 0.2); border-color: #D42426; }
+}
+
+/* 404 메시지 중앙 정렬 */
+.not-found-message {
+  /* position: absolute 제거 -> 부모인 podium-section의 flex 정렬을 따름 */
+  font-family: 'NeoDunggeunmo', sans-serif;
+  font-size: 4rem; 
+  color: #FF6B6B;  
+  text-align: center;
+  
+  text-shadow: 
+    4px 4px 0px #000,
+    -2px -2px 0px #330000;
+    
+  z-index: 100;
+  animation: flicker 2s infinite; 
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.hall-of-fame-title {
+  /* position: relative;  <-- 필요하다면 추가 */
+  font-family: 'NeoDunggeunmo', sans-serif;
+  text-align: center;
+  font-size: 3rem;
+  color: #FFD700; 
+  /* margin은 JS에서 데이터 유무에 따라 inline style로 조절되거나, 여기서 기본값 설정 */
+  margin: 50px 0 30px 0;
+  text-shadow: 4px 4px 0px #000000; 
+  z-index: 10; /* 404 메시지와 겹칠 경우를 대비해 우선순위 조정 */
+}
+
+/* === 하단 리스트 === */
+.list-section {
+  width: 1500px;
+  max-width: 85vw;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 15px;
+  margin-top: 50px;
+  padding: 20px;
+  box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+  z-index: 20; /* 기둥 위에 오도록 */
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+.grid-item {
+  background: #E8F5E9;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 2px solid #81C784;
+}
+.list-avatar { 
+    width: 85%; 
+    aspect-ratio: 4/3;
+    object-fit: cover; 
+    border-radius: 10%; 
+    margin-bottom: 5px;
+}
+.list-topic { font-weight: bold; font-size: 0.9rem; margin-bottom: 2px; }
+.list-rec { font-size: 0.8rem; background: #fff; padding: 2px 8px; border-radius: 10px; }
+
+.click-locked {
+  cursor: wait; /* 커서를 대기 상태(모래시계 등)로 변경 */
+}
+
+.click-locked * {
+  pointer-events: none; /* 클릭, 호버 등 마우스 이벤트 무시 */
+}
+
+/* =========================================
+   ✨ 인터랙션 효과 (호버 & 클릭)
+   ========================================= */
+
+/* 1. 기본 상태: 부드러운 전환을 위해 transition 설정 */
+.ranking-img, .list-avatar {
+  /* transform 관련 transition 제거 */
+  transition: filter 0.3s ease, border-color 0.6s ease; 
+  /* transform-origin은 남겨두셔도 됩니다 */
+  transform-origin: center center; 
+}
+
+/* 2. 마우스 올렸을 때 (Hover): 커지면서 살짝 기울기 */
+.ranking-img:hover, 
+.list-avatar:hover {
+  /* transform: scale(1.15) rotate(-5deg);  <-- 삭제 */
+  filter: drop-shadow(6px 6px 0 rgba(0,0,0,0.2)); 
+  z-index: 50; 
+}
