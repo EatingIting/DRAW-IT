@@ -1,66 +1,104 @@
 import axios from "axios";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./CreateRoomModal.css";
+import { useNavigate } from "react-router-dom";
+import { nanoid } from "nanoid";
+import { API_BASE_URL } from "../api/config";
 
-function CreateRoomModal({ onClose }) {
-  const [lobbyName, setLobbyName] = useState('');
+function CreateRoomModal({ onClose, mode = "create", roomData = null }) {
+  const navigate = useNavigate();
+
+  const [lobbyName, setLobbyName] = useState("");
   const [isPasswordOn, setIsPasswordOn] = useState(false);
-  const [password, setPassword] = useState('');
-  const [mode, setMode] = useState("RANDOM");
+  const [password, setPassword] = useState("");
+  const [modeValue, setModeValue] = useState("RANDOM");
   const [isLoading, setIsLoading] = useState(false);
+
+  // ✅ edit 모드일 때 초기값 주입
+  useEffect(() => {
+    if (mode === "edit" && roomData) {
+      setLobbyName(roomData.name ?? "");
+      setModeValue(roomData.mode ?? "RANDOM");
+      const pw = roomData.password ?? "";
+      setIsPasswordOn(!!pw);
+      setPassword(pw);
+    }
+  }, [mode, roomData]);
 
   const handleTogglePassword = () => {
     setIsPasswordOn((prev) => {
       const next = !prev;
-
-      if(!next) setPassword('');
-
+      if (!next) setPassword("");
       return next;
-    })
-  }
+    });
+  };
 
-  const handleCreateRoom = async () => {
-    console.log("임시 방 생성 (백엔드 로직 구현)");
-    console.log("로비 이름: ", lobbyName);
-    console.log("모드 : ", mode);
-    console.log("비밀번호 : ", password || "(없음)");
-    if(lobbyName.trim() === "") return;
+  const hostNickname = sessionStorage.getItem("nickname");
+
+  const isSubmitDisabled =
+    lobbyName.trim() === "" || (isPasswordOn && password.trim() === "");
+
+  const handleSubmit = async () => {
+    if (isSubmitDisabled) return;
+
+    if (!hostNickname || hostNickname.trim() === "") {
+      alert("닉네임을 먼저 입력해주세요.");
+      return;
+    }
+
     setIsLoading(true);
 
-    const payload = {
-      lobbyName,
-      mode,
-      password: isPasswordOn ? password : null
-    };
-
     try {
-      const response = await axios.post("http://localhost:8080/lobby", {
-        lobbyName,
-        mode,
-        password : isPasswordOn ? password : null
-      });
-      console.log("방 생성 성공" , response.data);
+      if (mode === "create") {
+        const lobbyId = nanoid(8);
+
+        const userId =
+          sessionStorage.getItem("userId") ||
+          (() => {
+            const id = nanoid(12);
+            sessionStorage.setItem("userId", id);
+            return id;
+          })();
+
+        const payload = {
+          id: lobbyId,
+          name: lobbyName,
+          mode: modeValue,
+          password: isPasswordOn ? password : null,
+          hostUserId: userId,
+          hostNickname: hostNickname,
+        };
+
+        await axios.post(`${API_BASE_URL}/lobby`, payload);
+
+        onClose();
+        navigate(`/lobby/${lobbyId}`, { state: { nickname: hostNickname } });
+        return;
+      }
+
+      // ✅ edit 모드
+      const payload = {
+        name: lobbyName,
+        mode: modeValue,
+        password: isPasswordOn ? password : null,
+      };
+
+      await axios.put(`${API_BASE_URL}/lobby/${roomData.id}`, payload);
+
       onClose();
     } catch (error) {
       console.log(error);
-      alert("방 생성에 실패했습니다.");
+      alert("요청에 실패했습니다.");
     } finally {
-      setIsLoading(true);
+      setIsLoading(false);
     }
   };
-
-  const isCreateDisabled = isPasswordOn && password.trim() === "";
 
   return (
     <div className="create-modal-overlay">
       <div className="create-modal">
+        <button className="close-btn" onClick={onClose}>✕</button>
 
-        {/* 닫기 버튼 */}
-        <button className="close-btn" onClick={onClose}>
-          ✕
-        </button>
-
-        {/* 로비 이름 */}
         <div className="form-group">
           <label className="label">로비 이름</label>
           <input
@@ -68,32 +106,29 @@ function CreateRoomModal({ onClose }) {
             className="input"
             placeholder="로비 이름을 입력하세요"
             value={lobbyName}
-            onChange={e => setLobbyName(e.target.value)}
+            onChange={(e) => setLobbyName(e.target.value)}
           />
         </div>
 
-        {/* 모드 */}
         <div className="form-group">
           <label className="label">모드</label>
 
           <div className="mode-group">
-            {/* 무작위 */}
             <button
               type="button"
-              className={`mode-btn ${mode === "RANDOM" ? "active" : ""}`}
-              onClick={() => setMode("RANDOM")}
+              className={`mode-btn ${modeValue === "RANDOM" ? "active" : ""}`}
+              onClick={() => setModeValue("RANDOM")}
             >
               무작위
             </button>
 
-            {/* 몬스터볼 */}
             <button
               type="button"
-              className={`mode-btn ${mode === "POKEMON" ? "active" : ""}`}
-              onClick={() => setMode("POKEMON")}
+              className={`mode-btn ${modeValue === "POKEMON" ? "active" : ""}`}
+              onClick={() => setModeValue("POKEMON")}
             >
               <img
-                src="/img/pokemon mode.png"
+                src="/img/pokemon_mode.png"
                 alt="monster-ball"
                 className="mode-icon"
               />
@@ -101,9 +136,8 @@ function CreateRoomModal({ onClose }) {
           </div>
         </div>
 
-        {/* 비밀번호 */}
         <div className="form-group">
-          <label className="label">비밀번호</label>
+          <label className="password-label">비밀번호</label>
 
           <div className="password-group">
             <input
@@ -112,9 +146,9 @@ function CreateRoomModal({ onClose }) {
               placeholder="비밀번호 (선택)"
               disabled={!isPasswordOn}
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
             />
-            {/* 토글 스위치 */}
+
             <button
               type="button"
               className={`toggle-lock ${isPasswordOn ? "on" : "off"}`}
@@ -124,18 +158,17 @@ function CreateRoomModal({ onClose }) {
             >
               <span className="toggle-knob" />
             </button>
-            {/* 방 생성 버튼 */}
-            <button
-              type="button"
-              className="create-room-btn"
-              onClick={handleCreateRoom}
-              disabled={isCreateDisabled}
-            >
-              {isLoading ? "생성 중..." : "빙 생성"}
-            </button>
           </div>
-        </div>
 
+          <button
+            type="button"
+            className="create-room-btn"
+            onClick={handleSubmit}
+            disabled={isSubmitDisabled || isLoading}
+          >
+            {isLoading ? "처리 중..." : mode === "edit" ? "수정 저장" : "방 생성"}
+          </button>
+        </div>
       </div>
     </div>
   );

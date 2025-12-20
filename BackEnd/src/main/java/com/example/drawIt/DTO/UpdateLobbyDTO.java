@@ -1,13 +1,13 @@
 package com.example.drawIt.DTO;
 
 import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
-@NoArgsConstructor
-public class CreateLobbyRequest {
-
-    private String lobbyName;
+@Setter
+public class UpdateLobbyDTO {
+    private String name;
     private String mode;
     private String password;
 }
+

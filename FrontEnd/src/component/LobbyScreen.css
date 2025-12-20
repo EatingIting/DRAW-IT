@@ -1,0 +1,448 @@
+/* LobbyScreen.css */
+
+/* =========================================
+   :root - 게임 테마 변수 정의
+   ========================================= */
+:root {
+  --game-bg-color: #2b8a3e;       /* 배경색 (초록) */
+  --game-border-color: #2c2c2c;   /* 테두리색 (진한 회색/검정) */
+  --game-border-width: 4px;       /* 테두리 두께 */
+  --font-family-game: 'Jua', sans-serif; /* 둥근 폰트 */
+}
+
+/* =========================================
+   1. 전체 레이아웃 (화면 고정 & 스크롤 방지)
+   ========================================= */
+.lobby-wrapper {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--game-bg-color);
+  
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 스크롤바 원천 차단 */
+  
+  font-family: var(--font-family-game);
+}
+
+/* =========================================
+   2. 뒤로가기 버튼 (왼쪽 상단)
+   ========================================= */
+.back-btn {
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  z-index: 100;
+
+  width: 56px;
+  height: 56px;
+
+  background: #fff;
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 50%;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  color: #333;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.back-btn:hover {
+  transform: scale(1.1);
+  background: #f1f3f5;
+}
+
+.back-btn:active {
+  transform: scale(0.95) translateY(4px);
+  box-shadow: none;
+}
+
+.back-btn svg {
+  margin-right: 2px; /* 아이콘 시각적 중앙 정렬 */
+}
+
+/* =========================================
+   3. 메인 플레이 영역 (중앙 정렬 & 그리드)
+   ========================================= */
+.play-area {
+  flex: 1; /* 남은 높이 모두 차지 */
+  width: 100%;
+  
+  display: flex;
+  align-items: center; 
+  justify-content: center;
+  
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+/* ★ 핵심 레이아웃: 좌우 유저를 바깥으로 밀어내기 ★ */
+.play-grid {
+  display: grid;
+  /* 좌측(240px) - 중앙(340px) - 우측(240px) */
+  grid-template-columns: 240px 340px 240px; 
+  gap: 120px; /* 중앙과 유저 리스트 사이의 간격을 넓게 설정 */
+  
+  align-items: center;
+}
+
+/* =========================================
+   4. 유저 리스트 (좌/우 컬럼 & 카드 디자인)
+   ========================================= */
+.user-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* 카드 사이 간격 */
+  width: 100%;
+}
+
+/* 왼쪽 컬럼은 오른쪽 정렬(중앙 향해), 오른쪽 컬럼은 왼쪽 정렬 */
+.user-column.left { align-items: flex-end; }   
+.user-column.right { align-items: flex-start; }
+
+/* 유저 카드 (채워진 상태) */
+.user-card {
+  width: 100%;
+  max-width: 220px;
+  height: 52px;
+  
+  background: #fff;
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  
+  transition: transform 0.2s;
+  cursor: default;
+}
+
+.user-card:not(.empty):hover {
+  transform: scale(1.05);
+  z-index: 10;
+}
+
+/* 유저 카드 (Empty 상태) */
+.user-card.empty {
+  background: rgba(255, 255, 255, 0.4); /* 반투명 배경 */
+  border-color: rgba(0, 0, 0, 0.2);      /* 흐릿한 테두리 */
+  box-shadow: none;                      /* 그림자 제거 (납작하게) */
+}
+
+.user-card.empty .avatar {
+  background-color: #adb5bd;
+  border-color: #868e96;
+}
+
+.user-card.empty .username {
+  color: #dee2e6; /* 글자색 흐리게 */
+  font-weight: 500;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+}
+
+/* 공통 요소 */
+.avatar {
+  width: 32px;
+  height: 32px;
+  background-color: #eee;
+  border: 2px solid var(--game-border-color);
+  border-radius: 50%;
+}
+
+.username {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* 긴 이름 말줄임표 */
+}
+
+/* =========================================
+   5. 중앙 정보 영역 (로고, 방 정보, 버튼들)
+   ========================================= */
+.lobby-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.logo-placeholder {
+  width: 180px;
+  height: 90px;
+  background: rgba(0,0,0,0.2);
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 16px;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  color: #fff;
+  font-size: 22px;
+  font-weight: bold;
+  box-shadow: 6px 6px 0 rgba(0,0,0,0.2);
+}
+
+.room-info-box {
+  text-align: center;
+  color: #fff;
+  text-shadow: 2px 2px 0 var(--game-border-color);
+}
+
+.room-title {
+  font-size: 24px;
+  margin: 0 0 6px 0;
+}
+
+.room-detail {
+  font-size: 18px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+/* ----- 버튼 그룹 Wrapper ----- */
+.action-btn-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+/* START 버튼 (빨강/주황) */
+.start-btn {
+  width: 200px;
+  height: 70px;
+  
+  background: linear-gradient(180deg, #ff6b6b 0%, #fa5252 100%);
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 18px;
+  box-shadow: 0 6px 0 #c92a2a;
+  
+  color: #fff;
+  font-family: var(--font-family-game);
+  font-size: 24px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.start-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.start-btn:active {
+  transform: translateY(6px);
+  box-shadow: 0 0 0 #c92a2a, inset 0 4px 0 rgba(0,0,0,0.2);
+}
+
+/* 방 설정(수정) 버튼 (파랑) */
+.modify-btn {
+  width: 140px;
+  height: 50px;
+  
+  background: #74c0fc;
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 14px;
+  box-shadow: 0 5px 0 #1c7ed6;
+  
+  color: #fff;
+  font-family: var(--font-family-game);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.1s;
+  
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+}
+
+.modify-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+}
+
+.modify-btn:active {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 #1c7ed6, inset 0 3px 0 rgba(0,0,0,0.2);
+}
+
+/* 일반 유저 대기 문구 */
+.waiting-text {
+  margin-top: 20px;
+  font-size: 24px;
+  color: #fff;
+  text-align: center;
+  line-height: 1.4;
+  text-shadow: 2px 2px 0 var(--game-border-color);
+  animation: pulseText 2s infinite ease-in-out;
+}
+
+@keyframes pulseText {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.98); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* =========================================
+   6. 하단 채팅 영역 (카툰 스타일)
+   ========================================= */
+.chat-area {
+  height: 90px;
+  width: 100%;
+  flex-shrink: 0;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px; /* 입력창과 버튼 사이 간격 */
+  
+  background: rgba(0,0,0,0.2);
+  border-top: var(--game-border-width) solid var(--game-border-color);
+  
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+/* 채팅 입력창 */
+.chat-area input {
+  width: 800px;
+  max-width: 80%;
+  height: 54px; /* 높이를 키워 볼륨감 줌 */
+  padding: 0 24px;
+  
+  border: 4px solid var(--game-border-color);
+  border-radius: 16px;
+  background: #fff;
+  
+  /* 안쪽 그림자를 진하게 주어 파인 느낌 강조 */
+  box-shadow: inset 0 6px 0 #e9ecef;
+  
+  font-family: var(--font-family-game);
+  font-size: 18px;
+  color: #333;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.chat-area input::placeholder {
+  color: #adb5bd;
+}
+
+.chat-area input:focus {
+  background-color: #fffdeb; /* 포커스시 아주 연한 노랑 */
+  border-color: #000;
+  transform: translateY(-2px);
+  box-shadow: inset 0 6px 0 #e9ecef, 0 4px 0 rgba(0,0,0,0.1);
+}
+
+/* 전송 버튼 */
+.chat-area button {
+  height: 54px;
+  padding: 0 32px;
+  
+  background: #ffc107;
+  border: 4px solid var(--game-border-color);
+  border-radius: 16px;
+  
+  /* 버튼 아래 굵은 그림자로 3D 효과 */
+  box-shadow: 0 6px 0 #e67700;
+  
+  font-family: var(--font-family-game);
+  font-size: 20px;
+  font-weight: 700;
+  color: #000;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.chat-area button:hover {
+  transform: translateY(-2px);
+  background: #ffd43b;
+}
+
+.chat-area button:active {
+  transform: translateY(6px); /* 눌리는 느낌 */
+  box-shadow: 0 0 0 #e67700;
+}
+
+/* 말풍선 */
+
+.chat-bubble-float {
+  background: white;
+  padding: 10px 14px;
+  border-radius: 12px;
+  
+  /* ✅ 게임 테마에 맞춘 테두리와 그림자 추가 */
+  border: 3px solid #2c2c2c;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2); 
+
+  font-size: 14px;
+  font-weight: 700; /* 폰트 굵게 */
+  color: #333;
+
+  max-width: 200px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+
+  pointer-events: none;
+  position: fixed;
+  z-index: 9999;
+}
+
+/* ✅ 꺾인 꼬리 만들기 (테두리 부분) */
+.chat-bubble-float::before {
+  content: "";
+  position: absolute;
+  left: -10px; /* 위치 조정 */
+  top: 50%;
+  
+  width: 14px;
+  height: 14px;
+  background: #2c2c2c; /* 테두리 색상 */
+  
+  /* 회전(rotate)과 비틀기(skew)로 꺾인 모양 생성 */
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
+  
+  /* 꼬리 끝을 살짝 둥글게 */
+  border-bottom-left-radius: 4px;
+  z-index: -2; /* 말풍선 뒤로 */
+}
+
+/* ✅ 꺾인 꼬리 만들기 (흰색 채움 부분) */
+.chat-bubble-float::after {
+  content: "";
+  position: absolute;
+  left: -6px; /* 테두리보다 살짝 안쪽으로 */
+  top: 50%;
+  
+  width: 14px;
+  height: 14px;
+  background: white; /* 말풍선 배경색 */
+  
+  /* before와 동일한 각도로 변형하여 덮어씌움 */
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
+  z-index: -1;
+}
+
+/* 등장 애니메이션 */
+@keyframes bubbleFloat {
+  0% { opacity: 0; transform: translateY(6px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}

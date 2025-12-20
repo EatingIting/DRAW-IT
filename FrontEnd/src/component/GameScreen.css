@@ -1,0 +1,629 @@
+/* GameScreen.css */
+
+/* =========================================
+   :root - 변수 (Lobby와 통일)
+   ========================================= */
+:root {
+  --game-bg-color: #2b8a3e;
+  --game-border-color: #2c2c2c;
+  --game-border-width: 4px;
+  --font-family-game: 'Jua', sans-serif;
+}
+
+/* =========================================
+   전체 레이아웃
+   ========================================= */
+.game-wrapper {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--game-bg-color);
+  
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 스크롤 방지 */
+  
+  font-family: var(--font-family-game);
+}
+
+/* =========================================
+   뒤로가기 버튼
+   ========================================= */
+.back-btn {
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  z-index: 100;
+
+  width: 56px;
+  height: 56px;
+  background: #fff;
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 50%;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.back-btn:hover {
+  transform: scale(1.1);
+  background: #f1f3f5;
+}
+
+.back-btn:active {
+  transform: scale(0.95);
+  box-shadow: none;
+}
+
+/* =========================================
+   메인 게임 영역 (Grid Layout)
+   ========================================= */
+.game-area {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center; 
+  justify-content: center;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+.game-grid {
+  display: grid;
+  /* 좌(240px) - 중앙(auto) - 우(240px) */
+  grid-template-columns: 240px auto 240px; 
+  gap: 40px; 
+  align-items: center;
+  width: 100%;
+  max-width: 1600px;
+}
+
+/* =========================================
+   유저 리스트
+   ========================================= */
+.user-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.user-column.left { align-items: flex-end; }   
+.user-column.right { align-items: flex-start; }
+
+.user-card {
+  width: 100%;
+  max-width: 220px;
+  height: 52px;
+  
+  background: #fff;
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  transition: transform 0.2s;
+  cursor: default;
+}
+
+.user-card:not(.empty):hover {
+  transform: scale(1.05);
+  z-index: 10;
+}
+
+.user-card.empty {
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: none;
+}
+
+.user-card.empty .avatar {
+  background-color: #adb5bd;
+  border-color: #868e96;
+}
+
+.user-card.empty .username {
+  color: #dee2e6;
+  font-weight: 500;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  background-color: #eee;
+  border: 2px solid var(--game-border-color);
+  border-radius: 50%;
+}
+
+.username {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card.winner {
+  background-color: #1c7ed6; /* 진한 파란색 */
+  border-color: #1864ab;
+  color: white; /* 글자색 흰색으로 변경 */
+  transform: scale(1.1); /* 약간 커지게 */
+  box-shadow: 0 0 15px rgba(28, 126, 214, 0.6); /* 파란색 광채 */
+  transition: all 0.3s ease;
+}
+
+/* 정답자일 때 내부 텍스트 색상 변경 */
+.user-card.winner .username {
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+/* 정답자일 때 아바타 테두리 변경 */
+.user-card.winner .avatar {
+  border-color: white;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+.user-score {
+  font-size: 0.85rem;
+  color: #555;
+  font-weight: 800;
+  background-color: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 8px;
+  width: fit-content;
+  margin-top: 2px;
+}
+
+/* 정답자일 때 점수판 색상 반전 */
+.user-card.winner .user-score {
+  background-color: rgba(255,255,255,0.3);
+  color: #fff;
+}
+
+/* =========================================
+   중앙: 타이머, 스케치북, 툴박스
+   ========================================= */
+.center-board-area {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+/* ✅ 보드와 도구함을 가로로 묶는 래퍼 */
+.board-wrapper {
+  display: flex;
+  flex-direction: row; /* 스케치북 그룹(좌) - 도구함(우) 가로 배치 */
+  align-items: flex-start; /* 상단 기준 정렬 */
+  gap: 0px; /* 스케치북과 도구함 사이 간격 0 (딱 붙임) */
+}
+
+.canvas-group {
+    display: flex;
+    flex-direction: column; /* 타이머(위) - 스케치북(아래) */
+    align-items: center;
+}
+
+/* ✅ 타이머 컨테이너 */
+.timer-container {
+  width: 746px; /* 캔버스 너비와 동일 */
+  height: 10px;
+  background-color: #eee;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 2px solid #333;
+  margin-bottom: 5px; /* 스케치북과 약간의 간격 */
+}
+
+/* ✅ 타이머 애니메이션 바 */
+.timer-bar {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    #ff6b6b 0%,
+    #fa5252 50%,
+    #e03131 100%
+  );
+  transition: width 0.1s linear;
+}
+
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+.tool-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;    
+  gap: 15px;
+  
+  /* 타이머 높이(10px) + 타이머마진(5px) + 스케치북 상단 여백 고려하여 높이 맞춤 */
+  margin-top: 50px; 
+  
+  /* 스케치북과 더 밀착시키고 싶다면 음수 마진 사용 */
+  margin-left: -5px; 
+  z-index: 10;
+}
+
+/* 스케치북 이미지 배경 */
+.drawingBoard {
+  width: 900px;
+  height: 675px; 
+  
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  position: relative; 
+  
+  filter: drop-shadow(10px 10px 0px rgba(0,0,0,0.2));
+}
+
+/* 캔버스 위치 */
+.canvas {
+  position: absolute;
+  top: 38px;
+  right: 101px;
+  border-radius: 20px;
+  width: 746px;
+  height: 603px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* 도구함 전체 컨테이너 (주제어 + 도구박스) */
+.tool-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;    
+  gap: 15px;
+  
+  /* ✅ 스케치북 상단 나사 부분과 높이를 맞추기 위해 마진 조정 */
+  margin-top: 35px; 
+  
+  /* ✅ 스케치북과 더 밀착시키고 싶다면 음수 마진 사용 가능 */
+  margin-left: -10px; 
+  z-index: 10; /* 스케치북 위로 살짝 올라와도 보이게 */
+}
+
+/* 주제어 배지 */
+.keyword-badge {
+  background-color: #fdd835;
+  color: #212121;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  margin: 0; 
+}
+
+/* ✅ 툴박스: 세로 정렬 (Vertical Layout) */
+.tool-box {
+  display: flex;
+  flex-direction: column; /* 세로 정렬 */
+  gap: 10px;
+  padding: 10px;
+  background-color: #ffe082; 
+  border-radius: 10px;
+  border: 2px solid #333;
+}
+
+/* 툴 아이콘 버튼 */
+.tool-btn {
+  width: 56px;
+  height: 56px;
+  background: #fff;
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  
+  user-select: none;
+}
+
+.tool-btn:hover {
+  transform: translateY(-2px);
+}
+
+.tool-btn.active {
+  background: #ffc107; 
+  transform: translateY(2px);
+  box-shadow: inset 0 3px 0 rgba(0,0,0,0.2);
+}
+
+/* 전체 지우기 버튼 */
+.tool-btn.delete-btn {
+  background: #ff6b6b;
+  margin-top: 10px; /* 지우개와 간격 */
+  font-size: 2.5rem;       
+  padding-bottom: 5px;
+}
+
+.tool-btn.delete-btn:hover {
+  background: #fa5252;
+}
+
+.tool-btn svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.tool-btn img {
+  width: 50px;
+  height: 50px;
+  display: block;
+}
+
+/* =========================================
+   하단 채팅바
+   ========================================= */
+.chat-area {
+  height: 80px;
+  width: 100%;
+  flex-shrink: 0;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  background: rgba(0,0,0,0.2);
+  border-top: var(--game-border-width) solid var(--game-border-color);
+}
+
+.chat-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 800px;
+  max-width: 95%;
+}
+
+.chat-input-wrapper input {
+  flex: 1;
+  height: 46px;
+  padding: 0 20px;
+  
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: inset 0 4px 0 #eee;
+  
+  font-family: var(--font-family-game);
+  font-size: 16px;
+  outline: none;
+}
+
+.chat-input-wrapper input:focus {
+  border-color: #ffec99;
+}
+
+.send-btn {
+  height: 46px;
+  padding: 0 20px;
+  
+  background: #ffc107;
+  border: 3px solid var(--game-border-color);
+  border-radius: 12px;
+  box-shadow: 0 4px 0 #e67700;
+  
+  font-family: var(--font-family-game);
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.send-btn:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+/* =========================================
+   말풍선 및 애니메이션
+   ========================================= */
+.chat-bubble-float {
+  background: white;
+  padding: 10px 14px;
+  border-radius: 12px;
+  
+  border: 3px solid #2c2c2c;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2); 
+
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+
+  max-width: 200px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+
+  pointer-events: none;
+  position: fixed;
+  z-index: 9999;
+}
+
+.chat-bubble-float::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: #2c2c2c;
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
+  border-bottom-left-radius: 4px;
+  z-index: -2;
+}
+
+.chat-bubble-float::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: white;
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg);
+  z-index: -1;
+}
+
+@keyframes bubbleFloat {
+  0% { opacity: 0; transform: translateY(6px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.answer-modal-overlay {
+  position: fixed; /* 화면 스크롤 상관없이 고정 */
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  
+  /* 배경을 어둡게 처리하여 모달 집중도 향상 */
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px); /* 배경 살짝 블러 처리 (지원 브라우저만) */
+  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+  /* 다른 모든 요소보다 위에 뜨도록 설정 */
+  z-index: 99999; 
+  
+  /* 부드럽게 등장 */
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* 2. 모달 내용 박스 */
+.answer-modal-content {
+  background-color: #fff;
+  padding: 40px 60px;
+  border-radius: 25px; /* 둥근 모서리 */
+  text-align: center;
+  
+  /* 깊이감 있는 그림자와 테두리 */
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  border: 6px solid #2b8a3e; /* 게임 테마색 (초록) */
+  
+  min-width: 380px;
+  max-width: 90%;
+  
+  /* 팝업 등장 애니메이션 */
+  transform: scale(0.8);
+  animation: modalPopIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* 제목 스타일 ("정답자가 나왔습니다!", "당신이 출제자입니다!") */
+.answer-modal-content h2 {
+  font-size: 2.2rem;
+  color: #333;
+  margin: 0 0 20px 0;
+  font-family: 'Jua', sans-serif;
+  word-break: keep-all; /* 단어 단위 줄바꿈 */
+}
+
+/* 내용 텍스트 래퍼 */
+.modal-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-info p {
+  font-size: 1.6rem;
+  margin: 5px 0;
+  color: #555;
+  font-family: 'Jua', sans-serif;
+  line-height: 1.4;
+}
+
+/* 강조 텍스트 (빨강) - 예: 정답 단어, 주제어 */
+.highlight-text {
+  color: #e03131; 
+  font-weight: 900;
+  font-size: 2rem;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+  padding: 0 5px;
+}
+
+/* 강조 텍스트 (파랑) - 예: 정답자 닉네임 */
+.highlight-winner {
+  color: #1971c2; 
+  font-weight: 900;
+  font-size: 2rem;
+  text-decoration: none !important;
+  text-underline-offset: 4px;
+}
+
+/* 폭죽 이모지 스타일 */
+.confetti {
+  font-size: 4rem;
+  margin-bottom: 10px;
+  display: block;
+  animation: shake 1s infinite alternate;
+}
+
+/* =========================================
+   애니메이션 키프레임 정의
+   ========================================= */
+
+/* 배경 페이드인 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 모달 팝업 (통통 튀는 효과) */
+@keyframes modalPopIn {
+  0% { 
+    transform: scale(0.5); 
+    opacity: 0; 
+  }
+  100% { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
+}
+
+/* 폭죽 흔들기 */
+@keyframes shake {
+  from { transform: rotate(-10deg); }
+  to { transform: rotate(10deg); }
+}

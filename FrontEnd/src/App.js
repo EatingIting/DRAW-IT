@@ -1,16 +1,20 @@
 import { Route, Routes } from 'react-router-dom';
-import './App.css';
 import Join from './component/Join.js';
 import Main from './component/Main.js';
 import Fragment from './layout/Fragment.js';
+import LobbyScreen from './component/LobbyScreen.js';
+import GameScreen from './component/GameScreen.js';
 function App() {
   return (
     <>
       <Fragment>
         <Routes>
           <Route path='/' element={<Main />} />
-          {/* 메인메뉴 참여하기 버튼(로비페이지) 이동 시 */}
-          <Route path="/Join" element={<Join />} />
+          <Route path="/join" element={<Join />} />
+          <Route path="/lobby/:lobbyId" element={<LobbyScreen/>}/>
+          <Route path="/gaming/:lobbyId" element={<GameScreen/>}/>
+          <Route path="/gamingResult/:lobbyId" element={<GameScreen/>}/>
+          <Route path="/vote/:lobbyId" element={<GameScreen/>}/>
         </Routes>
       </Fragment>
     </>

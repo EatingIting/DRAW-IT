@@ -1,168 +1,305 @@
+/* =========================================
+   :root - 게임 테마 변수 정의
+   ========================================= */
+:root {
+  --game-bg-overlay: rgba(0, 0, 0, 0.7);
+  --game-modal-bg: #ffcf4d;
+  --game-border-color: #2c2c2c;
+  --game-border-width: 4px;
+  
+  /* Colors */
+  --color-primary: #0ca678;
+  --color-primary-dark: #087f5b;
+  --color-danger: #ff6b6b;
+  --color-danger-dark: #c92a2a;
+  --color-input-bg: #fffbf0;
+  --color-input-shadow: #e6dbb9;
+  
+  /* Typography */
+  --font-family-game: 'Jua', 'Fredoka One', sans-serif; /* 둥글둥글한 폰트 추천 */
+}
+
+/* =========================================
+   Layout & Overlay
+   ========================================= */
 .create-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--game-bg-overlay);
+  backdrop-filter: blur(4px); /* 배경 흐림 효과 추가 */
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* =========================================
+   Game Modal Container
+   ========================================= */
 .create-modal {
   position: relative;
-  width: 1100px;
-  height: 650px;
-  background: #f7c948;
-  border-radius: 8px;
-  padding: 60px 80px;
-  box-sizing: border-box;
+  width: 900px;
+  max-width: 90%;
+  background: var(--game-modal-bg);
+  
+  /* 게임 UI 핵심: 굵은 테두리와 딱 떨어지는 그림자 */
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 24px;
+  box-shadow: 12px 12px 0 rgba(0, 0, 0, 0.25);
+  
+  padding: 60px 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  
+  /* 팝업 등장 애니메이션 */
+  animation: popUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* 닫기 버튼 */
+@keyframes popUp {
+  from { transform: scale(0.8) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* =========================================
+   Components: Close Button
+   ========================================= */
 .close-btn {
   position: absolute;
-  top: 30px;
-  right: 30px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #e76f51;
-  border: none;
-  font-size: 24px;
+  top: -20px;
+  right: -20px;
+  width: 56px;
+  height: 56px;
+  
+  background: var(--color-danger);
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 var(--color-danger-dark);
+  
+  color: #fff;
+  font-size: 28px;
+  font-weight: 900;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s;
+  z-index: 10;
 }
 
-/* 공통 폼 */
+.close-btn:hover {
+  transform: scale(1.05);
+  background: #ff8787;
+}
+
+.close-btn:active {
+  transform: scale(0.95) translateY(4px);
+  box-shadow: 0 0 0 var(--color-danger-dark); /* 눌렸을 때 그림자 삭제 */
+}
+
+/* =========================================
+   Form Groups & Typography
+   ========================================= */
 .form-group {
-  margin-bottom: 60px;
+  width: 100%;
+  margin-bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .label {
-  display: block;
+  font-family: var(--font-family-game);
   font-size: 28px;
-  font-weight: 700;
+  color: var(--game-border-color);
   margin-bottom: 16px;
+  text-shadow: 2px 2px 0 rgba(255, 255, 255, 0.4); /* 텍스트 입체감 */
+  letter-spacing: -0.5px;
 }
 
+/* =========================================
+   Components: Inputs (Slots)
+   ========================================= */
 .input {
-  width: 600px;
-  height: 56px;
-  background: #f4a261;
-  border: none;
-  padding: 0 16px;
-  font-size: 18px;
-  box-sizing: border-box;
+  width: 100%;
+  max-width: 500px;
+  height: 60px;
+  
+  background: var(--color-input-bg);
+  border: 3px solid var(--game-border-color);
+  border-radius: 16px;
+  
+  /* 안쪽으로 파인 느낌 (Inner Shadow) */
+  box-shadow: inset 0 6px 0 var(--color-input-shadow);
+  
+  padding: 0 20px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #495057;
+  text-align: center;
+  transition: all 0.2s;
 }
 
-/* 모드 선택 */
+.input:focus {
+  outline: none;
+  background: #fff;
+  transform: translateY(-2px);
+  box-shadow: inset 0 6px 0 var(--color-input-shadow), 0 8px 0 rgba(0,0,0,0.1);
+  border-color: var(--color-primary);
+}
+
+/* =========================================
+   Components: Mode Selection Cards
+   ========================================= */
 .mode-group {
   display: flex;
-  gap: 40px;
+  gap: 24px;
 }
 
 .mode-btn {
-  width: 140px;
-  height: 140px;
-  background: #f4a261;
-  border-radius: 12px;
-  border: none;
-  font-size: 24px;
-  font-weight: 700;
+  width: 160px;
+  height: 160px;
+  background: #fff;
+  border: 3px solid var(--game-border-color);
+  border-radius: 20px;
+  
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  
   cursor: pointer;
+  position: relative;
+  box-shadow: 0 8px 0 rgba(0,0,0,0.1); /* 카드 띄우기 */
+  transition: all 0.15s;
 }
 
+.mode-btn:hover {
+  transform: translateY(-4px);
+}
+
+/* 선택된 상태: 꾹 눌린 모습 + 색상 변경 */
 .mode-btn.active {
-  outline: 4px solid #000;
-  transform: translateY(-2px);
+  background: #ffe066;
+  border-color: var(--game-border-color);
+  transform: translateY(8px); /* 물리적으로 눌림 */
+  box-shadow: inset 0 6px 0 rgba(0,0,0,0.1); /* 안쪽 그림자 추가 */
 }
 
 .mode-icon {
-  width: 80px;
-  height: 80px;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.2)); /* 아이콘 그림자 */
 }
 
+/* =========================================
+   Components: Toggle Switch (Mechanical)
+   ========================================= */
 .password-group {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
 }
 
-.password-input.off {
-  background: #d9d9d9;
-  color: #777;
-  cursor: not-allowed;
+.toggle-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 10px 20px;
+  border-radius: 50px;
+  border: 2px solid var(--game-border-color);
 }
 
-.password-input.on {
-  background: #f4a261;
-  color: #111;
-}
-
-.password-input:disabled::placeholder {
-  color: #999;
-}
-
-/* 토글 버튼(스위치) */
 .toggle-lock {
-  width: 64px;
-  height: 34px;
-  border-radius: 999px;
-  border: 3px solid #000;
-  background: transparent;
+  width: 70px;
+  height: 36px;
+  background: #ced4da;
+  border: 3px solid var(--game-border-color);
+  border-radius: 99px;
   position: relative;
-  padding: 0;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
+  box-shadow: inset 0 4px 0 rgba(0,0,0,0.2); /* 트랙 안쪽 그림자 */
+  transition: background 0.2s;
 }
 
-/* 토글 안의 동그라미 */
-.toggle-knob {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #000;
-  position: absolute;
-  left: 8px;
-  transition: left 0.18s ease;
-}
-
-/* ON이면 오른쪽으로 이동 */
-.toggle-lock.on .toggle-knob {
-  left: 36px;
-}
-
-/* ON일 때 살짝 활성화 느낌 */
 .toggle-lock.on {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--color-primary);
 }
 
+.toggle-knob {
+  width: 24px;
+  height: 24px;
+  background: #fff;
+  border: 3px solid var(--game-border-color);
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  transform: translateY(-50%);
+  box-shadow: 0 2px 0 rgba(0,0,0,0.3);
+  transition: left 0.2s cubic-bezier(0.68, -0.55, 0.27, 1.55); /* 팅~ 하는 탄성 효과 */
+}
+
+.toggle-lock.on .toggle-knob {
+  left: calc(100% - 28px);
+}
+
+/* =========================================
+   Components: Main Action Button (CTA)
+   ========================================= */
 .create-room-btn {
-  height: 42px;
-  margin-left: 30px;
-  padding: 0 30px;
-  border-radius: 10px;
-  border: none;
-  background: #12b886;
+  margin-top: 20px;
+  height: 70px;
+  padding: 0 60px;
+  
+  background: linear-gradient(180deg, #20c997 0%, #099268 100%);
+  border: var(--game-border-width) solid var(--game-border-color);
+  border-radius: 20px;
+  
+  /* [변경됨] 그림자 색상 수정 
+     기존: #087f5b (진한 초록)
+     변경: #4db899 (훨씬 부드러운 옅은 민트색) 
+  */
+  box-shadow: 0 8px 0 #4db899, 0 12px 10px rgba(0,0,0,0.1);
+  
   color: #fff;
-  font-size: 15px;
-  font-weight: 600;
+  font-family: var(--font-family-game);
+  font-size: 24px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  
+  /* 텍스트 그림자도 살짝 연하게 조정 */
+  text-shadow: 2px 2px 0 rgba(8, 127, 91, 0.5);
+  
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.1s;
 }
 
 .create-room-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
+  filter: brightness(1.05);
 }
 
 .create-room-btn:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
+  transform: translateY(8px);
+  /* 눌렸을 때 그림자 깊이 제거 */
+  box-shadow: 0 0 0 #4db899, inset 0 4px 0 rgba(0,0,0,0.1);
 }
 
 .create-room-btn:disabled {
-  background: #9fbfb5;
+  background: #adb5bd;
+  box-shadow: 0 8px 0 #868e96;
   cursor: not-allowed;
-  box-shadow: none;
+  opacity: 0.7;
 }
