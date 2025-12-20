@@ -273,6 +273,11 @@ public class SocketController {
         String newWord = gameStateManager.getUniqueWord(state);
         state.setCurrentWord(newWord);
 
+        // 새 라운드 시작 시, 이정 그림 히스토리 삭제
+        // 이걸 안 하면 데이터가 계속 쌓여서 나중에 렉 걸리고 튕김
+        state.getDrawEvents().clear();
+        state.getRedoStack().clear();
+
         state.setRoundEndTime(0);
 
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(

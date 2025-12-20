@@ -37,6 +37,39 @@ function GameScreen({ maxPlayers = 10 }) {
 
   const stompRef = useRef(null);
 
+  const subsRef = useRef([]);               // 구독 핸들 저장(중복 구독 방지/정리)
+  const connectedRef = useRef(false);       // 연결 상태
+  const reconnectingRef = useRef(false);    // 재연결 중 여부(UX 제어용)
+
+  // ===== "2명 미만" 유예 종료용 =====
+  const minPlayersGraceTimerRef = useRef(null);
+  const MIN_PLAYERS = 2;
+  const GRACE_MS = 7000; // ✅ 유예 시간(7초). 필요하면 8000~15000 추천
+
+  const clearMinPlayersGraceTimer = () => {
+    if (minPlayersGraceTimerRef.current) {
+      clearTimeout(minPlayersGraceTimerRef.current);
+      minPlayersGraceTimerRef.current = null;
+    }
+  };
+
+  const safeUnsubscribeAll = () => {
+    try {
+      subsRef.current.forEach((sub) => {
+        try { sub?.unsubscribe?.(); } catch (_) {}
+      });
+    } finally {
+      subsRef.current = [];
+    }
+  };
+
+  const safeDeactivate = async (client) => {
+    try {
+      safeUnsubscribeAll();
+      await client?.deactivate?.();
+    } catch (_) {}
+  };
+
   const [players, setPlayers] = useState([]);
   const [isDrawer, setIsDrawer] = useState(false);
   const [keyword, setKeyword] = useState(""); 
@@ -91,17 +124,26 @@ function GameScreen({ maxPlayers = 10 }) {
   // 타이머 DOM Ref
   const timerBarRef = useRef(null);
 
-  const handleLeaveGame = () => {
-    if (stompRef.current?.connected) {
-      stompRef.current.publish({
-        destination: `/app/lobby/${lobbyId}/leave`,
-        body: JSON.stringify({ userId }),
-      });
-      stompRef.current.deactivate();
+  const handleLeaveGame = async () => {
+    try {
+      // 연결되어 있으면 leave publish 시도
+      if (stompRef.current?.connected) {
+        stompRef.current.publish({
+          destination: `/app/lobby/${lobbyId}/leave`,
+          body: JSON.stringify({ userId }),
+        });
+      }
+    } catch (_) {
+      // publish 실패해도 그냥 나감
+    } finally {
+      // ✅ 어떤 상태든 정리
+      if (stompRef.current) {
+        await safeDeactivate(stompRef.current);
+      }
+      stompRef.current = null;
+      navigate('/join');
     }
-    navigate('/join');
   };
-
   const handleToolClick = (tool) => {
     if (activeTool === tool) {
       setShowModal((prev) => !prev);
@@ -198,170 +240,214 @@ function GameScreen({ maxPlayers = 10 }) {
   useEffect(() => {
     if (!userId || !nickname || !lobbyId) return;
 
-    const client = new Client({
-      webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
-      reconnectDelay: 3000,
-      onConnect: () => {
-        console.log("Game 소켓 연결 성공");
+    let isMounted = true;
 
-        client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
-          const data = JSON.parse(msg.body);
+    const connect = async () => {
+      // ✅ 혹시 이전 client 남아있으면 먼저 정리
+      if (stompRef.current) {
+        await safeDeactivate(stompRef.current);
+        stompRef.current = null;
+      }
 
-          const updateDrawerState = (newDrawerId, newWord, endTime, triggerModal = false) => {
-            if (!newDrawerId) return;
-            const me = String(newDrawerId) === String(userId);
-            setIsDrawer(me);
-            
-            if (newWord) {
+      const client = new Client({
+        webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
+
+        // ✅ 자동 재연결
+        reconnectDelay: 3000,
+
+        // ✅ heartbeat (서버가 지원할 때 안정성 ↑)
+        heartbeatIncoming: 10000,
+        heartbeatOutgoing: 10000,
+
+        // 디버그 로그 줄이기(원하면 주석)
+        debug: () => {},
+
+        onConnect: () => {
+          if (!isMounted) return;
+
+          connectedRef.current = true;
+          reconnectingRef.current = false;
+
+          // ✅ 구독 중복 방지: 연결될 때마다 기존 구독 정리 후 다시 구독
+          safeUnsubscribeAll();
+
+          console.log("✅ Game STOMP connected");
+
+          // 1) lobby topic
+          const subLobby = client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
+            const data = JSON.parse(msg.body);
+
+            const updateDrawerState = (newDrawerId, newWord, endTime, triggerModal = false) => {
+              if (!newDrawerId) return;
+              const me = String(newDrawerId) === String(userId);
+              setIsDrawer(me);
+
+              if (newWord) {
                 setKeyword(newWord);
-                keywordRef.current = newWord; // 최신 값 저장
+                keywordRef.current = newWord;
+              }
+
+              setCurrentDrawerId(newDrawerId);
+
+              if (endTime !== undefined) setRoundEndTime(endTime);
+
+              if (me && triggerModal) {
+                setDrawerModal({ visible: true, keyword: newWord || "???" });
+
+                client.publish({
+                  destination: `/app/draw/${lobbyId}/clear`,
+                  body: JSON.stringify({ userId }),
+                });
+                setPenColor('#000000ff');
+                setActiveTool('pen');
+              }
+
+              prevDrawerIdRef.current = String(newDrawerId);
+            };
+
+            if (data.type === 'CORRECT_ANSWER') {
+              setWinnerId(data.winnerUserId);
+              setAnswerModal({ visible: true, winner: data.winnerNickname, answer: data.answer });
+              setRoundEndTime(0);
+
+              setTimeout(() => {
+                setAnswerModal(prev => ({ ...prev, visible: false }));
+              }, 1500);
             }
 
-            setCurrentDrawerId(newDrawerId);
+            if (data.type === 'USER_UPDATE') {
+              const hostId = data.hostUserId;
+              const mappedUsers = (data.users || []).map((u) => ({
+                ...u,
+                host: String(u.userId) === String(hostId),
+              })).sort((a, b) => (a.host === b.host ? 0 : a.host ? -1 : 1));
 
-            if (endTime !== undefined) {
-                setRoundEndTime(endTime);
+              setPlayers(mappedUsers);
+              if (data.gameStarted) setIsGameStarted(true);
+
+              // ✅ 여기서 "2명 미만 즉시 종료" 제거 -> 유예 처리로 교체
+              if (data.gameStarted && mappedUsers.length < MIN_PLAYERS) {
+                // 이미 유예 타이머가 없다면 시작
+                if (!minPlayersGraceTimerRef.current) {
+                  minPlayersGraceTimerRef.current = setTimeout(async () => {
+                    minPlayersGraceTimerRef.current = null;
+
+                    // ✅ 유예 후에도 정말 2명 미만인지 서버 재확인(권장)
+                    try {
+                      const res = await axios.get(`${API_BASE_URL}/lobby/${lobbyId}`);
+                      const latest = res.data?.lobby ?? res.data;
+                      const latestCount = (latest?.users || []).length;
+
+                      if (latest?.gameStarted && latestCount < MIN_PLAYERS) {
+                        alert("유저가 2명 미만 상태가 지속되어 게임을 종료합니다.");
+                        handleLeaveGame();
+                      }
+                    } catch (e) {
+                      // 재확인 실패면 그냥 다음 USER_UPDATE 기다림(강제 종료 X)
+                      console.warn("유저 수 재확인 실패:", e);
+                    }
+                  }, GRACE_MS);
+                }
+              } else {
+                // ✅ 2명 이상이면 유예 타이머 취소
+                clearMinPlayersGraceTimer();
+              }
+
+              if (data.drawerUserId) updateDrawerState(data.drawerUserId, data.word, data.roundEndTime, false);
             }
 
-            // 여기가 핵심입니다! (triggerModal 사용)
-            if (me && triggerModal) {
-              console.log("🔥 모달 띄우기 발동!"); // 디버깅용 로그
-              setDrawerModal({ visible: true, keyword: newWord || "???" });
-                
-              client.publish({ destination: `/app/draw/${lobbyId}/clear`, body: JSON.stringify({ userId }) });
-              setPenColor('#000000ff');
-              setActiveTool('pen');
-            }
-            
-            prevDrawerIdRef.current = String(newDrawerId);
-          };
-
-          if (data.type === 'CORRECT_ANSWER') {
-             const winnerId = data.winnerUserId;
-             const winnerName = data.winnerNickname;
-             const answer = data.answer;
-             
-             setWinnerId(winnerId);
-
-             setAnswerModal({ visible: true, winner: winnerName, answer: answer });
-
-             setRoundEndTime(0); //정답자가 나오면 타이머 중지
-
-             setTimeout(() => {
-                 setAnswerModal(prev => ({ ...prev, visible: false }));
-             }, 1500); //1.5초 뒤에 모달 닫기
-          }
-
-          if (data.type === 'USER_UPDATE') {
-            const hostId = data.hostUserId;
-            const mappedUsers = (data.users || []).map((u) => ({
-              ...u,
-              host: String(u.userId) === String(hostId),
-            })).sort((a, b) => (a.host === b.host ? 0 : a.host ? -1 : 1));
-            
-            setPlayers(mappedUsers);
-            if (data.gameStarted) setIsGameStarted(true);
-
-            if (data.gameStarted && mappedUsers.length < 2) {
-                alert("유저가 없습니다. 세션을 종료합니다.");
-                handleLeaveGame();
-                return; 
-            }
-            
-            if (data.drawerUserId) updateDrawerState(data.drawerUserId, data.word, data.roundEndTime, false);
-          }
-
-          if (data.type === 'GAME_START') {
-            setIsGameStarted(true);
-            resetCanvasLocal();
-            updateDrawerState(data.drawerUserId, data.word, 0, true);
-            setRoundEndTime(0);
-          }
-
-          if (data.type === 'ROUND_START') {
-             setDrawerModal(prev => ({ ...prev, visible: false }));
-             setGuesserModal(false);
-             
-             setRoundEndTime(data.roundEndTime);
-          }
-
-          if (data.type === 'DRAWER_CHANGED') {
-
-            if (String(prevDrawerIdRef.current) === String(userId)) {
-                 // 저장 함수 호출 (현재 상태인 keyword를 넘겨줌)
-                 saveMyDrawing(keywordRef.current);
+            if (data.type === 'GAME_START') {
+              setIsGameStarted(true);
+              resetCanvasLocal();
+              updateDrawerState(data.drawerUserId, data.word, 0, true);
+              setRoundEndTime(0);
             }
 
-            setWinnerId(null);
-            setRoundEndTime(0); 
-            resetCanvasLocal();
-            
-            updateDrawerState(data.drawerUserId, data.word, 0, false); 
+            if (data.type === 'ROUND_START') {
+              setDrawerModal(prev => ({ ...prev, visible: false }));
+              setGuesserModal(false);
+              setRoundEndTime(data.roundEndTime);
+            }
 
-            // ✅ [동시 시작] 1초 뒤에 이전 모달 끄고 & 새 모달 동시에 켜기
-            setTimeout(() => {
-                // 1. 이전 결과 모달들 끄기
+            if (data.type === 'DRAWER_CHANGED') {
+              if (String(prevDrawerIdRef.current) === String(userId)) {
+                saveMyDrawing(keywordRef.current);
+              }
+
+              setWinnerId(null);
+              setRoundEndTime(0);
+              resetCanvasLocal();
+
+              updateDrawerState(data.drawerUserId, data.word, 0, false);
+
+              setTimeout(() => {
                 setAnswerModal(prev => ({ ...prev, visible: false }));
                 setTimeOverModal(false);
 
-                // 2. 역할에 맞는 모달 켜기 (닫는 타이머 삭제!)
                 if (String(data.drawerUserId) === String(userId)) {
-                    // [출제자]
-                    setDrawerModal({ visible: true, keyword: data.word || "???" });
-                    
-                    client.publish({ destination: `/app/draw/${lobbyId}/clear`, body: JSON.stringify({ userId }) });
-                    setPenColor('#000000ff');
-                    setActiveTool('pen');
+                  setDrawerModal({ visible: true, keyword: data.word || "???" });
+
+                  client.publish({
+                    destination: `/app/draw/${lobbyId}/clear`,
+                    body: JSON.stringify({ userId }),
+                  });
+                  setPenColor('#000000ff');
+                  setActiveTool('pen');
                 } else {
-                    // [맞추는 사람]
-                    setGuesserModal(true);
+                  setGuesserModal(true);
                 }
-            }, 1000); // 1초 대기 후 등장이 가장 적절
-          }
-
-          if (data.type === 'ROOM_DESTROYED') {
-            alert('방이 삭제되었습니다.');
-            navigate('/');
-          }
-
-          if(data.type === 'TIME_OVER') {
-            setTimeOverModal(true);
-            setRoundEndTime(0);
-          }
-
-          if (data.type === 'GAME_OVER') {
-
-            if (String(prevDrawerIdRef.current) === String(userId)) {
-            saveMyDrawing(keywordRef.current);
+              }, 1000);
             }
 
-            setTimeOverModal(false); //게임 끝나면 모달 끄기
-            alert(`게임이 종료되었습니다.`);
-            navigate(`/vote/${lobbyId}`, { state: { players: players } });
-          }
-        });
+            if (data.type === 'ROOM_DESTROYED') {
+              alert('방이 삭제되었습니다.');
+              navigate('/');
+            }
 
-        client.subscribe(`/topic/lobby/${lobbyId}/draw`, (msg) => {
+            if (data.type === 'TIME_OVER') {
+              setTimeOverModal(true);
+              setRoundEndTime(0);
+            }
+
+            if (data.type === 'GAME_OVER') {
+              if (String(prevDrawerIdRef.current) === String(userId)) {
+                saveMyDrawing(keywordRef.current);
+              }
+              setTimeOverModal(false);
+              alert(`게임이 종료되었습니다.`);
+              navigate(`/vote/${lobbyId}`, { state: { players: playersRef.current } }); // ✅ playersRef 사용 권장
+            }
+          });
+
+          // 2) draw topic
+          const subDraw = client.subscribe(`/topic/lobby/${lobbyId}/draw`, (msg) => {
             const evt = JSON.parse(msg.body);
             applyRemoteDraw(evt);
-        });
-        client.subscribe(`/topic/history/${userId}`, (msg) => {
+          });
+
+          // 3) history topic
+          const subHistory = client.subscribe(`/topic/history/${userId}`, (msg) => {
             const data = JSON.parse(msg.body);
             const historyList = data.history || [];
             const redoList = data.redoStack || [];
+
             if (canvasReadyRef.current) {
               historyList.forEach((evt) => applyRemoteDraw(evt, true));
             } else {
               pendingHistoryRef.current = historyList;
             }
             redoStackRef.current = redoList;
-        });
-        client.subscribe('/topic/chat/bubble', (msg) => {
+          });
+
+          // 4) chat bubble
+          const subChat = client.subscribe('/topic/chat/bubble', (msg) => {
             const data = JSON.parse(msg.body);
             if (data.type !== 'CHAT_BUBBLE') return;
             const uid = data.userId;
+
             setChatBubbles((prev) => ({ ...prev, [uid]: data.message }));
             if (bubbleTimeoutRef.current[uid]) clearTimeout(bubbleTimeoutRef.current[uid]);
+
             bubbleTimeoutRef.current[uid] = setTimeout(() => {
               setChatBubbles((prev) => {
                 const copy = { ...prev };
@@ -369,24 +455,65 @@ function GameScreen({ maxPlayers = 10 }) {
                 return copy;
               });
             }, 3000);
-        });
+          });
 
-        client.publish({
-          destination: `/app/lobby/${lobbyId}/join`,
-          body: JSON.stringify({ userId, nickname }),
-        });
-      },
-      onStompError: (frame) => console.error("❌ 소켓 에러:", frame)
-    });
+          subsRef.current = [subLobby, subDraw, subHistory, subChat];
 
-    client.activate();
-    stompRef.current = client;
+          // ✅ (재)연결될 때마다 join 보냄
+          try {
+            client.publish({
+              destination: `/app/lobby/${lobbyId}/join`,
+              body: JSON.stringify({ userId, nickname }),
+            });
+          } catch (e) {
+            console.warn("join publish 실패:", e);
+          }
+        },
+
+        // ✅ STOMP 레벨 에러
+        onStompError: (frame) => {
+          console.error("❌ STOMP error:", frame?.headers?.message || frame);
+        },
+
+        // ✅ WebSocket 레벨 에러/종료
+        onWebSocketError: (evt) => {
+          console.warn("⚠️ WebSocket error:", evt);
+        },
+        onWebSocketClose: () => {
+          connectedRef.current = false;
+          reconnectingRef.current = true;
+
+          // 끊김 순간에 "2명 미만 처리" 타이머가 돌고 있으면 일단 유지(유예가 있으니까)
+          // 필요하면 여기서 UI로 "재연결중..." 표시 가능
+          console.warn("⚠️ WebSocket closed (reconnecting...)");
+        },
+        onDisconnect: () => {
+          connectedRef.current = false;
+          console.warn("⚠️ STOMP disconnected");
+        },
+      });
+
+      stompRef.current = client;
+      client.activate();
+    };
+
+    connect();
 
     return () => {
-      if (client) client.deactivate();
+      isMounted = false;
+      clearMinPlayersGraceTimer();
+
+      // bubble 타이머 정리
+      Object.values(bubbleTimeoutRef.current).forEach((t) => clearTimeout(t));
+      bubbleTimeoutRef.current = {};
+
+      if (stompRef.current) {
+        safeDeactivate(stompRef.current);
+        stompRef.current = null;
+      }
     };
-    // eslint-disable-next-line
-  }, [lobbyId, userId, nickname, navigate]);
+  // eslint-disable-next-line
+  }, [lobbyId, userId, nickname]);
 
 
   // 타이머 애니메이션 동기화
@@ -502,11 +629,25 @@ function GameScreen({ maxPlayers = 10 }) {
      }
   };
   const publishDraw = (evt) => {
-    stompRef.current?.publish({
+  const client = stompRef.current;
+
+  // ✅ 연결 안 됐으면 publish 금지 (여기서 에러 방지)
+  if (!client || !client.connected) {
+    // 필요하면 여기서만 로그(너무 많이 찍히면 주석)
+    // console.warn("STOMP not connected: skip draw event", evt.type);
+    return;
+  }
+
+  try {
+    client.publish({
       destination: `/app/draw/${lobbyId}`,
       body: JSON.stringify({ ...evt, userId }),
     });
-  };
+  } catch (e) {
+    // ✅ 내부 연결이 순간적으로 끊긴 경우도 여기서 흡수
+    console.warn("publishDraw failed:", e);
+  }
+};
   const applyRemoteDraw = (evt, isHistory = false) => {
     const isMe = String(evt.userId) === String(userId);
     if (!isHistory && isMe) return;
@@ -613,9 +754,12 @@ function GameScreen({ maxPlayers = 10 }) {
   };
   const startDraw = (e) => {
     if (!isDrawer) return;
+
+    if (!stompRef.current?.connected) return;
+
     calculateScale();
-    const x = e.nativeEvent.offsetX * scaleRef.current.x;
-    const y = e.nativeEvent.offsetY * scaleRef.current.y;
+    const x = Math.round(e.nativeEvent.offsetX * scaleRef.current.x);
+    const y = Math.round(e.nativeEvent.offsetY * scaleRef.current.y);
     if (activeTool === 'fill') {
       floodFill(x, y, fillColor);
       historyRef.current.push({ type: 'FILL', x, y, color: fillColor });
@@ -631,8 +775,9 @@ function GameScreen({ maxPlayers = 10 }) {
   };
   const draw = (e) => {
     if (!isDrawer || !drawing.current) return;
-    const x = e.nativeEvent.offsetX * scaleRef.current.x;
-    const y = e.nativeEvent.offsetY * scaleRef.current.y;
+    if (!stompRef.current?.connected) return;
+    const x = Math.round(e.nativeEvent.offsetX * scaleRef.current.x);
+    const y = Math.round(e.nativeEvent.offsetY * scaleRef.current.y);
     ctxRef.current.lineTo(x, y);
     ctxRef.current.stroke();
     currentStrokeRef.current.push({ x, y });
@@ -640,6 +785,10 @@ function GameScreen({ maxPlayers = 10 }) {
   };
   const endDraw = () => {
     if (!drawing.current) return;
+    if (!stompRef.current?.connected) { 
+    drawing.current = false; 
+    return; 
+  }
     drawing.current = false;
     ctxRef.current.closePath();
     const strokePoints = [...currentStrokeRef.current];
@@ -656,7 +805,15 @@ function GameScreen({ maxPlayers = 10 }) {
     if (ctx && canvasRef.current) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     historyRef.current.push({ type: 'CLEAR' });
     redoStackRef.current = [];
-    stompRef.current?.publish({ destination: `/app/draw/${lobbyId}/clear`, body: JSON.stringify({ userId }) });
+    // ✅ STOMP 연결이 살아있을 때만 publish
+    if (stompRef.current?.connected) {
+      try {
+        stompRef.current.publish({
+          destination: `/app/draw/${lobbyId}/clear`,
+          body: JSON.stringify({ userId }),
+        });
+      } catch (_) {}
+    }
   };
   const handleUndo = () => {
     if (!isDrawer || historyRef.current.length === 0) return;
@@ -694,11 +851,18 @@ function GameScreen({ maxPlayers = 10 }) {
   };
   const handleSendChat = () => {
     if (!chatMessage.trim()) return;
-    stompRef.current?.publish({
-      destination: '/app/chat/bubble',
-      body: JSON.stringify({ lobbyId, userId, message: chatMessage }),
-    });
-    setChatMessage('');
+    const client = stompRef.current;
+    if (!client || !client.connected) return;
+
+    try {
+      client.publish({
+        destination: '/app/chat/bubble',
+        body: JSON.stringify({ lobbyId, userId, message: chatMessage }),
+      });
+      setChatMessage('');
+    } catch (e) {
+      console.warn("chat publish failed:", e);
+    }
   };
 
   const totalSlots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
