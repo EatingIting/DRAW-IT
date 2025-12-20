@@ -588,7 +588,7 @@
   color: #1971c2; 
   font-weight: 900;
   font-size: 2rem;
-  text-decoration: underline;
+  text-decoration: none !important;
   text-underline-offset: 4px;
 }
 
@@ -612,13 +612,13 @@
 
 /* 모달 팝업 (통통 튀는 효과) */
 @keyframes modalPopIn {
-  0% { 
-    transform: scale(0.5); 
-    opacity: 0; 
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
   }
-  100% { 
-    transform: scale(1); 
-    opacity: 1; 
+  100% {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 

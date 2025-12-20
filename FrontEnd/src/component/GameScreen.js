@@ -225,6 +225,11 @@ function GameScreen({ maxPlayers = 10 }) {
     };
   }, []);
 
+  const playersRef = useRef([]); // 최신 플레이어 상태를 담을 Ref
+    useEffect(() => {
+      playersRef.current = players;
+    }, [players])
+
   useEffect(() => {
     if (!userId || !nickname || !lobbyId) return;
     
@@ -321,27 +326,27 @@ function GameScreen({ maxPlayers = 10 }) {
             }
             
             if (data.gameStarted) {
-                setIsGameStarted(true);
-                if (data.drawerUserId) {
-                    updateDrawerState(data.drawerUserId, data.word, data.roundEndTime, false);
-
-                    if (isFirstSocketUpdate.current) {
-                        setAnswerModal({ visible: false, winner: '', answer: '' });
-                        setTimeOverModal(false);
-                        setTimeout(() => {
-                             showRoundModal(data.drawerUserId, data.word);
-                        }, 300);
-                    }
-                }
+              setIsGameStarted(true);
+              if (data.drawerUserId) {
+                  updateDrawerState(data.drawerUserId, data.word, data.roundEndTime, false);
+                  prevDrawerIdRef.current = String(data.drawerUserId);
+                  if (isFirstSocketUpdate.current) {
+                      setAnswerModal({ visible: false, winner: '', answer: '' });
+                      setTimeOverModal(false);
+                      setTimeout(() => {
+                            showRoundModal(data.drawerUserId, data.word);
+                      }, 300);
+                  }
+              }
             } else {
-                 if (data.gameStarted && mappedUsers.length < 2) {
-                    // 여기도 동일하게 처리
-                    setTimeout(() => {
-                        alert("유저가 없습니다. 세션을 종료합니다.");
-                        handleLeaveGame();
-                    }, 0);
-                    return; 
-                 }
+              if (data.gameStarted && mappedUsers.length < 2) {
+                // 여기도 동일하게 처리
+                setTimeout(() => {
+                    alert("유저가 없습니다. 세션을 종료합니다.");
+                    handleLeaveGame();
+                }, 0);
+                return;
+              }
             }
             isFirstSocketUpdate.current = false;
           }
@@ -359,6 +364,8 @@ function GameScreen({ maxPlayers = 10 }) {
 
             // 현재 출제자 기록
             prevDrawerIdRef.current = String(targetDrawerId);
+
+            isFirstSocketUpdate.current = false;
           }
 
 
@@ -367,38 +374,56 @@ function GameScreen({ maxPlayers = 10 }) {
           }
 
           if (data.type === 'DRAWER_CHANGED') {
-            // 내가 이전 출제자였다면 그림 저장
+            /* =========================
+              1️⃣ 이전 출제자면 그림 저장
+            ========================= */
             if (String(prevDrawerIdRef.current) === String(userId)) {
               saveMyDrawing(keywordRef.current);
             }
 
+            /* =========================
+              2️⃣ 라운드 상태 초기화
+            ========================= */
             setRoundFinished(false);
             setWinnerId(null);
             setRoundEndTime(0);
+            setAnswerModal({ visible: false, winner: '', answer: '' });
+            setTimeOverModal(false);
+
             resetCanvasLocal();
 
+            /* =========================
+              3️⃣ 출제자 / 단어 결정
+            ========================= */
             const targetDrawerId = data.drawerUserId || data.drawerId;
-            const targetWord = data.word || data.keyword;
+            const targetWord = data.word || data.keyword || '???';
 
-            setIsDrawer(String(targetDrawerId) === String(userId));
-            setCurrentDrawerId(targetDrawerId);
-            setKeyword(targetWord);
+            updateDrawerState(targetDrawerId, targetWord, 0);
 
+            /* =========================
+              4️⃣ 🔥 통합 모달 (showRoundModal)
+            ========================= */
             showRoundModal(targetDrawerId, targetWord);
 
-            // 출제자면 캔버스 초기화
+            /* =========================
+              5️⃣ 내가 출제자라면 캔버스 클리어 + 펜 초기화
+            ========================= */
             if (String(targetDrawerId) === String(userId)) {
-              stompRef.current.publish({
+              stompRef.current?.publish({
                 destination: `/app/draw/${lobbyId}/clear`,
                 body: JSON.stringify({ userId }),
               });
+
               setPenColor('#000000ff');
               setActiveTool('pen');
             }
 
-            // 마지막에 현재 출제자 기록
+            /* =========================
+              6️⃣ 현재 출제자 기록
+            ========================= */
             prevDrawerIdRef.current = String(targetDrawerId);
           }
+
 
           if (data.type === 'ROOM_DESTROYED') {
             setTimeout(() => {
@@ -419,16 +444,12 @@ function GameScreen({ maxPlayers = 10 }) {
           }
 
           if (data.type === 'GAME_OVER') {
-            // 내가 마지막 출제자였다면 저장
             if (String(prevDrawerIdRef.current) === String(userId)) {
               saveMyDrawing(keywordRef.current);
             }
-
             setTimeOverModal(false);
-            setTimeout(() => {
-              alert('게임이 종료되었습니다.');
-              handleLeaveGame();
-            }, 0);
+            alert(`게임이 종료되었습니다.`);
+            navigate(`/vote/${lobbyId}`, { state: { players: playersRef.current } }); // playersRef 사용 권장
           }
         });
 
@@ -968,9 +989,9 @@ function GameScreen({ maxPlayers = 10 }) {
           <div className="game-grid">
              
              <div className="user-column left">
-                {leftUsers.map((u, i) => renderUser(u, i * 2))} 
+                {leftUsers.map((u, i) => renderUser(u, i * 2))}
              </div>
-             
+
              <div className="center-board-area">
                 <div className="board-wrapper">
                     <div className="canvas-group">
@@ -1037,13 +1058,21 @@ function GameScreen({ maxPlayers = 10 }) {
          if (!el) return null;
          const rect = el.getBoundingClientRect();
          return (
-             <div key={uid} className="chat-bubble-float" style={{ position: 'fixed', top: rect.top + rect.height / 2, left: rect.right + 12, transform: 'translateY(-50%)', zIndex: 9999, maxWidth: '220px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', pointerEvents: 'none' }}>
-                {msg}
-             </div>
-          );
+          <div key={uid} className="chat-bubble-float" style={{ position: 'fixed', top: rect.top + rect.height / 2, left: rect.right + 12, transform: 'translateY(-50%)', zIndex: 9999, maxWidth: '220px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', pointerEvents: 'none' }}>
+              {msg}
+          </div>
+        );
        })}
        <div className="chat-area">
-          <input type="text" placeholder="메시지 입력..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat(); }} />
+          <input type="text"
+            placeholder="메시지 입력..."
+            value={chatMessage}
+            onChange={(e) => setChatMessage(e.target.value)} 
+            onKeyDown={(e) => { 
+                if (e.nativeEvent.isComposing) return; 
+                if (e.key === 'Enter') handleSendChat(); 
+              }}
+            />
           <button onClick={handleSendChat}>전송</button>
        </div>
     </div>
