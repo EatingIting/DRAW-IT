@@ -5,6 +5,7 @@ import com.example.drawIt.Domain.DrawEvent;
 import com.example.drawIt.Domain.GameState;
 import com.example.drawIt.Domain.GameStateManager;
 import com.example.drawIt.Entity.Lobby;
+import com.example.drawIt.Service.GameImageService;
 import com.example.drawIt.Service.LobbyService;
 import com.example.drawIt.Socket.LobbyUserStore;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class SocketController {
     private final LobbyService lobbyService;
     private final SimpMessagingTemplate messagingTemplate;
     private final GameStateManager gameStateManager;
+    private final GameImageService gameImageService;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -342,5 +344,29 @@ public class SocketController {
                 processNextRound(roomId);
             }
         }, 3, TimeUnit.SECONDS);
+    }
+
+    @MessageMapping("/vote/{lobbyId}")
+    public void handleVote(@DestinationVariable String lobbyId, @Payload Map<String, Object> payload) {
+        try {
+            // 1. 데이터 추출
+            Integer voteIndex = (Integer) payload.get("voteIndex");
+            String userId = (String) payload.get("userId");
+
+            System.out.println("🗳️ [Controller] 투표 요청: Lobby=" + lobbyId + ", Idx=" + voteIndex + ", User=" + userId);
+
+            // 2. 서비스 호출 (투표 반영 및 최신 카운트 리스트 획득)
+            // "투표 증가" 로그는 여기서 찍히고 있었을 겁니다.
+            List<Integer> latestVoteCounts = gameImageService.addVote(lobbyId, voteIndex, userId);
+
+            // 3. 🔥 [핵심] 갱신된 투표 현황을 모든 클라이언트에게 방송!
+            // 이 부분이 없으면 프론트엔드에서 엄지척이 절대 안 뜹니다.
+            messagingTemplate.convertAndSend("/topic/vote/" + lobbyId, latestVoteCounts);
+
+            System.out.println("📡 [Controller] 투표 현황 방송 완료: " + latestVoteCounts);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

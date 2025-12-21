@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
+import SockJS from 'sockjs-client';
+import { Client } from '@stomp/stompjs';
 import { API_BASE_URL } from '../api/config';
 import './VoteScreen.css';
 
@@ -11,9 +13,10 @@ const VoteScreen = () => {
 
   const [players, setPlayers] = useState(location.state?.players || []);
   const [images, setImages] = useState([]);
-  
-  // 현재 내가 투표한 그림의 index (없으면 null)
   const [myVote, setMyVote] = useState(null);
+
+  const stompClientRef = useRef(null);
+  const myUserId = useRef("user_" + Math.random().toString(36).substr(2, 9)).current;
 
   useEffect(() => {
     if (!lobbyId) return;
@@ -21,13 +24,11 @@ const VoteScreen = () => {
     const fetchVoteData = async () => {
       try {
         const galleryRes = await axios.get(`${API_BASE_URL}/api/game/${lobbyId}/gallery`);
-        
-        // 데이터 초기화: voteCount가 없으면 0으로 설정
         const initializedData = galleryRes.data.map(img => ({
             ...img,
-            voteCount: img.voteCount || 0 
+            // 문자열 "0"일 수 있으므로 parseInt로 안전하게 변환
+            voteCount: parseInt(img.voteCount || 0, 10)
         }));
-        
         setImages(initializedData);
 
         if (players.length === 0) {
@@ -35,81 +36,89 @@ const VoteScreen = () => {
                 const lobbyRes = await axios.get(`${API_BASE_URL}/lobby/${lobbyId}`);
                 const lobbyData = lobbyRes.data.lobby || lobbyRes.data;
                 setPlayers(lobbyData.users || []);
-            } catch(e) {
-                console.warn("로비 정보 소실(정상)");
-            }
+            } catch(e) {}
         }
       } catch (err) {
         console.error("데이터 로딩 실패:", err);
       }
     };
-
     fetchVoteData();
-  }, [lobbyId]);
 
-  const formatSubject = (filename) => {
-    if (!filename) return "Unknown";
-    return filename.replace(/\.[^/.]+$/, "");
-  };
-
-  // 🔥 [핵심 로직 수정] 1인 1투표 (이동 가능)
-  const handleVote = (index) => {
-    // 이미 투표한 것을 다시 누르면 아무것도 안 함 (혹은 취소 로직을 넣을 수도 있음)
-    if (myVote === index) return;
-
-    setImages(prevImages => {
-        const newImages = [...prevImages];
-
-        // 1. 이전에 투표한 것이 있다면 -> 투표 수 회수 (-1)
-        if (myVote !== null) {
-            const prevImg = newImages[myVote];
-            newImages[myVote] = {
-                ...prevImg,
-                // 0보다 작아지지 않게 방어 코드
-                voteCount: Math.max(0, (prevImg.voteCount || 0) - 1)
-            };
-        }
-
-        // 2. 새로 선택한 것 -> 투표 수 추가 (+1)
-        const newImg = newImages[index];
-        newImages[index] = {
-            ...newImg,
-            voteCount: (newImg.voteCount || 0) + 1
-        };
-
-        return newImages;
+    const socket = new SockJS(`${API_BASE_URL}/ws-stomp`);
+    const client = new Client({
+      webSocketFactory: () => socket,
+      onConnect: () => {
+        console.log('✅ 투표 소켓 연결 성공!');
+        client.subscribe(`/topic/vote/${lobbyId}`, (message) => {
+          if (message.body) {
+            const voteCounts = JSON.parse(message.body);
+            console.log("📩 투표 현황 수신:", voteCounts);
+            
+            setImages(prevImages => {
+                return prevImages.map((img, idx) => ({
+                    ...img,
+                    // 서버에서 온 값으로 덮어쓰기
+                    voteCount: voteCounts[idx] !== undefined ? voteCounts[idx] : img.voteCount
+                }));
+            });
+          }
+        });
+      },
+      onStompError: (frame) => console.error('소켓 에러:', frame.headers['message']),
     });
 
-    // 3. 내 투표 상태 업데이트
+    client.activate();
+    stompClientRef.current = client;
+
+    return () => {
+      if (stompClientRef.current) stompClientRef.current.deactivate();
+    };
+  }, [lobbyId]);
+
+  const handleVote = (index) => {
+    if (myVote === index) return;
     setMyVote(index);
 
-    console.log(`투표 이동: ${myVote}번 -> ${index}번`);
-    
-    // TODO: 백엔드 연동 시
-    // axios.post(..., { prevVote: myVote, newVote: index }) 
-    // 형태로 보내서 서버 DB도 업데이트하고, 소켓으로 다른 사람들에게도 전파해야 함.
+    if (stompClientRef.current && stompClientRef.current.connected) {
+        stompClientRef.current.publish({
+            destination: `/app/vote/${lobbyId}`,
+            body: JSON.stringify({ voteIndex: index, userId: myUserId }),
+        });
+    }
   };
 
-  // 투표 수만큼 엄지척 아이콘 렌더링
+  // 🔥 [수정] CSS 변수(--rotate)를 직접 주입하여 지그재그 효과 적용
   const renderThumbs = (count) => {
-    return Array.from({ length: count }).map((_, i) => (
-        <span key={i} className="thumb-icon" style={{ animationDelay: `${i * 0.05}s` }}>
-            👍
-        </span>
-    ));
+    // 안전하게 숫자로 변환
+    const numCount = parseInt(count || 0, 10);
+    
+    return Array.from({ length: numCount }).map((_, i) => {
+        // 짝수는 15도, 홀수는 -15도 회전
+        const rotateDeg = i % 2 === 0 ? 15 : -15;
+        return (
+            <span 
+                key={i} 
+                className="thumb-icon" 
+                style={{ 
+                    animationDelay: `${i * 0.05}s`,
+                    '--rotate': `${rotateDeg}deg` // CSS에서 var(--rotate)로 사용
+                }}
+            >
+                👍
+            </span>
+        );
+    });
   };
 
   return (
     <div className="vote-screen-container">
-      
-      <h1 className="vote-title">
-        The Art of The Match
-      </h1>
-      
+      <h1 className="vote-title">The Art of The Match</h1>
       <div className="gallery-container-frame">
         <div className="gallery-grid">
           {images.map((img, idx) => {
             const isSelected = myVote === idx;
+            const imageSrc = img.imageUrl.startsWith('http') ? img.imageUrl : `${API_BASE_URL}${img.imageUrl}`;
+            const subjectText = img.keyword || "Unknown";
 
             return (
               <div 
@@ -117,27 +126,18 @@ const VoteScreen = () => {
                 className={`gallery-card ${isSelected ? 'selected' : ''}`}
                 onClick={() => handleVote(idx)}
               >
-                {/* 엄지척 스택 (투표 수만큼 표시) */}
                 <div className="vote-stack">
-                    {renderThumbs(img.voteCount || 0)}
+                    {renderThumbs(img.voteCount)}
                 </div>
-
-                <img 
-                  src={img.imageUrl} 
-                  alt={img.keyword} 
-                  className="gallery-image"
-                />
+                <img src={imageSrc} alt={subjectText} className="gallery-image"/>
                 <div className="card-info">
-                    <p className="card-nickname">
-                      {formatSubject(img.nickname)}
-                    </p>
+                    <p className="card-nickname">{subjectText}</p>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-
       <div className="score-section">
         <h3 className="score-title">🏆 최종 점수</h3>
         {players.length > 0 ? (
@@ -148,14 +148,9 @@ const VoteScreen = () => {
                 </li>
             ))}
             </ul>
-        ) : (
-            <p>점수 정보를 불러올 수 없습니다.</p>
-        )}
+        ) : (<p>점수 정보를 불러올 수 없습니다.</p>)}
       </div>
-      
-      <button onClick={() => navigate('/')} className="home-button">
-        메인으로 돌아가기
-      </button>
+      <button onClick={() => navigate('/')} className="home-button">메인으로 돌아가기</button>
     </div>
   );
 };
