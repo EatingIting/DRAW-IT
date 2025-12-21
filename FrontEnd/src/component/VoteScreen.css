@@ -25,9 +25,42 @@
 /* 메인 타이틀 */
 .vote-title {
   font-size: 4rem; 
-  margin-bottom: 40px;
+  margin-bottom: 20px; /* 타이머 공간 확보를 위해 여백 줄임 */
   font-weight: normal;
   text-shadow: 4px 4px 0px rgba(0, 0, 0, 0.3);
+}
+
+/* 🔥 [추가] 타이머 관련 스타일 */
+.timer-wrapper {
+  margin-bottom: 30px;
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.timer-text {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+  color: #ffd700; /* 노란색 강조 */
+  text-shadow: 2px 2px 0px rgba(0,0,0,0.5);
+}
+
+.timer-bar-container {
+  width: 100%;
+  height: 20px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 3px solid #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
+}
+
+.timer-bar-fill {
+  height: 100%;
+  background-color: #ff4757; /* 붉은색 게이지 */
+  transition: width 1s linear; /* 1초마다 부드럽게 줄어듦 */
 }
 
 /* 갤러리 그리드 프레임 */
@@ -86,7 +119,7 @@
   transition: all 0.2s ease;
   cursor: pointer;
   min-width: 0;
-  z-index: 1; /* 스택킹 컨텍스트 생성 */
+  z-index: 1; 
 }
 
 /* 선택된 카드 스타일 */
@@ -124,11 +157,7 @@
   text-overflow: ellipsis;
 }
 
-/* =========================================
-   🔥 [문제 해결] 엄지척 아이콘 스타일 수정
-   ========================================= */
-
-/* 엄지척 아이콘들을 담는 컨테이너 */
+/* 엄지척 아이콘 컨테이너 */
 .vote-stack {
   position: absolute;
   left: -15px;
@@ -146,20 +175,11 @@
   font-size: 2rem;
   margin-bottom: -20px;
   filter: drop-shadow(2px 2px 0px rgba(0,0,0,0.5));
-  
-  /* 애니메이션 설정 */
   animation: thumbsUpPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-  
-  /* 기본 상태 */
-  opacity: 0; 
-  transform: scale(0.5) translateY(20px);
+  opacity: 1; 
+  transform: scale(1);
 }
 
-/* 짝수/홀수 아이콘 기울기 */
-.thumb-icon:nth-child(even) { transform: rotate(15deg); }
-.thumb-icon:nth-child(odd) { transform: rotate(-15deg); }
-
-/* 애니메이션 정의 (파일 맨 아래에 꼭 있어야 함) */
 @keyframes thumbsUpPop {
   0% {
     opacity: 0;
@@ -167,7 +187,6 @@
   }
   100% {
     opacity: 1;
-    /* var(--rotate)가 없으면 0deg를 기본값으로 사용 */
     transform: scale(1) rotate(var(--rotate, 0deg));
   }
 }
@@ -199,8 +218,3 @@
   box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.4);
 }
 .home-button:hover { background-color: #f0f0f0; transform: translate(2px, 2px); }
-
-/* 반응형 */
-@media (max-width: 1200px) { .gallery-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 900px) { .gallery-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 600px) { .gallery-grid { grid-template-columns: repeat(2, 1fr); } }
