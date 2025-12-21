@@ -135,8 +135,23 @@
 }
 
 .card-info { margin-top: 8px; width: 100%; color: #000; }
-.card-nickname { font-size: 1.1rem; margin: 5px 0; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-nickname {
+  font-size: 1.1rem; 
+  margin: 5px 0; 
+  font-weight: bold; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
 
+/* 🔥 [추가] 작가 닉네임 스타일 */
+.card-artist {
+  font-size: 0.7em;      /* 주제어보다 작게 (0.7배) */
+  color: #888;           /* 회색 */
+  font-weight: normal;   /* 굵기 빼기 */
+  margin-left: 8px;      /* 주제어와의 간격 */
+  vertical-align: middle; /* 텍스트 정렬 보정 */
+}
 /* 엄지척 아이콘 */
 .vote-stack {
   position: absolute; left: -15px; bottom: 20px; display: flex; flex-direction: column-reverse; align-items: center; width: 40px; z-index: 20; pointer-events: none;

@@ -99,22 +99,38 @@ const VoteScreen = () => {
   const calculateAndShowResults = () => {
     const currentImages = imagesRef.current;
     
-    // 이미지 투표수 내림차순 정렬
+    // 1. 이미지 투표수 내림차순 정렬
     const sortedImages = [...currentImages].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
 
-    // 보너스 점수 매핑 (1등: 75, 2등: 50, 3등: 25)
+    // 🔥 [수정 1] SQL RANK 방식 점수 매핑 (1등: 75, 2등: 50, 3등: 25)
+    // 예: 1등이 2명이면 둘 다 75점, 2등은 없고, 다음 사람은 3등(25점)
     const bonusMap = {};
-    if (sortedImages.length > 0) bonusMap[sortedImages[0].userId] = 75; 
-    if (sortedImages.length > 1) bonusMap[sortedImages[1].userId] = 50; 
-    if (sortedImages.length > 2) bonusMap[sortedImages[2].userId] = 25; 
+    let currentRank = 1;
 
-    // 🔥 [수정 2] 플레이어 중복 제거 (방어 코드)
-    // userId가 같은 유저가 여러 번 들어있는 경우를 대비해 Map으로 유니크하게 필터링
+    for (let i = 0; i < sortedImages.length; i++) {
+        // 첫 번째 사람이 아니면서, 이전 사람보다 투표수가 적으면 랭크 갱신
+        // (투표수가 같으면 currentRank가 유지되어 공동 등수가 됨)
+        if (i > 0 && sortedImages[i].voteCount < sortedImages[i - 1].voteCount) {
+            currentRank = i + 1; // 인덱스 + 1로 순위 건너뛰기 적용
+        }
+
+        let bonus = 0;
+        if (currentRank === 1) bonus = 75;
+        else if (currentRank === 2) bonus = 50;
+        else if (currentRank === 3) bonus = 25;
+        // 4등부터는 0점
+
+        if (bonus > 0) {
+            bonusMap[sortedImages[i].userId] = bonus;
+        }
+    }
+
+    // 플레이어 중복 제거
     const uniquePlayers = Array.from(
         new Map(players.map(p => [p.userId, p])).values()
     );
 
-    const updatedPlayers = uniquePlayers.map(p => {
+    let updatedPlayers = uniquePlayers.map(p => {
       const bonus = bonusMap[p.userId] || 0;
       return {
         ...p,
@@ -125,6 +141,16 @@ const VoteScreen = () => {
 
     // 최종 점수 내림차순 정렬
     updatedPlayers.sort((a, b) => b.totalScore - a.totalScore);
+
+    // 🔥 [수정 2] 화면 표시용 최종 등수(Rank) 계산
+    // 최종 점수에서도 동점자가 나오면 공동 등수로 표시하기 위함
+    let finalRank = 1;
+    updatedPlayers = updatedPlayers.map((p, index) => {
+        if (index > 0 && p.totalScore < updatedPlayers[index - 1].totalScore) {
+            finalRank = index + 1;
+        }
+        return { ...p, realRank: finalRank }; // realRank 필드 추가
+    });
 
     setRankedPlayers(updatedPlayers);
     setShowResults(true); 
@@ -263,7 +289,13 @@ const VoteScreen = () => {
                 </div>
                 <img src={imageSrc} alt={subjectText} className="gallery-image" />
                 <div className="card-info">
-                    <p className="card-nickname">{subjectText}</p>
+                    <p className="card-nickname">
+                      {subjectText}
+                      {/* 닉네임이 있을 경우에만 표시 */}
+                      {img.nickname && (
+                        <span className="card-artist"> {img.nickname}</span>
+                      )}
+                    </p>
                 </div>
               </div>
             );
@@ -275,15 +307,16 @@ const VoteScreen = () => {
         <div className="score-section visible">
           <h3 className="score-title">🏆 최종 순위</h3>
           <ul className="score-list">
-            {/* 🔥 [수정 4] visibleCount 만큼만 잘라서 렌더링 (중복 키 발생 원천 차단) */}
-            {rankedPlayers.slice(0, visibleCount).map((p, index) => {
-              const isTop3 = index < 3;
+            {rankedPlayers.slice(0, visibleCount).map((p) => { // index 파라미터 굳이 안 써도 됨
+              
+              const rank = p.realRank; // 계산된 실제 등수 사용
+              const isTop3 = rank <= 3; // 3등 이내인지 확인 (공동 1등도 포함됨)
               
               return (
-                <li key={p.userId} className={`score-item rank-${index + 1}`}>
+                <li key={p.userId} className={`score-item rank-${rank}`}>
                   {isTop3 && <ConfettiExplosion />}
                   
-                  <span className="rank-badge">{index + 1}위</span>
+                  <span className="rank-badge">{rank}위</span>
                   <span className="player-name">{p.nickname}</span>
                   <div className="score-container">
                     <CountUp target={p.totalScore || 0} />
