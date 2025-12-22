@@ -54,33 +54,76 @@ const VoteScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // ✅ [수정] 모든 키 저장소를 sessionStorage로 변경하기 위해 키 이름은 유지하되 저장소만 변경
+  const VOTE_END_TIME_KEY = `voteEndTime_${lobbyId}`;
+  const MY_VOTE_KEY = `myVote_${lobbyId}`;
+  const FINAL_RESULTS_KEY = `finalResults_${lobbyId}`;
+  const MY_USER_ID_KEY = `voteUserId_${lobbyId}`;
+
   const [players, setPlayers] = useState(location.state?.players || []);
   const [images, setImages] = useState([]);
-  const [myVote, setMyVote] = useState(null);
 
-  // 타이머 및 상태 관리
-  const [timeLeft, setTimeLeft] = useState(30); 
-  const [isVotingDisabled, setIsVotingDisabled] = useState(false);
+  // ✅ [수정] sessionStorage 사용 (탭별로 ID 격리, 새로고침 시 유지)
+  const [myUserId] = useState(() => {
+    const savedId = sessionStorage.getItem(MY_USER_ID_KEY);
+    if (savedId) return savedId;
 
-  // 결과 화면 관련 상태
-  const [showResults, setShowResults] = useState(false); 
-  const [rankedPlayers, setRankedPlayers] = useState([]); 
-  
-  // 🔥 [수정 1] 리스트 배열 대신 '몇 명 보여줄지' 숫자로 관리 (중복 키 에러 해결의 핵심)
+    const newId = "user_" + Math.random().toString(36).substr(2, 9);
+    sessionStorage.setItem(MY_USER_ID_KEY, newId);
+    return newId;
+  });
+
+  // 투표 상태 초기화
+  const [myVote, setMyVote] = useState(() => {
+    const savedVote = sessionStorage.getItem(MY_VOTE_KEY);
+    return savedVote !== null ? parseInt(savedVote, 10) : null;
+  });
+
+  // 타이머 초기화
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const savedEndTime = sessionStorage.getItem(VOTE_END_TIME_KEY);
+    if (savedEndTime) {
+      const remaining = Math.floor((parseInt(savedEndTime, 10) - Date.now()) / 1000);
+      return remaining > 0 ? remaining : 0;
+    }
+    return 30; // 기본값
+  });
+
+  // 결과 화면 상태 초기화
+  const [showResults, setShowResults] = useState(() => {
+    return !!sessionStorage.getItem(FINAL_RESULTS_KEY);
+  });
+
+  const [isVotingDisabled, setIsVotingDisabled] = useState(() => {
+    return !!sessionStorage.getItem(FINAL_RESULTS_KEY);
+  });
+
+  const [rankedPlayers, setRankedPlayers] = useState(() => {
+    const savedResults = sessionStorage.getItem(FINAL_RESULTS_KEY);
+    return savedResults ? JSON.parse(savedResults) : [];
+  });
+
   const [visibleCount, setVisibleCount] = useState(0);
-  
   const [showHomeButton, setShowHomeButton] = useState(false); 
 
   const stompClientRef = useRef(null);
-  const myUserId = useRef("user_" + Math.random().toString(36).substr(2, 9)).current;
   const imagesRef = useRef([]); 
 
   useEffect(() => {
     imagesRef.current = images;
   }, [images]);
 
+  useEffect(() => {
+    if (!sessionStorage.getItem(VOTE_END_TIME_KEY)) {
+      const endTime = Date.now() + 30 * 1000;
+      sessionStorage.setItem(VOTE_END_TIME_KEY, endTime.toString());
+    }
+  }, [lobbyId]);
+
   // 타이머 로직
   useEffect(() => {
+    if (showResults) return;
+
     if (timeLeft <= 0) {
       if (!isVotingDisabled) {
         setIsVotingDisabled(true);
@@ -90,28 +133,26 @@ const VoteScreen = () => {
     }
 
     const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
+      setTimeLeft((prev) => {
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [timeLeft, isVotingDisabled, showResults]);
 
   const calculateAndShowResults = () => {
     const currentImages = imagesRef.current;
     
-    // 1. 이미지 투표수 내림차순 정렬
     const sortedImages = [...currentImages].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
 
-    // 🔥 [수정 1] SQL RANK 방식 점수 매핑 (1등: 75, 2등: 50, 3등: 25)
-    // 예: 1등이 2명이면 둘 다 75점, 2등은 없고, 다음 사람은 3등(25점)
     const bonusMap = {};
     let currentRank = 1;
 
     for (let i = 0; i < sortedImages.length; i++) {
-        // 첫 번째 사람이 아니면서, 이전 사람보다 투표수가 적으면 랭크 갱신
-        // (투표수가 같으면 currentRank가 유지되어 공동 등수가 됨)
         if (i > 0 && sortedImages[i].voteCount < sortedImages[i - 1].voteCount) {
-            currentRank = i + 1; // 인덱스 + 1로 순위 건너뛰기 적용
+            currentRank = i + 1;
         }
 
         let bonus = 0;
@@ -124,9 +165,9 @@ const VoteScreen = () => {
         }
     }
 
-    // 플레이어 중복 제거
+    const currentPlayers = players.length > 0 ? players : [];
     const uniquePlayers = Array.from(
-        new Map(players.map(p => [p.userId, p])).values()
+        new Map(currentPlayers.map(p => [p.userId, p])).values()
     );
 
     let updatedPlayers = uniquePlayers.map(p => {
@@ -138,39 +179,35 @@ const VoteScreen = () => {
       };
     });
 
-    // 최종 점수 내림차순 정렬
     updatedPlayers.sort((a, b) => b.totalScore - a.totalScore);
 
-    // 🔥 [수정 2] 화면 표시용 최종 등수(Rank) 계산
-    // 최종 점수에서도 동점자가 나오면 공동 등수로 표시하기 위함
     let finalRank = 1;
     updatedPlayers = updatedPlayers.map((p, index) => {
         if (index > 0 && p.totalScore < updatedPlayers[index - 1].totalScore) {
             finalRank = index + 1;
         }
-        return { ...p, realRank: finalRank }; // realRank 필드 추가
+        return { ...p, realRank: finalRank };
     });
 
     setRankedPlayers(updatedPlayers);
+    // ✅ [수정] 결과 저장도 sessionStorage
+    sessionStorage.setItem(FINAL_RESULTS_KEY, JSON.stringify(updatedPlayers));
     setShowResults(true); 
   };
 
-  // 🔥 [수정 3] 순차적 랭킹 공개 애니메이션 로직 변경 (visibleCount 증가 방식)
   useEffect(() => {
     if (!showResults || rankedPlayers.length === 0) return;
 
-    // 인터벌을 통해 visibleCount를 1씩 증가시킴
     const interval = setInterval(() => {
       setVisibleCount(prevCount => {
-        // 모든 플레이어를 다 보여줬다면 종료
         if (prevCount >= rankedPlayers.length) {
           clearInterval(interval);
           setTimeout(() => setShowHomeButton(true), 1000);
           return prevCount;
         }
-        return prevCount + 1; // 하나 더 보여줌
+        return prevCount + 1;
       });
-    }, 1500); // 1.5초 간격
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [showResults, rankedPlayers]);
@@ -179,6 +216,9 @@ const VoteScreen = () => {
   useEffect(() => {
     if (!lobbyId) return;
 
+    let retryCount = 0;
+    const maxRetries = 10; 
+
     const fetchVoteData = async () => {
       try {
         const galleryRes = await axios.get(`${API_BASE_URL}/api/game/${lobbyId}/gallery`);
@@ -186,7 +226,16 @@ const VoteScreen = () => {
             ...img,
             voteCount: parseInt(img.voteCount || 0, 10)
         }));
+
         setImages(initializedData);
+
+        // 이미지 개수 부족 시 재시도 (Race Condition 방지)
+        const EXPECTED_ROUNDS = 3; 
+        if (initializedData.length < EXPECTED_ROUNDS && retryCount < maxRetries) {
+            console.log(`⏳ 이미지 로딩 대기 중... (${initializedData.length}/${EXPECTED_ROUNDS})`);
+            retryCount++;
+            setTimeout(fetchVoteData, 1000); 
+        }
 
         if (players.length === 0) {
             try {
@@ -236,7 +285,9 @@ const VoteScreen = () => {
   const handleVote = (index) => {
     if (isVotingDisabled) return;
     if (myVote === index) return;
+    
     setMyVote(index);
+    sessionStorage.setItem(MY_VOTE_KEY, index.toString());
 
     if (stompClientRef.current && stompClientRef.current.connected) {
         stompClientRef.current.publish({
@@ -244,6 +295,15 @@ const VoteScreen = () => {
             body: JSON.stringify({ voteIndex: index, userId: myUserId }),
         });
     }
+  };
+
+  const handleGoHome = () => {
+    // ✅ [수정] sessionStorage 정리
+    sessionStorage.removeItem(VOTE_END_TIME_KEY);
+    sessionStorage.removeItem(MY_VOTE_KEY);
+    sessionStorage.removeItem(FINAL_RESULTS_KEY);
+    sessionStorage.removeItem(MY_USER_ID_KEY); 
+    navigate('/');
   };
 
   const renderThumbs = (count) => {
@@ -260,7 +320,7 @@ const VoteScreen = () => {
 
       <div className="timer-wrapper">
         <div className="timer-text">
-          {timeLeft > 0 ? `투표 종료까지 ${timeLeft}초` : "투표 종료! 결과 집계 중..."}
+          {showResults ? "투표 종료! 결과 발표" : (timeLeft > 0 ? `투표 종료까지 ${timeLeft}초` : "투표 종료! 결과 집계 중...")}
         </div>
         <div className="timer-bar-container">
           <div 
@@ -290,7 +350,6 @@ const VoteScreen = () => {
                 <div className="card-info">
                     <p className="card-nickname">
                       {subjectText}
-                      {/* 닉네임이 있을 경우에만 표시 */}
                       {img.nickname && (
                         <span className="card-artist"> {img.nickname}</span>
                       )}
@@ -306,10 +365,9 @@ const VoteScreen = () => {
         <div className="score-section visible">
           <h3 className="score-title">🏆 최종 순위</h3>
           <ul className="score-list">
-            {rankedPlayers.slice(0, visibleCount).map((p) => { // index 파라미터 굳이 안 써도 됨
-              
-              const rank = p.realRank; // 계산된 실제 등수 사용
-              const isTop3 = rank <= 3; // 3등 이내인지 확인 (공동 1등도 포함됨)
+            {rankedPlayers.slice(0, visibleCount).map((p) => {
+              const rank = p.realRank;
+              const isTop3 = rank <= 3;
               
               return (
                 <li key={p.userId} className={`score-item rank-${rank}`}>
@@ -329,7 +387,7 @@ const VoteScreen = () => {
       )}
       
       {showHomeButton && (
-        <button onClick={() => navigate('/')} className="home-button boing-enter">
+        <button onClick={handleGoHome} className="home-button boing-enter">
           메인으로 돌아가기
         </button>
       )}

@@ -17,7 +17,7 @@ public class GameState {
     private String currentWord;   // 현재 제시어
     private long roundEndTime;    // 타이머 종료 시간
     private int currentRound = 1; // 현재 라운드(1~10)
-    public static final int MAX_ROUND = 10; //총 라운드 10
+    public static final int MAX_ROUND = 3; //총 라운드 10
 
     // 동시성 문제를 방지하기 위해 CopyOnWriteArrayList 사용 (좋습니다!)
     private List<DrawEvent> drawEvents = new CopyOnWriteArrayList<>();
