@@ -115,10 +115,9 @@ const VoteScreen = () => {
         }
 
         let bonus = 0;
-        if (currentRank === 1) bonus = 75;
-        else if (currentRank === 2) bonus = 50;
-        else if (currentRank === 3) bonus = 25;
-        // 4등부터는 0점
+        if (currentRank === 1) bonus = 50;
+        else if (currentRank === 2) bonus = 30;
+        else if (currentRank === 3) bonus = 20;
 
         if (bonus > 0) {
             bonusMap[sortedImages[i].userId] = bonus;
