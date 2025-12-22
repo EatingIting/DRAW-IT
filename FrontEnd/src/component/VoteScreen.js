@@ -54,50 +54,49 @@ const VoteScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ✅ [수정] 모든 키 저장소를 sessionStorage로 변경하기 위해 키 이름은 유지하되 저장소만 변경
   const VOTE_END_TIME_KEY = `voteEndTime_${lobbyId}`;
   const MY_VOTE_KEY = `myVote_${lobbyId}`;
   const FINAL_RESULTS_KEY = `finalResults_${lobbyId}`;
   const MY_USER_ID_KEY = `voteUserId_${lobbyId}`;
+  const TOTAL_ROUNDS_KEY = `totalRounds_${lobbyId}`;
 
   const [players, setPlayers] = useState(location.state?.players || []);
   const [images, setImages] = useState([]);
 
-  // ✅ [수정] sessionStorage 사용 (탭별로 ID 격리, 새로고침 시 유지)
+  // 총 라운드 수
+  const [totalRounds] = useState(() => {
+      if (location.state?.totalRounds) {
+          sessionStorage.setItem(TOTAL_ROUNDS_KEY, location.state.totalRounds);
+          return location.state.totalRounds;
+      }
+      const saved = sessionStorage.getItem(TOTAL_ROUNDS_KEY);
+      return saved ? parseInt(saved, 10) : 3; 
+  });
+
   const [myUserId] = useState(() => {
     const savedId = sessionStorage.getItem(MY_USER_ID_KEY);
     if (savedId) return savedId;
-
     const newId = "user_" + Math.random().toString(36).substr(2, 9);
     sessionStorage.setItem(MY_USER_ID_KEY, newId);
     return newId;
   });
 
-  // 투표 상태 초기화
   const [myVote, setMyVote] = useState(() => {
     const savedVote = sessionStorage.getItem(MY_VOTE_KEY);
     return savedVote !== null ? parseInt(savedVote, 10) : null;
   });
 
-  // 타이머 초기화
   const [timeLeft, setTimeLeft] = useState(() => {
     const savedEndTime = sessionStorage.getItem(VOTE_END_TIME_KEY);
     if (savedEndTime) {
       const remaining = Math.floor((parseInt(savedEndTime, 10) - Date.now()) / 1000);
       return remaining > 0 ? remaining : 0;
     }
-    return 30; // 기본값
+    return 30;
   });
 
-  // 결과 화면 상태 초기화
-  const [showResults, setShowResults] = useState(() => {
-    return !!sessionStorage.getItem(FINAL_RESULTS_KEY);
-  });
-
-  const [isVotingDisabled, setIsVotingDisabled] = useState(() => {
-    return !!sessionStorage.getItem(FINAL_RESULTS_KEY);
-  });
-
+  const [showResults, setShowResults] = useState(() => !!sessionStorage.getItem(FINAL_RESULTS_KEY));
+  const [isVotingDisabled, setIsVotingDisabled] = useState(() => !!sessionStorage.getItem(FINAL_RESULTS_KEY));
   const [rankedPlayers, setRankedPlayers] = useState(() => {
     const savedResults = sessionStorage.getItem(FINAL_RESULTS_KEY);
     return savedResults ? JSON.parse(savedResults) : [];
@@ -125,7 +124,7 @@ const VoteScreen = () => {
     if (showResults) return;
 
     if (timeLeft <= 0) {
-      if (!isVotingDisabled) {
+      if (images.length > 0 && !isVotingDisabled) {
         setIsVotingDisabled(true);
         calculateAndShowResults();
       }
@@ -133,49 +132,93 @@ const VoteScreen = () => {
     }
 
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) return 0;
-        return prev - 1;
-      });
+      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
-
     return () => clearInterval(timer);
-  }, [timeLeft, isVotingDisabled, showResults]);
+  }, [timeLeft, isVotingDisabled, showResults, images.length]);
 
   const calculateAndShowResults = () => {
     const currentImages = imagesRef.current;
     
-    const sortedImages = [...currentImages].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
+    console.log("================ [점수 계산 시작] ================");
+    console.log("📸 전체 이미지 데이터:", currentImages);
+
+    // 1. 투표수 내림차순 정렬
+    const sortedImages = [...currentImages].sort((a, b) => {
+        const countA = parseInt(a.voteCount || 0, 10);
+        const countB = parseInt(b.voteCount || 0, 10);
+        return countB - countA;
+    });
+
+    // 득표수별 인원 수 미리 계산 (동점자 확인용)
+    const voteFrequency = {};
+    sortedImages.forEach(img => {
+        const v = parseInt(img.voteCount || 0, 10);
+        voteFrequency[v] = (voteFrequency[v] || 0) + 1;
+    });
 
     const bonusMap = {};
     let currentRank = 1;
 
     for (let i = 0; i < sortedImages.length; i++) {
-        if (i > 0 && sortedImages[i].voteCount < sortedImages[i - 1].voteCount) {
+        const thisVoteCount = parseInt(sortedImages[i].voteCount || 0, 10);
+        
+        // 이전 사람보다 표가 적으면 랭크 갱신 (SQL Rank 방식: 1, 1, 3, 4...)
+        if (i > 0 && thisVoteCount < parseInt(sortedImages[i - 1].voteCount || 0, 10)) {
             currentRank = i + 1;
         }
 
+        const sameScoreCount = voteFrequency[thisVoteCount];
         let bonus = 0;
-        if (currentRank === 1) bonus = 50;
-        else if (currentRank === 2) bonus = 30;
-        else if (currentRank === 3) bonus = 20;
 
-        if (bonus > 0) {
-            bonusMap[sortedImages[i].userId] = bonus;
+        // 🔥 [조건 수정됨]
+        if (currentRank === 1) {
+            // 1등이 4명 이상이면 보너스 없음 (기존 3명 -> 4명으로 변경)
+            if (sameScoreCount >= 4) {
+                bonus = 0;
+                console.log(`⚠️ 1등이 ${sameScoreCount}명이므로 보너스 취소 (4명 이상 제한)`);
+            } else {
+                bonus = 50;
+            }
+        } else if (currentRank === 2) {
+            // 2등이 3명 이상이면 보너스 없음
+            if (sameScoreCount >= 3) {
+                bonus = 0;
+                console.log(`⚠️ 2등이 ${sameScoreCount}명이므로 보너스 취소 (3명 이상 제한)`);
+            } else {
+                bonus = 30;
+            }
+        } else if (currentRank === 3) {
+            // 3등이 2명 이상이면 보너스 없음
+            if (sameScoreCount >= 2) {
+                bonus = 0;
+                console.log(`⚠️ 3등이 ${sameScoreCount}명이므로 보너스 취소 (2명 이상 제한)`);
+            } else {
+                bonus = 20;
+            }
+        } else {
+            bonus = 0;
+        }
+
+        if (bonus > 0 && sortedImages[i].userId) {
+            console.log(`🏅 [Rank ${currentRank}] ${sortedImages[i].nickname} (${thisVoteCount}표) -> +${bonus}`);
+            bonusMap[String(sortedImages[i].userId)] = bonus;
+        } else {
+            console.log(`❌ [Rank ${currentRank}] ${sortedImages[i].nickname} (${thisVoteCount}표) -> +0`);
         }
     }
 
     const currentPlayers = players.length > 0 ? players : [];
-    const uniquePlayers = Array.from(
-        new Map(currentPlayers.map(p => [p.userId, p])).values()
-    );
+    const uniquePlayers = Array.from(new Map(currentPlayers.map(p => [String(p.userId), p])).values());
 
     let updatedPlayers = uniquePlayers.map(p => {
-      const bonus = bonusMap[p.userId] || 0;
-      return {
-        ...p,
-        totalScore: (p.score || 0) + bonus,
-        bonus: bonus
+      const pid = String(p.userId);
+      const bonus = bonusMap[pid] || 0;
+      
+      return { 
+          ...p, 
+          totalScore: (p.score || 0) + bonus, 
+          bonus: bonus 
       };
     });
 
@@ -189,15 +232,16 @@ const VoteScreen = () => {
         return { ...p, realRank: finalRank };
     });
 
+    console.log("🏆 최종 결과:", updatedPlayers);
+    console.log("================ [계산 종료] ================");
+
     setRankedPlayers(updatedPlayers);
-    // ✅ [수정] 결과 저장도 sessionStorage
     sessionStorage.setItem(FINAL_RESULTS_KEY, JSON.stringify(updatedPlayers));
     setShowResults(true); 
   };
 
   useEffect(() => {
     if (!showResults || rankedPlayers.length === 0) return;
-
     const interval = setInterval(() => {
       setVisibleCount(prevCount => {
         if (prevCount >= rankedPlayers.length) {
@@ -208,11 +252,9 @@ const VoteScreen = () => {
         return prevCount + 1;
       });
     }, 1500);
-
     return () => clearInterval(interval);
   }, [showResults, rankedPlayers]);
 
-  // 데이터 로딩 및 소켓 연결
   useEffect(() => {
     if (!lobbyId) return;
 
@@ -229,8 +271,9 @@ const VoteScreen = () => {
 
         setImages(initializedData);
 
-        // 이미지 개수 부족 시 재시도 (Race Condition 방지)
-        const EXPECTED_ROUNDS = 3; 
+        const EXPECTED_ROUNDS = totalRounds; 
+        console.log(`🖼️ 이미지 로드 현황: ${initializedData.length} / ${EXPECTED_ROUNDS}`);
+
         if (initializedData.length < EXPECTED_ROUNDS && retryCount < maxRetries) {
             console.log(`⏳ 이미지 로딩 대기 중... (${initializedData.length}/${EXPECTED_ROUNDS})`);
             retryCount++;
@@ -251,7 +294,6 @@ const VoteScreen = () => {
     fetchVoteData();
 
     const socket = new SockJS(`${API_BASE_URL}/ws-stomp`);
-    
     const client = new Client({
       webSocketFactory: () => socket,
       debug: () => {},
@@ -263,15 +305,13 @@ const VoteScreen = () => {
             setImages(prevImages => {
                 return prevImages.map((img, idx) => ({
                     ...img,
-                    voteCount: voteCounts[idx] !== undefined ? voteCounts[idx] : img.voteCount
+                    voteCount: voteCounts[idx] !== undefined ? parseInt(voteCounts[idx], 10) : parseInt(img.voteCount || 0, 10)
                 }));
             });
           }
         });
       },
-      onStompError: (frame) => {
-        console.error('소켓 에러:', frame.headers['message']);
-      },
+      onStompError: (frame) => console.error('소켓 에러:', frame.headers['message']),
     });
 
     client.activate();
@@ -280,7 +320,7 @@ const VoteScreen = () => {
     return () => {
       if (stompClientRef.current) stompClientRef.current.deactivate();
     };
-  }, [lobbyId]);
+  }, [lobbyId, totalRounds]);
 
   const handleVote = (index) => {
     if (isVotingDisabled) return;
@@ -298,11 +338,11 @@ const VoteScreen = () => {
   };
 
   const handleGoHome = () => {
-    // ✅ [수정] sessionStorage 정리
     sessionStorage.removeItem(VOTE_END_TIME_KEY);
     sessionStorage.removeItem(MY_VOTE_KEY);
     sessionStorage.removeItem(FINAL_RESULTS_KEY);
-    sessionStorage.removeItem(MY_USER_ID_KEY); 
+    sessionStorage.removeItem(MY_USER_ID_KEY);
+    sessionStorage.removeItem(TOTAL_ROUNDS_KEY); 
     navigate('/');
   };
 

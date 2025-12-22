@@ -449,7 +449,15 @@ function GameScreen({ maxPlayers = 10 }) {
             }
             setTimeOverModal(false);
             alert(`게임이 종료되었습니다.`);
-            navigate(`/vote/${lobbyId}`, { state: { players: playersRef.current } }); // playersRef 사용 권장
+            
+            const totalRounds = data.totalRounds || 3;
+
+            navigate(`/vote/${lobbyId}`, { 
+              state: { 
+                players: playersRef.current,
+                totalRounds: totalRounds
+              }
+            }); // playersRef 사용 권장
           }
         });
 

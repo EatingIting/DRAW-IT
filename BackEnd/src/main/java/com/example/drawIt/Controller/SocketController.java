@@ -260,7 +260,8 @@ public class SocketController {
         // 10라운드 종료 체크
         if (nextRound > GameState.MAX_ROUND) {
             messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
-                    "type", "GAME_OVER"
+                    "type", "GAME_OVER",
+                    "totalRounds", GameState.MAX_ROUND
             ));
             gameStateManager.removeGame(roomId);
             return;
