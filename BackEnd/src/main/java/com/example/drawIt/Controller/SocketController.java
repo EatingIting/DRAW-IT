@@ -7,6 +7,7 @@ import com.example.drawIt.Domain.GameStateManager;
 import com.example.drawIt.Entity.Lobby;
 import com.example.drawIt.Service.GameImageService;
 import com.example.drawIt.Service.LobbyService;
+import com.example.drawIt.Service.MonRnkService;
 import com.example.drawIt.Socket.LobbyUserStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -17,6 +18,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -30,8 +32,11 @@ public class SocketController {
     private final SimpMessagingTemplate messagingTemplate;
     private final GameStateManager gameStateManager;
     private final GameImageService gameImageService;
+    private final MonRnkService monRnkService;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+    private final Set<String> endingLobbies = ConcurrentHashMap.newKeySet();
 
     @MessageMapping("/lobby/{roomId}/join")
     public void join(@DestinationVariable String roomId, @Payload SocketJoinDTO dto, StompHeaderAccessor accessor) {
@@ -259,11 +264,26 @@ public class SocketController {
 
         // 10라운드 종료 체크
         if (nextRound > GameState.MAX_ROUND) {
+
+            // 🔥 [핵심 수정] 이미 종료 예약된 방이면 무시 (중복 실행 방지)
+            if (endingLobbies.contains(roomId)) {
+                return;
+            }
+            endingLobbies.add(roomId); // "이 방은 이제 종료됩니다" 표시
+
+            // 클라이언트에 게임 종료 알림
             messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                     "type", "GAME_OVER",
                     "totalRounds", GameState.MAX_ROUND
             ));
-            gameStateManager.removeGame(roomId);
+
+            System.out.println("🗳️ [Server] 게임 종료! 투표 대기 시작 (60초): " + roomId);
+
+            // 30초 뒤 저장 로직 단 한 번만 실행
+            scheduler.schedule(() -> {
+                finishVoteAndSave(roomId);
+            }, 30, TimeUnit.SECONDS);
+
             return;
         }
         state.setCurrentRound(nextRound);
@@ -345,6 +365,35 @@ public class SocketController {
                 processNextRound(roomId);
             }
         }, 3, TimeUnit.SECONDS);
+    }
+
+    private synchronized void finishVoteAndSave(String roomId) {
+        // 방이 이미 삭제되었거나 처리가 끝났는지 확인
+        if (lobbyUserStore.getUsers(roomId).isEmpty()) return;
+
+        System.out.println("🏆 [Server] 투표 종료 로직 실행: " + roomId);
+
+        try {
+            // 1. 우승자 선별 (수정된 메서드 사용)
+            List<Map<String, String>> winners = gameImageService.getWinners(roomId);
+
+            // 2. 우승자가 있을 경우에만 월간 랭킹에 저장
+            if (!winners.isEmpty()) {
+                monRnkService.saveWinners(winners);
+                System.out.println("💾 월간 랭킹 저장 완료: " + winners.size() + "건");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            // 정리 작업
+            gameImageService.clearRoomData(roomId);
+            gameStateManager.removeGame(roomId);
+
+            // 🔥 [추가] 종료 리스트에서 방 제거
+            endingLobbies.remove(roomId);
+
+            System.out.println("🧹 방 폭파 완료: " + roomId);
+        }
     }
 
     @MessageMapping("/vote/{lobbyId}")

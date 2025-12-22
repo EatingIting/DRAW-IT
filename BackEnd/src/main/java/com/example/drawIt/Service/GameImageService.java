@@ -141,6 +141,33 @@ public class GameImageService {
         return counts;
     }
 
+    public List<Map<String, String>> getWinners(String lobbyId) {
+        List<Map<String, String>> allImages = getGallery(lobbyId);
+
+        if (allImages.isEmpty()) return new ArrayList<>();
+
+        // 1. 최다 득표수 계산
+        int maxVote = allImages.stream()
+                .mapToInt(img -> Integer.parseInt(img.getOrDefault("voteCount", "0")))
+                .max()
+                .orElse(0);
+
+        // 🔥 [수정] 주석 해제! (0표만 있는 경우, 즉 오류 상황에서는 아무것도 리턴하지 않음)
+        if (maxVote == 0) {
+            return new ArrayList<>();
+        }
+
+        // 2. 우승자 필터링
+        List<Map<String, String>> winners = new ArrayList<>();
+        for (Map<String, String> img : allImages) {
+            int voteCount = Integer.parseInt(img.getOrDefault("voteCount", "0"));
+            if (voteCount == maxVote) {
+                winners.add(img);
+            }
+        }
+        return winners;
+    }
+
     public void clearRoomData(String lobbyId) {
         if (roomGallery.containsKey(lobbyId)) roomGallery.remove(lobbyId);
         if (lobbyUserVotes.containsKey(lobbyId)) lobbyUserVotes.remove(lobbyId);
