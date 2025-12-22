@@ -137,7 +137,7 @@ const VoteScreen = () => {
     return () => clearInterval(timer);
   }, [timeLeft, isVotingDisabled, showResults, images.length]);
 
-  const calculateAndShowResults = () => {
+  const calculateAndShowResults = async () => {
     const currentImages = imagesRef.current;
     
     console.log("================ [점수 계산 시작] ================");
@@ -232,6 +232,35 @@ const VoteScreen = () => {
         return { ...p, realRank: finalRank };
     });
 
+    if (sortedImages.length > 0) {
+        // 1. 투표수 순으로 정렬된 이미지 중 상위 3개만 자름
+        const top3Images = sortedImages.slice(0, 3);
+        
+        // 2. 서버로 보낼 데이터 가공 (파일명 추출 등)
+        const winnersPayload = top3Images.map(img => {
+            // imageUrl 예시: "/game/image/{lobbyId}/{filename}"
+            // 여기서 파일명만 추출
+            const parts = img.imageUrl.split('/');
+            const filename = parts[parts.length - 1]; 
+            
+            return {
+                lobbyId: lobbyId,
+                filename: filename,
+                keyword: img.keyword || "Unknown",
+                voteCount: img.voteCount || 0
+            };
+        });
+
+        // 3. 백엔드에 저장 요청 전송
+        try {
+            console.log("🏆 명예의 전당 저장 요청:", winnersPayload);
+            // await를 쓰지 않아도 요청은 전송되므로 화면 전환에 방해되지 않게 처리
+            axios.post(`${API_BASE_URL}/monRnk/saveWinners`, winnersPayload); 
+        } catch (error) {
+            console.error("명예의 전당 저장 실패:", error);
+        }
+    }
+    
     console.log("🏆 최종 결과:", updatedPlayers);
     console.log("================ [계산 종료] ================");
 
