@@ -10,4 +10,5 @@ import java.util.List;
 
 public interface MonRnkRepository extends JpaRepository<MonRnk, Long> {
     Slice<MonRnk> findByRegDateBetweenOrderByRecommendDesc(Date startDate, Date endDate, Pageable pageable);
+    boolean existsByImgName(String imgName);
 }

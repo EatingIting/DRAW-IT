@@ -93,20 +93,28 @@ public class MonRnkService {
 
         for (Map<String, String> info : winners) {
             String lobbyId = info.get("lobbyId");
-            String filename = info.get("filename");
+            String filename = info.get("filename"); // UUID가 포함된 고유한 파일명
             String keyword = info.get("keyword");
+
+            // 🔥 [중복 방지 로직 추가]
+            // 이미 DB에 동일한 파일명(UUID 포함)으로 저장된 기록이 있다면 건너뜁니다.
+            if (monRnkRepository.existsByImgName(filename)) {
+                System.out.println("⚠️ 이미 저장된 이미지입니다. 중복 저장을 건너뜁니다: " + filename);
+                continue;
+            }
 
             Path sourcePath = Paths.get(GAME_TEMP_DIR + lobbyId + "/" + filename);
             Path targetPath = Paths.get(targetDirPath + "/" + filename);
 
             try {
                 if (Files.exists(sourcePath)) {
+                    // ... (기존 파일 복사 로직 동일)
                     Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
                     System.out.println("💾 파일 복사 완료: " + targetPath.toString());
 
                     MonRnk monRnk = MonRnk.builder()
                             .imgName(filename)
-                            .imgUrl(targetPath.toString())
+                            .imgUrl(targetPath.toString()) // 절대 경로보다는 웹 접근 경로로 저장하는 것을 추천하지만, 기존 로직 유지
                             .topic(keyword)
                             .recommend(0)
                             .regDate(now)

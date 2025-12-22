@@ -234,7 +234,9 @@ const VoteScreen = () => {
 
     if (sortedImages.length > 0) {
         // 1. 투표수 순으로 정렬된 이미지 중 상위 3개만 자름
-        const top3Images = sortedImages.slice(0, 3);
+        const top3Images = sortedImages
+          .filter(img => parseInt(img.voteCount || 0, 10) > 0) // 🔥 이 부분 추가
+          .slice(0, 3);
         
         // 2. 서버로 보낼 데이터 가공 (파일명 추출 등)
         const winnersPayload = top3Images.map(img => {
@@ -260,7 +262,7 @@ const VoteScreen = () => {
             console.error("명예의 전당 저장 실패:", error);
         }
     }
-    
+
     console.log("🏆 최종 결과:", updatedPlayers);
     console.log("================ [계산 종료] ================");
 
