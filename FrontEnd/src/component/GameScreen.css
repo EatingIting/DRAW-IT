@@ -266,6 +266,26 @@
   z-index: 10;
 }
 
+.tool-wrapper {
+  position: relative; /* 자식 요소(설정창)의 기준점이 됨 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-popover {
+  position: absolute;
+  
+  /* 버튼의 왼쪽으로 띄우기 (간격 15px) */
+  right: 10px;
+  top: -10px;
+  left: auto;
+  
+  z-index: 200; /* 버튼보다 위에 */
+  /* 말풍선 꼬리나 애니메이션 등을 추가할 수 있음 */
+  animation: popIn 0.2s ease-out;
+}
+
 /* 스케치북 이미지 배경 */
 .drawingBoard {
   width: 900px;
@@ -287,8 +307,33 @@
   border-radius: 20px;
   width: 746px;
   height: 603px;
-  cursor: crosshair;
+  cursor: none;
   touch-action: none;
+}
+
+.custom-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  
+  /* 동그라미 모양 */
+  border-radius: 50%;
+  
+  /* 테두리: 배경색에 상관없이 잘 보이도록 검은색+흰색 이중 처리 */
+  border: 2px solid #333; 
+  box-shadow: 0 0 0 1px #fff; 
+  
+  /* 내부 살짝 투명하게 채우기 (선택사항) */
+  background-color: rgba(255, 255, 255, 0.1); 
+
+  /* 중요: 마우스 이벤트를 통과시켜서 뒤에 있는 캔버스에 그림이 그려지게 함 */
+  pointer-events: none; 
+  
+  /* 마우스 포인터가 원의 정중앙에 오도록 좌표 보정 */
+  transform: translate(-50%, -50%);
+  
+  z-index: 9999; /* 제일 위에 표시 */
+  display: none; /* 기본적으로 숨김 (캔버스 위에 올렸을 때만 표시) */
 }
 
 /* 도구함 전체 컨테이너 (주제어 + 도구박스) */

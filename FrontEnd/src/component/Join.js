@@ -72,6 +72,17 @@ function Join() {
 
     const nickname = sessionStorage.getItem("nickname") || "";
 
+    const filterValidRooms = (roomList) => {
+        if (!Array.isArray(roomList)) return [];
+        return roomList.filter(room => {
+            // 게임 중인데 1명 이하(0명, 1명)라면 유령 세션이므로 false 반환 (제거)
+            if (room.gameStarted && room.currentCount < 2) {
+                return false;
+            }
+            return true; // 그 외에는 표시
+        });
+    };
+
     // 🔄 [Effect] 초기 로드 및 소켓 연결
     useEffect(() => {
         console.group("🚀 [Join Page] 초기화 시작");
@@ -90,30 +101,34 @@ function Join() {
     const fetchRoomList = async () => {
         try {
             const res = await axios.get(`${API_BASE_URL}/api/lobbies`);
-            setRooms(res.data);
-            console.log("📦 [HTTP] 방 목록 로드 완료:", res.data.length + "개");
+            // ✅ 받아온 데이터를 필터링 후 상태 저장
+            const validRooms = filterValidRooms(res.data);
+            setRooms(validRooms);
+            console.log("📦 [HTTP] 방 목록 로드 완료:", validRooms.length + "개");
         } catch (err) {
             console.error("❌ [HTTP] 방 목록 로드 실패:", err);
         }
     };
 
-    // 🔌 [WebSocket] 소켓 연결 및 구독
+    // [WebSocket] 소켓 연결 및 구독
     const connectWebSocket = () => {
         client.current = new Client({
             webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
-            reconnectDelay: 5000, // 끊기면 5초 뒤 재연결 시도
+            reconnectDelay: 5000, 
             
             onConnect: () => {
                 console.log("🟢 [WS] 소켓 연결 성공!");
                 
-                // 실시간 방 목록 구독
                 client.current.subscribe('/topic/lobbies', (message) => {
-                    const updatedRooms = JSON.parse(message.body);
-                    setRooms(updatedRooms);
+                    const updatedRoomsRaw = JSON.parse(message.body);
                     
-                    // 🔍 개발자 도구에서 표 형태로 깔끔하게 확인 가능
+                    // 소켓으로 온 데이터도 필터링 적용!
+                    const validRooms = filterValidRooms(updatedRoomsRaw);
+                    
+                    setRooms(validRooms);
+                    
                     console.groupCollapsed(`🔄 [WS] 방 목록 갱신됨 (${new Date().toLocaleTimeString()})`);
-                    console.table(updatedRooms.map(r => ({
+                    console.table(validRooms.map(r => ({
                         제목: r.name,
                         인원: `${r.currentCount}/${r.maxCount}`,
                         상태: r.gameStarted ? '게임중' : '대기중',
@@ -129,7 +144,7 @@ function Join() {
         client.current.activate();
     };
 
-    // 🚪 [Handler] 방 입장 처리 로직
+    // [Handler] 방 입장 처리 로직
     const handleJoinRoom = async (room) => {
         // 1. 닉네임 체크
         if (!nickname.trim()) {

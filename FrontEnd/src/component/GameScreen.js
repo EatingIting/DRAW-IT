@@ -1,6 +1,6 @@
 import { Client } from '@stomp/stompjs';
 import axios from 'axios';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import SockJS from 'sockjs-client';
 
@@ -66,6 +66,10 @@ function GameScreen({ maxPlayers = 10 }) {
   // 시간 초과 알림 모달
   const [timeOverModal, setTimeOverModal] = useState(false);
 
+  const [forceExitModal, setForceExitModal] = useState(false);
+
+  const [gameOverModal, setGameOverModal] = useState(false);
+
   // 출제자, 유저한테 뜨는 모달
   const [roundModal, setRoundModal] = useState({
     visible: false,
@@ -84,6 +88,8 @@ function GameScreen({ maxPlayers = 10 }) {
   const currentStrokeRef = useRef([]);
   const pendingHistoryRef = useRef([]);
   const canvasReadyRef = useRef(false);
+
+  const customCursorRef = useRef(null); // 커서 굵기에 따른 변화 관리
 
   const [activeTool, setActiveTool] = useState(() => localStorage.getItem('activeTool') || 'pen');
   const [showModal, setShowModal] = useState(false);
@@ -104,7 +110,11 @@ function GameScreen({ maxPlayers = 10 }) {
   const prevDrawerIdRef = useRef(null);
   const keywordRef = useRef('');
 
-  const handleLeaveGame = () => {
+  const [shouldForceLeave, setShouldForceLeave] = useState(false);
+
+  const isGameStartedRef = useRef(false);
+
+  const handleLeaveGame = useCallback (() => {
     // 1. 소켓 먼저 끊기 (중복 메시지 수신 방지)
     if (stompRef.current?.connected) {
       stompRef.current.publish({
@@ -115,13 +125,14 @@ function GameScreen({ maxPlayers = 10 }) {
     }
     // 2. 페이지 이동
     navigate('/join');
-  };
+  }, [lobbyId, userId, navigate]);
+
   const handleToolClick = (tool) => {
     if (activeTool === tool) {
       setShowModal((prev) => !prev);
     } else {
       setActiveTool(tool);
-      setShowModal(true);
+      setShowModal(false);
     }
   };
 
@@ -153,6 +164,28 @@ function GameScreen({ maxPlayers = 10 }) {
     roundModalTimerRef.current = setTimeout(() => {
       setRoundModal((prev) => ({ ...prev, visible: false }));
     }, 3000);
+  };
+
+  const handleCursorMove = (e) => {
+    if (customCursorRef.current) {
+      customCursorRef.current.style.left = `${e.clientX}px`;
+      customCursorRef.current.style.top = `${e.clientY}px`;
+    }
+    // 그림 그리기 함수(draw)도 호출해야 함 (기존 로직 유지)
+    draw(e); 
+  };
+
+  const handleCursorEnter = () => {
+    if (customCursorRef.current) {
+      customCursorRef.current.style.display = 'block';
+    }
+  };
+
+  const handleCursorLeave = () => {
+    if (customCursorRef.current) {
+      customCursorRef.current.style.display = 'none';
+    }
+    endDraw(); // 기존 캔버스 벗어날 때 그리기 종료
   };
 
   const saveMyDrawing = async (currentKeyword) => {
@@ -228,7 +261,17 @@ function GameScreen({ maxPlayers = 10 }) {
   const playersRef = useRef([]); // 최신 플레이어 상태를 담을 Ref
     useEffect(() => {
       playersRef.current = players;
-    }, [players])
+    }, [players]);
+
+  useEffect(() => {
+    isGameStartedRef.current = isGameStarted;
+  }, [isGameStarted]);
+
+  useEffect(() => {
+    if (shouldForceLeave) {
+      setForceExitModal(true);
+    }
+  }, [shouldForceLeave]);
 
   useEffect(() => {
     if (!userId || !nickname || !lobbyId) return;
@@ -306,47 +349,55 @@ function GameScreen({ maxPlayers = 10 }) {
 
           if (data.type === 'USER_UPDATE') {
             const hostId = data.hostUserId;
-            const mappedUsers = (data.users || []).map((u) => ({
-              ...u,
-              host: String(u.userId) === String(hostId),
-            })).sort((a, b) => (a.host === b.host ? 0 : a.host ? -1 : 1));
-            
-            setPlayers(mappedUsers);
-            console.log(`[USER_UPDATE] 인원: ${mappedUsers.length}, 게임중: ${data.gameStarted}`);
 
-            // 🔥 [게임 중 혼자 남음 처리 수정]
-            // alert는 비동기 처리 중 씹힐 수 있으므로 window.confirm이나 확실한 로직 필요
-            if (data.gameStarted && mappedUsers.length < 2) {
-                // 브라우저 렌더링 사이클 확보를 위해 0ms setTimeout 사용
-                setTimeout(() => {
-                    alert("모든 유저가 나갔습니다. 게임을 종료합니다.");
-                    handleLeaveGame();
-                }, 0);
-                return;
+            const mappedUsers = (data.users || [])
+              .map((u) => ({
+                ...u,
+                host: String(u.userId) === String(hostId),
+              }))
+              .sort((a, b) => (a.host === b.host ? 0 : a.host ? -1 : 1));
+
+            setPlayers(mappedUsers);
+
+            console.log(
+              `[USER_UPDATE] 인원: ${mappedUsers.length}, 게임중: ${data.gameStarted}`
+            );
+
+            if (
+              (data.gameStarted || isGameStartedRef.current) &&
+              mappedUsers.length < 2 &&
+              !shouldForceLeave
+            ) {
+              setShouldForceLeave(true);
+              return;
             }
-            
+
+            /* =========================
+              게임 시작 상태 동기화
+            ========================= */
             if (data.gameStarted) {
               setIsGameStarted(true);
+
               if (data.drawerUserId) {
-                  updateDrawerState(data.drawerUserId, data.word, data.roundEndTime, false);
-                  prevDrawerIdRef.current = String(data.drawerUserId);
-                  if (isFirstSocketUpdate.current) {
-                      setAnswerModal({ visible: false, winner: '', answer: '' });
-                      setTimeOverModal(false);
-                      setTimeout(() => {
-                            showRoundModal(data.drawerUserId, data.word);
-                      }, 300);
-                  }
+                updateDrawerState(
+                  data.drawerUserId,
+                  data.word,
+                  data.roundEndTime
+                );
+
+                prevDrawerIdRef.current = String(data.drawerUserId);
+
+                if (isFirstSocketUpdate.current) {
+                  setAnswerModal({ visible: false, winner: '', answer: '' });
+                  setTimeOverModal(false);
+
+                  setTimeout(() => {
+                    showRoundModal(data.drawerUserId, data.word);
+                  }, 300);
+                }
               }
             } else {
-              if (data.gameStarted && mappedUsers.length < 2) {
-                // 여기도 동일하게 처리
-                setTimeout(() => {
-                    alert("유저가 없습니다. 세션을 종료합니다.");
-                    handleLeaveGame();
-                }, 0);
-                return;
-              }
+              setIsGameStarted(false);
             }
             isFirstSocketUpdate.current = false;
           }
@@ -443,14 +494,31 @@ function GameScreen({ maxPlayers = 10 }) {
             }
           }
 
-          if (data.type === 'GAME_OVER') {
-            if (String(prevDrawerIdRef.current) === String(userId)) {
-              saveMyDrawing(keywordRef.current);
+          if (data.type === 'GAME_OVER') {                
+                // (1) 출제자 그림 저장 (에러나도 무시하고 진행)
+                if (String(prevDrawerIdRef.current) === String(userId)) {
+                    try {
+                        saveMyDrawing(keywordRef.current || "");
+                    } catch (e) {
+                        console.error("그림 저장 실패:", e);
+                    }
+                }
+
+                // 충돌 방지를 위해 기존 모달들 닫기
+                setAnswerModal({ visible: false, winner: '', answer: '' });
+                setTimeOverModal(false);
+                setRoundModal({ visible: false, role: null, word: '' });
+
+                // 게임 종료 모달 띄우기 (모든 유저에게 보임)
+                setGameOverModal(true);
+
+                // 3초 뒤에 투표 페이지로 이동
+                setTimeout(() => {
+                    navigate(`/vote/${lobbyId}`, { 
+                        state: { players: playersRef.current } 
+                    });
+                }, 3000);
             }
-            setTimeOverModal(false);
-            alert(`게임이 종료되었습니다.`);
-            navigate(`/vote/${lobbyId}`, { state: { players: playersRef.current } }); // playersRef 사용 권장
-          }
         });
 
         // ... (draw, history, chat 등 기존 구독 로직 동일)
@@ -914,6 +982,57 @@ function GameScreen({ maxPlayers = 10 }) {
 
   return (
     <div className="game-wrapper">
+
+      {gameOverModal && createPortal(
+        <div className="answer-modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="answer-modal-content">
+            <div className="confetti" style={{ fontSize: '3rem' }}>🗳️</div>
+            <h2>게임 종료!</h2>
+            <div className="modal-info">
+              <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                모든 라운드가 끝났습니다.
+              </p>
+              <p style={{ marginTop: '10px', color: '#666' }}>
+                잠시 후 투표 결과 페이지로 이동합니다...
+              </p>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {forceExitModal && createPortal(
+        <div className="answer-modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="answer-modal-content">
+            <div className="confetti" style={{ fontSize: '3rem' }}>🥹</div>
+            <h2>게임 종료</h2>
+            <div className="modal-info">
+              <p style={{ fontSize: '1.1rem', marginBottom: '10px' }}>
+                모든 플레이어가 나갔습니다.<br />
+                대기실로 돌아갑니다.
+              </p>
+              <button
+                className="confirm-btn"
+                onClick={handleLeaveGame}
+                style={{
+                  marginTop: '15px',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#1971c2',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '1rem'
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
        
        {answerModal.visible && createPortal(
          <div className="answer-modal-overlay" style={{ zIndex: 99999 }}>
@@ -1005,7 +1124,11 @@ function GameScreen({ maxPlayers = 10 }) {
                              ref={canvasRef}
                              className="canvas"
                              width={746} height={603}
-                             onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+                             onMouseDown={startDraw} 
+                             onMouseMove={handleCursorMove} 
+                             onMouseUp={endDraw} 
+                             onMouseEnter={handleCursorEnter}
+                             onMouseLeave={handleCursorLeave}
                            />
                         </div>
                     </div>
@@ -1018,14 +1141,60 @@ function GameScreen({ maxPlayers = 10 }) {
                             </div>
                           )}
                           <div className="tool-box">
-                             {showModal && activeTool === 'pen' && <PenSettings color={penColor} setColor={setPenColor} width={penWidth} setWidth={setPenWidth} onClose={() => setShowModal(false)} />}
-                             {showModal && activeTool === 'fill' && <FillSettings color={fillColor} setColor={setFillColor} onClose={() => setShowModal(false)} />}
-                             {showModal && activeTool === 'eraser' && <EraserSettings width={eraserWidth} setWidth={setEraserWidth} onClose={() => setShowModal(false)} />}
+                            <div className="tool-wrapper">
+                              <div 
+                                className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`} 
+                                onClick={() => handleToolClick('pen')}
+                              >
+                                <PenIcon color={penColor} />
+                              </div>
+                             {showModal && activeTool === 'pen' && (
+                                <div className="settings-popover">
+                                  <PenSettings 
+                                    color={penColor} setColor={setPenColor} 
+                                    width={penWidth} setWidth={setPenWidth} 
+                                    onClose={() => setShowModal(false)} 
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="tool-wrapper">
+                              <div 
+                                className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`} 
+                                onClick={() => handleToolClick('fill')}
+                              >
+                                <img src="/svg/fill.svg" alt="fill" />
+                              </div>
+                              {/* 채우기 설정창 */}
+                              {showModal && activeTool === 'fill' && (
+                                <div className="settings-popover">
+                                  <FillSettings 
+                                    color={fillColor} setColor={setFillColor} 
+                                    onClose={() => setShowModal(false)} 
+                                  />
+                                </div>
+                              )}
+                            </div>
                              
-                             <div className={`tool-btn ${activeTool === 'pen' ? 'active' : ''}`} onClick={() => handleToolClick('pen')}><PenIcon color={penColor} /></div>
-                             <div className={`tool-btn ${activeTool === 'fill' ? 'active' : ''}`} onClick={() => handleToolClick('fill')}><img src="/svg/fill.svg" alt="fill" /></div>
-                             <div className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} onClick={() => handleToolClick('eraser')}><img src="/svg/eraser.svg" alt="eraser" /></div>
-                             
+                            <div className="tool-wrapper">
+                              <div 
+                                className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} 
+                                onClick={() => handleToolClick('eraser')}
+                              >
+                                <img src="/svg/eraser.svg" alt="eraser" />
+                              </div>
+                              {/* 지우개 설정창: 지우개 버튼 옆에 렌더링 */}
+                              {showModal && activeTool === 'eraser' && (
+                                <div className="settings-popover">
+                                  <EraserSettings 
+                                    width={eraserWidth} setWidth={setEraserWidth} 
+                                    onClose={() => setShowModal(false)} 
+                                  />
+                                </div>
+                              )}
+                            </div>
+                            
                              <div className="tool-btn" onClick={handleUndo} title="Undo">
                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                  <path d="M9 14 4 9l5-5"/>
@@ -1074,6 +1243,15 @@ function GameScreen({ maxPlayers = 10 }) {
               }}
             />
           <button onClick={handleSendChat}>전송</button>
+       </div>
+       <div
+         ref={customCursorRef}
+         className='custom-cursor'
+         style={{
+          width : activeTool === 'eraser' ? eraserWidth : penWidth,
+          height : activeTool === 'eraser' ? eraserWidth : penWidth,
+          display : activeTool === 'Fill' ? 'none' : undefined
+         }}>
        </div>
     </div>
   );
