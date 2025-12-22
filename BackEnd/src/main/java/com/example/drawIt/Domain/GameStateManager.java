@@ -15,8 +15,8 @@ public class GameStateManager {
         this.wordProvider = wordProvider;
     }
 
-    public GameState createGame(String roomId, String drawerUserId, String mode) {
-        GameState state = new GameState(roomId, drawerUserId, mode);
+    public GameState createGame(String roomId, String drawerUserId, String mode, int roundDuration) {
+        GameState state = new GameState(roomId, drawerUserId, mode, roundDuration);
         String word = wordProvider.pickUniqueWord(state, mode);
         state.setCurrentWord(word);
 

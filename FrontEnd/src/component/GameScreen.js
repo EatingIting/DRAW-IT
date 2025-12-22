@@ -37,7 +37,7 @@ function GameScreen({ maxPlayers = 10 }) {
 
   const stompRef = useRef(null);
   
-  // [수정] 누락된 Ref 정의 추가
+  // 누락된 Ref 정의 추가
   const connectedRef = useRef(false);
   const reconnectingRef = useRef(false);
   const subsRef = useRef([]);
@@ -113,6 +113,10 @@ function GameScreen({ maxPlayers = 10 }) {
   const [shouldForceLeave, setShouldForceLeave] = useState(false);
 
   const isGameStartedRef = useRef(false);
+
+  const chatInputRef = useRef(null);
+
+  const [remainingSeconds, setRemainingSeconds] = useState(null);
 
   const handleLeaveGame = useCallback (() => {
     // 1. 소켓 먼저 끊기 (중복 메시지 수신 방지)
@@ -276,10 +280,10 @@ function GameScreen({ maxPlayers = 10 }) {
   useEffect(() => {
     if (!userId || !nickname || !lobbyId) return;
     
-    // [수정] isMounted 변수 정의
+    // isMounted 변수 정의
     let isMounted = true; 
 
-    // [수정] safeUnsubscribeAll 함수 정의
+    // safeUnsubscribeAll 함수 정의
     const safeUnsubscribeAll = () => {
         if (subsRef.current) {
             subsRef.current.forEach(sub => sub.unsubscribe());
@@ -287,7 +291,7 @@ function GameScreen({ maxPlayers = 10 }) {
         }
     };
 
-    // [수정] safeDeactivate 함수 정의
+    // safeDeactivate 함수 정의
     const safeDeactivate = (client) => {
         if (client && client.active) {
             client.deactivate();
@@ -296,15 +300,15 @@ function GameScreen({ maxPlayers = 10 }) {
 
     isFirstSocketUpdate.current = true;
 
-    // [수정] connect 함수로 래핑
+    // connect 함수로 래핑
     const connect = () => {
       const client = new Client({
         webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
 
-        // ✅ 자동 재연결
+        // 자동 재연결
         reconnectDelay: 3000,
 
-        // ✅ heartbeat (서버가 지원할 때 안정성 ↑)
+        // heartbeat (서버가 지원할 때 안정성 ↑)
         heartbeatIncoming: 10000,
         heartbeatOutgoing: 10000,
 
@@ -317,10 +321,10 @@ function GameScreen({ maxPlayers = 10 }) {
           connectedRef.current = true;
           reconnectingRef.current = false;
 
-          // ✅ 구독 중복 방지: 연결될 때마다 기존 구독 정리 후 다시 구독
+          // 구독 중복 방지: 연결될 때마다 기존 구독 정리 후 다시 구독
           safeUnsubscribeAll();
 
-          console.log("✅ Game STOMP connected");
+          console.log("Game STOMP connected");
 
           // 1) lobby topic
           const subLobby = client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
@@ -331,6 +335,12 @@ function GameScreen({ maxPlayers = 10 }) {
             setCurrentDrawerId(newDrawerId);
             if (newWord) setKeyword(newWord);
             if (endTime !== undefined) setRoundEndTime(endTime);
+          };
+
+          const updateRoundSignature = (drawerId, word) => {
+            const safeWord = word || "???"; // 단어가 없으면 ???로 통일
+            const signature = `${lobbyId}_${drawerId}_${safeWord}`;
+            sessionStorage.setItem('currentRoundSignature', signature);
           };
 
           if (data.type === 'CORRECT_ANSWER') {
@@ -388,15 +398,27 @@ function GameScreen({ maxPlayers = 10 }) {
                 prevDrawerIdRef.current = String(data.drawerUserId);
 
                 if (isFirstSocketUpdate.current) {
-                  setAnswerModal({ visible: false, winner: '', answer: '' });
-                  setTimeOverModal(false);
+                    setAnswerModal({ visible: false, winner: '', answer: '' });
+                    setTimeOverModal(false);
 
-                  setTimeout(() => {
-                    showRoundModal(data.drawerUserId, data.word);
-                  }, 300);
+                    const safeWord = data.word || "???";
+                    const currentSig = `${lobbyId}_${data.drawerUserId}_${safeWord}`;
+                    
+                    const storedSig = sessionStorage.getItem('currentRoundSignature');
+
+                    // 저장된 키와 다를 때만 모달 띄움
+                    if (currentSig !== storedSig) {
+                        setTimeout(() => {
+                            showRoundModal(data.drawerUserId, data.word);
+                        }, 300);
+                        // 모달 띄웠으니 키 업데이트
+                        sessionStorage.setItem('currentRoundSignature', currentSig);
+                    } else {
+                        console.log("🔄 새로고침 감지됨: 모달 생략");
+                    }
+                  }
                 }
-              }
-            } else {
+              } else {
               setIsGameStarted(false);
             }
             isFirstSocketUpdate.current = false;
@@ -413,27 +435,31 @@ function GameScreen({ maxPlayers = 10 }) {
 
             showRoundModal(targetDrawerId, targetWord);
 
+            updateRoundSignature(targetDrawerId, targetWord);
+
             // 현재 출제자 기록
             prevDrawerIdRef.current = String(targetDrawerId);
-
             isFirstSocketUpdate.current = false;
           }
 
 
           if (data.type === 'ROUND_START') {
             setRoundEndTime(data.roundEndTime);
+            if (currentDrawerId) {
+              updateRoundSignature(currentDrawerId, data.roundEndTime);
+            }
           }
 
           if (data.type === 'DRAWER_CHANGED') {
             /* =========================
-              1️⃣ 이전 출제자면 그림 저장
+              이전 출제자면 그림 저장
             ========================= */
             if (String(prevDrawerIdRef.current) === String(userId)) {
               saveMyDrawing(keywordRef.current);
             }
 
             /* =========================
-              2️⃣ 라운드 상태 초기화
+              라운드 상태 초기화
             ========================= */
             setRoundFinished(false);
             setWinnerId(null);
@@ -444,7 +470,7 @@ function GameScreen({ maxPlayers = 10 }) {
             resetCanvasLocal();
 
             /* =========================
-              3️⃣ 출제자 / 단어 결정
+              출제자 / 단어 결정
             ========================= */
             const targetDrawerId = data.drawerUserId || data.drawerId;
             const targetWord = data.word || data.keyword || '???';
@@ -452,12 +478,14 @@ function GameScreen({ maxPlayers = 10 }) {
             updateDrawerState(targetDrawerId, targetWord, 0);
 
             /* =========================
-              4️⃣ 🔥 통합 모달 (showRoundModal)
+              통합 모달 (showRoundModal)
             ========================= */
             showRoundModal(targetDrawerId, targetWord);
 
+            updateRoundSignature(targetDrawerId, targetWord);
+
             /* =========================
-              5️⃣ 내가 출제자라면 캔버스 클리어 + 펜 초기화
+              내가 출제자라면 캔버스 클리어 + 펜 초기화
             ========================= */
             if (String(targetDrawerId) === String(userId)) {
               stompRef.current?.publish({
@@ -470,7 +498,7 @@ function GameScreen({ maxPlayers = 10 }) {
             }
 
             /* =========================
-              6️⃣ 현재 출제자 기록
+              현재 출제자 기록
             ========================= */
             prevDrawerIdRef.current = String(targetDrawerId);
           }
@@ -495,7 +523,7 @@ function GameScreen({ maxPlayers = 10 }) {
           }
 
           if (data.type === 'GAME_OVER') {                
-                // (1) 출제자 그림 저장 (에러나도 무시하고 진행)
+                // 출제자 그림 저장 (에러나도 무시하고 진행)
                 if (String(prevDrawerIdRef.current) === String(userId)) {
                     try {
                         saveMyDrawing(keywordRef.current || "");
@@ -504,12 +532,14 @@ function GameScreen({ maxPlayers = 10 }) {
                     }
                 }
 
-                // 충돌 방지를 위해 기존 모달들 닫기
+                // 기존 모달 닫기
+                sessionStorage.removeItem('currentRoundSignature');
+                
                 setAnswerModal({ visible: false, winner: '', answer: '' });
                 setTimeOverModal(false);
                 setRoundModal({ visible: false, role: null, word: '' });
 
-                // 게임 종료 모달 띄우기 (모든 유저에게 보임)
+                // 게임 종료 모달
                 setGameOverModal(true);
 
                 // 3초 뒤에 투표 페이지로 이동
@@ -521,14 +551,12 @@ function GameScreen({ maxPlayers = 10 }) {
             }
         });
 
-        // ... (draw, history, chat 등 기존 구독 로직 동일)
-        // [수정] subDraw 변수에 할당하도록 수정
         const subDraw = client.subscribe(`/topic/lobby/${lobbyId}/draw`, (msg) => {
             const evt = JSON.parse(msg.body);
             applyRemoteDraw(evt);
           });
 
-          // 3) history topic
+          // history topic
           const subHistory = client.subscribe(`/topic/history/${userId}`, (msg) => {
             const data = JSON.parse(msg.body);
             const historyList = data.history || [];
@@ -542,7 +570,7 @@ function GameScreen({ maxPlayers = 10 }) {
             redoStackRef.current = redoList;
           });
 
-          // 4) chat bubble
+          // chat bubble
           const subChat = client.subscribe('/topic/chat/bubble', (msg) => {
             const data = JSON.parse(msg.body);
             if (data.type !== 'CHAT_BUBBLE') return;
@@ -562,7 +590,7 @@ function GameScreen({ maxPlayers = 10 }) {
 
           subsRef.current = [subLobby, subDraw, subHistory, subChat];
 
-          // ✅ (재)연결될 때마다 join 보냄
+          // (재)연결될 때마다 join 보냄
           try {
             client.publish({
               destination: `/app/lobby/${lobbyId}/join`,
@@ -573,26 +601,23 @@ function GameScreen({ maxPlayers = 10 }) {
           }
         },
 
-        // ✅ STOMP 레벨 에러
+        // STOMP 레벨 에러
         onStompError: (frame) => {
-          console.error("❌ STOMP error:", frame?.headers?.message || frame);
+          console.error("STOMP error:", frame?.headers?.message || frame);
         },
 
-        // ✅ WebSocket 레벨 에러/종료
+        // WebSocket 레벨 에러/종료
         onWebSocketError: (evt) => {
-          console.warn("⚠️ WebSocket error:", evt);
+          console.warn("WebSocket error:", evt);
         },
         onWebSocketClose: () => {
           connectedRef.current = false;
           reconnectingRef.current = true;
-
-          // 끊김 순간에 "2명 미만 처리" 타이머가 돌고 있으면 일단 유지(유예가 있으니까)
-          // 필요하면 여기서 UI로 "재연결중..." 표시 가능
-          console.warn("⚠️ WebSocket closed (reconnecting...)");
+          console.warn("WebSocket closed (reconnecting...)");
         },
         onDisconnect: () => {
           connectedRef.current = false;
-          console.warn("⚠️ STOMP disconnected");
+          console.warn("STOMP disconnected");
         },
       });
 
@@ -604,9 +629,6 @@ function GameScreen({ maxPlayers = 10 }) {
 
     return () => {
       isMounted = false;
-      // [수정] 정의되지 않은 함수 호출 제거 (clearMinPlayersGraceTimer)
-
-      // bubble 타이머 정리
       Object.values(bubbleTimeoutRef.current).forEach((t) => clearTimeout(t));
       bubbleTimeoutRef.current = {};
 
@@ -617,9 +639,7 @@ function GameScreen({ maxPlayers = 10 }) {
     };
   }, [lobbyId, userId, nickname, navigate]);
 
-  // 🔥 [수정] 타이머 안전장치 추가 (에러 방지 핵심)
   useEffect(() => {
-    // 타이머바 DOM 요소가 없으면 애니메이션 시작조차 하지 않음
     if (!isGameStarted || !roundEndTime) return;
 
     const GAME_DURATION = 60000;
@@ -629,9 +649,7 @@ function GameScreen({ maxPlayers = 10 }) {
       const now = Date.now();
       const remaining = roundEndTime - now;
 
-      // DOM 요소가 존재하는지 매 프레임 확인
       if (!timerBarRef.current) {
-          // 컴포넌트가 언마운트되었거나 페이지 이동 중이라면 루프 종료
           return;
       }
 
@@ -642,6 +660,9 @@ function GameScreen({ maxPlayers = 10 }) {
 
       const percent = Math.max(0, (remaining / GAME_DURATION) * 100);
       timerBarRef.current.style.width = `${percent}%`;
+
+      const seconds = Math.max(0, Math.ceil(remaining / 1000));
+      setRemainingSeconds(seconds);
       
       rafId = requestAnimationFrame(updateTimer);
     };
@@ -653,7 +674,6 @@ function GameScreen({ maxPlayers = 10 }) {
     };
   }, [roundEndTime, isGameStarted]);
 
-  // ... (나머지 로직 동일)
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -894,7 +914,7 @@ function GameScreen({ maxPlayers = 10 }) {
     if (ctx && canvasRef.current) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     historyRef.current.push({ type: 'CLEAR' });
     redoStackRef.current = [];
-    // ✅ STOMP 연결이 살아있을 때만 publish
+    // STOMP 연결이 살아있을 때만 publish
     if (stompRef.current?.connected) {
       try {
         stompRef.current.publish({
@@ -960,6 +980,25 @@ function GameScreen({ maxPlayers = 10 }) {
   const totalSlots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const leftUsers = totalSlots.filter((_, i) => i % 2 === 0);
   const rightUsers = totalSlots.filter((_, i) => i % 2 === 1);
+
+  useEffect(() => {
+  const handleGlobalKeyDown = (e) => {
+    if (e.key !== "Enter") return;
+
+    const input = chatInputRef.current;
+    if (!input) return;
+
+    // 이미 input에 포커스가 있으면 → 아무것도 안 함
+    if (document.activeElement === input) return;
+
+    // 다른 곳에서 Enter 누르면 → input으로 포커스 이동
+    e.preventDefault();
+    input.focus();
+  };
+
+  window.addEventListener("keydown", handleGlobalKeyDown);
+  return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+}, []);
 
   const renderUser = (u, index) => (
     <div
@@ -1117,6 +1156,12 @@ function GameScreen({ maxPlayers = 10 }) {
                         {isGameStarted && (
                           <div className="timer-container">
                             <div ref={timerBarRef} className="timer-bar"></div>
+
+                            {remainingSeconds !== null && (
+                              <div className="timer-seconds">
+                                {remainingSeconds}
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className="drawingBoard" style={{ backgroundImage: "url('/img/board.png')" }}>
@@ -1194,7 +1239,7 @@ function GameScreen({ maxPlayers = 10 }) {
                                 </div>
                               )}
                             </div>
-                            
+
                              <div className="tool-btn" onClick={handleUndo} title="Undo">
                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                  <path d="M9 14 4 9l5-5"/>
@@ -1234,7 +1279,8 @@ function GameScreen({ maxPlayers = 10 }) {
        })}
        <div className="chat-area">
           <input type="text"
-            placeholder="메시지 입력..."
+            ref={chatInputRef}
+            placeholder="메시지를 입력하세요..."
             value={chatMessage}
             onChange={(e) => setChatMessage(e.target.value)} 
             onKeyDown={(e) => { 

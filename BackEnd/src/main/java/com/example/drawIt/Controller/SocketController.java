@@ -31,6 +31,8 @@ public class SocketController {
     private final GameStateManager gameStateManager;
     private final GameImageService gameImageService;
 
+    private static final int ROUND_DURATION_SECONDS = 60;
+
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     @MessageMapping("/lobby/{roomId}/join")
@@ -54,7 +56,9 @@ public class SocketController {
 
         // 중간 입장 시 타이머 동기화
         if (gameStarted) {
-            payload.put("roundEndTime", state.getRoundEndTime());
+            long endTime = state.getRoundEndTime();
+            payload.put("roundEndTime", endTime);
+            payload.put("serverNow", System.currentTimeMillis());
         }
 
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, payload);
@@ -63,10 +67,16 @@ public class SocketController {
         if (state != null && !state.getDrawEvents().isEmpty()) {
             Map<String, Object> historyPayload = new HashMap<>();
             List<Map<String, Object>> activeHistory = new ArrayList<>();
-            for (DrawEvent evt : state.getDrawEvents()) activeHistory.add(convertEventToMap(evt));
+
+            for (DrawEvent evt : state.getDrawEvents())
+                activeHistory.add(convertEventToMap(evt));
+
             historyPayload.put("history", activeHistory);
             List<Map<String, Object>> redoHistory = new ArrayList<>();
-            for (DrawEvent evt : state.getRedoStack()) redoHistory.add(convertEventToMap(evt));
+
+            for (DrawEvent evt : state.getRedoStack())
+                redoHistory.add(convertEventToMap(evt));
+
             historyPayload.put("redoStack", redoHistory);
             messagingTemplate.convertAndSend("/topic/history/" + dto.getUserId(), historyPayload);
         }
@@ -87,17 +97,27 @@ public class SocketController {
 
     @MessageMapping("/lobby/{roomId}/start")
     public void startGame(@DestinationVariable String roomId) {
-        lobbyService.markGameStarted(roomId);
         var users = lobbyUserStore.getUsers(roomId);
-        if (users == null || users.isEmpty()) {
-            throw new IllegalStateException("게임 시작 불가: 유저 없음");
+
+        if(users == null || users.size() < 2) {
+            messagingTemplate.convertAndSend("/topic/lobby/" + roomId,
+                    Map.of(
+                            "type", "GAME_START_DENIED",
+                            "reason", "NOT_ENOUGH_PLAYERS"
+                    )
+            );
+            return;
         }
+
+        lobbyService.markGameStarted(roomId);
 
         Lobby lobby = lobbyService.getLobby(roomId);
         String mode = lobby.getMode();
+
         String drawerUserId = gameStateManager.pickRandomDrawer(users);
-        GameState state = gameStateManager.createGame(roomId, drawerUserId, mode);
-        state.setRoundEndTime(0);
+        GameState state = gameStateManager.createGame(roomId, drawerUserId, mode, ROUND_DURATION_SECONDS);
+
+        state.setRoundEndTime(0L);
 
         // ✅ [확인] createGame 안에서 roundEndTime이 설정되므로, 여기서 get 해서 보냄
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
@@ -105,7 +125,8 @@ public class SocketController {
                 "drawerUserId", drawerUserId,
                 "word", state.getCurrentWord(),
                 "gameStarted", true,
-                "roundEndTime", 0L
+                "roundEndTime", 0L,
+                "serverNow", System.currentTimeMillis()
         ));
 
         scheduler.schedule(new Runnable() {
@@ -147,7 +168,6 @@ public class SocketController {
         lobbyUserStore.leaveRoom(roomId, payload.get("userId"));
     }
 
-    // (draw, clear, chatBubble 메서드는 기존과 동일하므로 생략하지 않고 그대로 둠)
     @MessageMapping("/draw/{roomId}")
     public void handleDraw(@DestinationVariable String roomId, @Payload DrawEvent evt) {
         GameState state = gameStateManager.getGame(roomId);
@@ -190,9 +210,6 @@ public class SocketController {
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId + "/draw", Map.of("type", "CLEAR", "userId", userIdObj));
     }
 
-    /* =========================
-       채팅 (정답 체크 로직)
-    ========================= */
     @MessageMapping("/chat/bubble")
     public void chatBubble(@Payload Map<String, Object> payload) {
         String roomId = (String) payload.get("lobbyId");
@@ -282,13 +299,15 @@ public class SocketController {
         state.getDrawEvents().clear();
         state.getRedoStack().clear();
 
-        state.setRoundEndTime(0);
+        state.setRoundEndTime(0L);
 
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "DRAWER_CHANGED",
                 "drawerUserId", newDrawer,
                 "word", newWord,
-                "currentRound", state.getCurrentRound()
+                "currentRound", state.getCurrentRound(),
+                "roundEndTime", 0L,
+                "serverNow", System.currentTimeMillis()
         ));
 
         // 3. 3초 뒤에 "진짜 시작" 신호 예약
@@ -304,8 +323,8 @@ public class SocketController {
         GameState state = gameStateManager.getGame(roomId);
         if (state == null) return;
 
-        long duration = 60000;
-        long endTime = System.currentTimeMillis() + duration;
+        long durationMs = state.getRoundDuration() * 1000L;
+        long endTime = System.currentTimeMillis() + durationMs;
         state.setRoundEndTime(endTime);
 
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
@@ -313,13 +332,16 @@ public class SocketController {
                 "roundEndTime", endTime
         ));
 
-        // ✅ 현재 라운드 번호를 기억해둠 (예: 1라운드)
+        // 현재 라운드 번호를 기억해둠
         final int currentRound = state.getCurrentRound();
 
-        // 60초 뒤에 실행될 때, 이 라운드 번호를 들고 갑니다.
-        scheduler.schedule(() -> {
-            checkAndTimeOver(roomId, currentRound);
-        }, duration, TimeUnit.MILLISECONDS);
+        // 60초 뒤에 실행될 때, 이 라운드 번호를 들고 감.
+        scheduler.schedule(new Runnable() {
+            @Override
+            public void run() {
+                checkAndTimeOver(roomId, currentRound);
+            }
+        }, durationMs, TimeUnit.MILLISECONDS);
     }
 
     private void checkAndTimeOver(String roomId, int scheduledRound) {
@@ -330,9 +352,8 @@ public class SocketController {
             return;
         }
 
-        System.out.println("⏰ 시간 초과! (Room: " + roomId + ")");
+        System.out.println("시간 초과! (Room: " + roomId + ")");
 
-        // 바로 processNextRound를 호출하지 않고, TIME_OVER 메시지 전송
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "TIME_OVER"
         ));
@@ -355,17 +376,17 @@ public class SocketController {
             Integer voteIndex = (Integer) payload.get("voteIndex");
             String userId = (String) payload.get("userId");
 
-            System.out.println("🗳️ [Controller] 투표 요청: Lobby=" + lobbyId + ", Idx=" + voteIndex + ", User=" + userId);
+            System.out.println("[Controller] 투표 요청: Lobby=" + lobbyId + ", Idx=" + voteIndex + ", User=" + userId);
 
             // 2. 서비스 호출 (투표 반영 및 최신 카운트 리스트 획득)
-            // "투표 증가" 로그는 여기서 찍히고 있었을 겁니다.
+            // "투표 증가" 로그는 여기서 찍힘
             List<Integer> latestVoteCounts = gameImageService.addVote(lobbyId, voteIndex, userId);
 
-            // 3. 🔥 [핵심] 갱신된 투표 현황을 모든 클라이언트에게 방송!
+            // 3. 갱신된 투표 현황을 모든 클라이언트에게 방송
             // 이 부분이 없으면 프론트엔드에서 엄지척이 절대 안 뜹니다.
             messagingTemplate.convertAndSend("/topic/vote/" + lobbyId, latestVoteCounts);
 
-            System.out.println("📡 [Controller] 투표 현황 방송 완료: " + latestVoteCounts);
+            System.out.println("[Controller] 투표 현황 방송 완료: " + latestVoteCounts);
 
         } catch (Exception e) {
             e.printStackTrace();

@@ -225,13 +225,27 @@
 
 /* ✅ 타이머 컨테이너 */
 .timer-container {
+  position: relative;
   width: 746px; /* 캔버스 너비와 동일 */
   height: 10px;
   background-color: #eee;
   border-radius: 5px;
-  overflow: hidden;
+  overflow: visible;
   border: 2px solid #333;
   margin-bottom: 5px; /* 스케치북과 약간의 간격 */
+}
+
+.timer-seconds {
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.6);
 }
 
 /* ✅ 타이머 애니메이션 바 */
