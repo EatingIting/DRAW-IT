@@ -20,16 +20,18 @@ public class LobbyUserStore {
     private final GameStateManager gameStateManager;
     private final SimpMessagingTemplate messagingTemplate;
 
-    // F5를 위한 유예 시간 (1.5초)
+    // F5 유예 시간
     private static final long GRACE_MS = 1500;
 
     private final Map<String, Map<String, UserSessionState>> rooms = new ConcurrentHashMap<>();
     private final Map<String, String[]> sessionIndex = new ConcurrentHashMap<>();
+
     /* =========================
        입장 / 재접속
     ========================= */
     @Transactional
     public synchronized void addUser(String roomId, String sessionId, String userId, String nickname) {
+
         rooms.putIfAbsent(roomId, new ConcurrentHashMap<>());
         Map<String, UserSessionState> users = rooms.get(roomId);
 
@@ -39,11 +41,12 @@ public class LobbyUserStore {
             boolean isFirst = users.isEmpty();
             state = new UserSessionState(userId, nickname, isFirst);
             users.put(userId, state);
+
             if (isFirst) {
                 lobbyRepository.updateHost(roomId, userId, nickname);
             }
         } else {
-            state.setDisconnectAt(0); // 부활
+            state.setDisconnectAt(0);
             state.setNickname(nickname);
         }
 
@@ -52,7 +55,7 @@ public class LobbyUserStore {
     }
 
     /* =========================
-       명시적 나가기 (버튼 클릭)
+       명시적 나가기
     ========================= */
     @Transactional
     public synchronized void leaveRoom(String roomId, String userId) {
@@ -60,7 +63,6 @@ public class LobbyUserStore {
         if (users == null) return;
 
         UserSessionState removed = users.remove(userId);
-
         if (removed != null && removed.getSessionId() != null) {
             sessionIndex.remove(removed.getSessionId());
         }
@@ -70,7 +72,7 @@ public class LobbyUserStore {
     }
 
     /* =========================
-       연결 끊김 마킹 (F5/탭닫기)
+       연결 끊김 마킹
     ========================= */
     public synchronized void markDisconnected(String sessionId) {
         String[] info = sessionIndex.get(sessionId);
@@ -89,7 +91,7 @@ public class LobbyUserStore {
     }
 
     /* =========================
-       스케줄러 정리 (1.5초 타임아웃)
+       주기적 정리 (F5 타임아웃)
     ========================= */
     @Transactional
     public synchronized void cleanup() {
@@ -103,12 +105,12 @@ public class LobbyUserStore {
             while (it.hasNext()) {
                 UserSessionState state = it.next();
 
-                if (state.getDisconnectAt() > 0 && (now - state.getDisconnectAt() > GRACE_MS)) {
+                if (state.getDisconnectAt() > 0 && now - state.getDisconnectAt() > GRACE_MS) {
                     it.remove();
                     if (state.getSessionId() != null) {
                         sessionIndex.remove(state.getSessionId());
                     }
-                    System.out.println("⏳ Timeout Remove: " + state.getNickname());
+
                     processUserRemoval(roomId, users, state);
                     sendUserUpdate(roomId);
                 }
@@ -116,7 +118,11 @@ public class LobbyUserStore {
         }
     }
 
+    /* =========================
+       유저 제거 후 처리
+    ========================= */
     private void processUserRemoval(String roomId, Map<String, UserSessionState> users, UserSessionState removed) {
+
         if (users.isEmpty()) {
             lobbyRepository.deleteById(roomId);
             rooms.remove(roomId);
@@ -133,72 +139,80 @@ public class LobbyUserStore {
         handleGameLogicOnRemoval(roomId, removed != null ? removed.getUserId() : null);
     }
 
-    // ✅ [수정] 출제자 변경 시 타이머 시간 설정
-    private void handleGameLogicOnRemoval(String roomId, String userId) {
-        if (userId == null) return;
+    /* =========================
+       출제자 이탈 시 게임 로직
+    ========================= */
+    private void handleGameLogicOnRemoval(String roomId, String removedUserId) {
+
+        if (removedUserId == null) return;
+
         GameState state = gameStateManager.getGame(roomId);
+        if (state == null) return;
 
-        if (state != null && userId.equals(state.getDrawerUserId())) {
-            List<Map<String, Object>> currentUsers = getUsers(roomId);
+        if (!removedUserId.equals(state.getDrawerUserId())) return;
 
-            if (currentUsers.size() >= 2) {
-                String newDrawer = gameStateManager.pickRandomDrawer(currentUsers);
-                state.setDrawerUserId(newDrawer);
-                String newWord = gameStateManager.getUniqueWord(state);
-                state.setCurrentWord(newWord);
-                state.setRoundEndTime(0);
-
-                messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
-                        "type", "DRAWER_CHANGED",
-                        "drawerUserId", newDrawer,
-                        "word", newWord
-                ));
-
-                // 3초 뒤 시작 신호
-                new Timer().schedule(new TimerTask() {
-                    @Override
-                    public void run() {
-                        long endTime = System.currentTimeMillis() + 60000;
-                        state.setRoundEndTime(endTime);
-                        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
-                                "type", "ROUND_START",
-                                "roundEndTime", endTime
-                        ));
-                    }
-                }, 3000);
-            } else if (currentUsers.isEmpty()) {
-                gameStateManager.removeGame(roomId);
-            }
+        List<Map<String, Object>> users = getUsers(roomId);
+        if (users.size() < 2) {
+            gameStateManager.removeGame(roomId);
+            return;
         }
+
+        String newDrawer = gameStateManager.pickRandomDrawer(users);
+        state.setDrawerUserId(newDrawer);
+
+        // ✅ lobby에서 mode 조회
+        String mode = lobbyRepository.findById(roomId)
+                .map(l -> l.getMode())
+                .orElse("RANDOM");
+
+        String newWord = gameStateManager.pickNextWord(state);
+
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                "type", "DRAWER_CHANGED",
+                "drawerUserId", newDrawer,
+                "word", newWord
+        ));
+
+        new Timer().schedule(new TimerTask() {
+            @Override
+            public void run() {
+                long endTime = System.currentTimeMillis() + 60000;
+                state.setRoundEndTime(endTime);
+                messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
+                        "type", "ROUND_START",
+                        "roundEndTime", endTime
+                ));
+            }
+        }, 3000);
     }
 
+    /* =========================
+       USER_UPDATE 전송
+    ========================= */
     private void sendUserUpdate(String roomId) {
         GameState state = gameStateManager.getGame(roomId);
-        boolean gameStarted = (state != null);
 
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "USER_UPDATE",
                 "users", getUsers(roomId),
-                "gameStarted", gameStarted
+                "gameStarted", state != null
         ));
     }
 
+    /* =========================
+       유저 목록 반환
+    ========================= */
     public List<Map<String, Object>> getUsers(String roomId) {
+
         Map<String, UserSessionState> users = rooms.get(roomId);
         if (users == null) return List.of();
 
         return users.values().stream()
-                // 1. 정렬 로직
-                .sorted((u1, u2) -> {
-                    // 방장(Host)은 무조건 맨 앞
-                    if (u1.isHost() && !u2.isHost()) return -1;
-                    if (!u1.isHost() && u2.isHost()) return 1;
-
-                    // 나머지는 입장 시간(joinedAt) 오름차순
-                    return Long.compare(u1.getJoinedAt(), u2.getJoinedAt());
+                .sorted((a, b) -> {
+                    if (a.isHost() && !b.isHost()) return -1;
+                    if (!a.isHost() && b.isHost()) return 1;
+                    return Long.compare(a.getJoinedAt(), b.getJoinedAt());
                 })
-                // 2. 맵핑 (여기가 에러 발생 지점)
-                // ✅ 수정: Map.<String, Object>of(...) 로 타입을 명시해야 함
                 .map(u -> Map.<String, Object>of(
                         "userId", u.getUserId(),
                         "nickname", u.getNickname(),
@@ -208,16 +222,16 @@ public class LobbyUserStore {
                 .collect(Collectors.toList());
     }
 
-    //점수 추가 메서드
+    /* =========================
+       점수 추가
+    ========================= */
     public void addScore(String roomId, String userId, int score) {
         Map<String, UserSessionState> users = rooms.get(roomId);
-        if(users != null) {
-            UserSessionState user = users.get(userId);
-            if(user != null) {
-                user.setScore(user.getScore() + score);
-            }
+        if (users == null) return;
+
+        UserSessionState user = users.get(userId);
+        if (user != null) {
+            user.setScore(user.getScore() + score);
         }
     }
-
-
 }

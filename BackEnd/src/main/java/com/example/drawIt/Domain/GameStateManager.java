@@ -9,18 +9,15 @@ import java.util.stream.Collectors;
 public class GameStateManager {
 
     private final Map<String, GameState> games = new ConcurrentHashMap<>();
+    private final WordProvider wordProvider;
 
-    // (단어 리스트는 기존 그대로 유지)
-    private final List<String> wordList = Arrays.asList(
-            "사과", "바나나", "노트북", "자동차", "비행기", "고양이", "강아지", "학교",
-            "병원", "경찰서", "소방관", "축구", "농구", "야구", "피아노", "기타",
-            "바다", "산", "우주", "별", "달", "해", "구름", "비", "눈", "크리스마스",
-            "시계", "안경", "모자", "신발", "가방", "책", "연필", "지우개"
-    );
+    public GameStateManager(WordProvider wordProvider) {
+        this.wordProvider = wordProvider;
+    }
 
-    public GameState createGame(String roomId, String drawerUserId) {
-        GameState state = new GameState(roomId, drawerUserId);
-        String word = getUniqueWord(state);
+    public GameState createGame(String roomId, String drawerUserId, String mode) {
+        GameState state = new GameState(roomId, drawerUserId, mode);
+        String word = wordProvider.pickUniqueWord(state, mode);
         state.setCurrentWord(word);
 
         // ✅ [추가] 게임 생성 시 종료 시간 설정 (60초)
@@ -37,10 +34,12 @@ public class GameStateManager {
         games.remove(roomId);
     }
 
-    public String getUniqueWord(GameState state) {
+    /*public String getUniqueWord(GameState state, String mode) {
         // 1. 전체 단어에서 이미 사용된 단어 제외하고 리스트에 담기
         List<String> availableWords = new ArrayList<>();
         Set<String> usedWords = state.getUsedWords();
+        List<String> wordList =
+                wordPoolByMode.getOrDefault(mode, wordPoolByMode.get("RANDOM"));
 
         for (String w : wordList) {
             // 이미 사용된 단어(usedWords)에 포함되지 않은 것만 추가
@@ -63,11 +62,7 @@ public class GameStateManager {
         state.getUsedWords().add(picked);
 
         return picked;
-    }
-
-    public String pickRandomWord() {
-        return wordList.get(new Random().nextInt(wordList.size()));
-    }
+    }*/
 
     public String pickRandomDrawer(List<Map<String, Object>> users) {
         if (users == null || users.isEmpty()) return null;
@@ -125,5 +120,11 @@ public class GameStateManager {
         counts.put(nextDrawer, nextDrawerCount + 1);
 
         return nextDrawer;
+    }
+
+    public String pickNextWord(GameState state) {
+        String word = wordProvider.pickUniqueWord(state, state.getMode());
+        state.setCurrentWord(word);
+        return word;
     }
 }

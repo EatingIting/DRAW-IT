@@ -1,5 +1,5 @@
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./CreateRoomModal.css";
 import { useNavigate } from "react-router-dom";
 import { nanoid } from "nanoid";
@@ -13,6 +13,21 @@ function CreateRoomModal({ onClose, mode = "create", roomData = null }) {
   const [password, setPassword] = useState("");
   const [modeValue, setModeValue] = useState("RANDOM");
   const [isLoading, setIsLoading] = useState(false);
+
+  const scrollRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+
+  const MODE_LIST = [
+    { key: "RANDOM", label: "무작위" },
+    { key: "ANIMAL", label: "동물" },
+    { key: "FOOD", label: "음식" },
+    { key: "JOB", label: "직업" },
+    { key: "SPORT", label: "스포츠" },
+    { key: "OBJECT", label: "사물" },
+    { key: "POKEMON", label: "포켓몬", icon: "/img/pokemon_mode.png" },
+  ];
 
   // ✅ edit 모드일 때 초기값 주입
   useEffect(() => {
@@ -113,26 +128,49 @@ function CreateRoomModal({ onClose, mode = "create", roomData = null }) {
         <div className="form-group">
           <label className="label">모드</label>
 
-          <div className="mode-group">
-            <button
-              type="button"
-              className={`mode-btn ${modeValue === "RANDOM" ? "active" : ""}`}
-              onClick={() => setModeValue("RANDOM")}
-            >
-              무작위
-            </button>
+          <div
+            className="mode-scroll-wrapper drag-scroll"
+            ref={scrollRef}
+            onMouseDown={(e) => {
+              isDraggingRef.current = true;
+              startXRef.current = e.pageX;
+              scrollLeftRef.current = scrollRef.current.scrollLeft;
+            }}
+            onMouseMove={(e) => {
+              if (!isDraggingRef.current) return;
 
-            <button
-              type="button"
-              className={`mode-btn ${modeValue === "POKEMON" ? "active" : ""}`}
-              onClick={() => setModeValue("POKEMON")}
-            >
-              <img
-                src="/img/pokemon_mode.png"
-                alt="monster-ball"
-                className="mode-icon"
-              />
-            </button>
+              e.preventDefault(); // 텍스트 선택 방지
+              const walk = (e.pageX - startXRef.current) * 1.2; // 감도 조절
+              scrollRef.current.scrollLeft = scrollLeftRef.current - walk;
+            }}
+            onMouseUp={() => {
+              isDraggingRef.current = false;
+            }}
+            onMouseLeave={() => {
+              isDraggingRef.current = false;
+            }}
+            onWheel={(e) => {
+              // 기존 휠 가로 스크롤 유지
+              e.preventDefault();
+              scrollRef.current.scrollLeft += e.deltaY;
+            }}
+          >
+            <div className="mode-group">
+              {MODE_LIST.map((mode) => (
+                <button
+                  key={mode.key}
+                  type="button"
+                  className={`mode-btn ${modeValue === mode.key ? "active" : ""}`}
+                  onClick={() => setModeValue(mode.key)}
+                >
+                  {mode.icon ? (
+                    <img src={mode.icon} alt={mode.label} className="mode-icon" />
+                  ) : (
+                    mode.label
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

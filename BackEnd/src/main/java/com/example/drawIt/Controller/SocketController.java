@@ -93,8 +93,10 @@ public class SocketController {
             throw new IllegalStateException("게임 시작 불가: 유저 없음");
         }
 
+        Lobby lobby = lobbyService.getLobby(roomId);
+        String mode = lobby.getMode();
         String drawerUserId = gameStateManager.pickRandomDrawer(users);
-        GameState state = gameStateManager.createGame(roomId, drawerUserId);
+        GameState state = gameStateManager.createGame(roomId, drawerUserId, mode);
         state.setRoundEndTime(0);
 
         // ✅ [확인] createGame 안에서 roundEndTime이 설정되므로, 여기서 get 해서 보냄
@@ -116,7 +118,7 @@ public class SocketController {
 
     @MessageMapping("/lobby/{roomId}/timeover")
     public void timeOver(@DestinationVariable String roomId) {
-        processNextRound(roomId);
+        /*processNextRound(roomId);
         GameState state = gameStateManager.getGame(roomId);
         if (state == null) return;
         var users = lobbyUserStore.getUsers(roomId);
@@ -124,7 +126,8 @@ public class SocketController {
 
         String newDrawer = gameStateManager.pickRandomDrawer(users);
         state.setDrawerUserId(newDrawer);
-        String newWord = gameStateManager.getUniqueWord(state);
+
+        String newWord = gameStateManager.pickNextWord(state);
         state.setCurrentWord(newWord);
 
         // ✅ 시간 갱신
@@ -136,7 +139,7 @@ public class SocketController {
                 "drawerUserId", newDrawer,
                 "word", newWord,
                 "roundEndTime", endTime
-        ));
+        ));*/
     }
 
     @MessageMapping("/lobby/{roomId}/leave")
@@ -271,8 +274,7 @@ public class SocketController {
         String newDrawer = gameStateManager.pickNextDrawer(state, users);
         state.setDrawerUserId(newDrawer);
 
-        // 중복 없는 단어
-        String newWord = gameStateManager.getUniqueWord(state);
+        String newWord = gameStateManager.pickNextWord(state);
         state.setCurrentWord(newWord);
 
         // 새 라운드 시작 시, 이정 그림 히스토리 삭제

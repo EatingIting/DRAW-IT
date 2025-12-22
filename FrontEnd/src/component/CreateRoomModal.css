@@ -157,28 +157,65 @@
 /* =========================================
    Components: Mode Selection Cards
    ========================================= */
+.mode-scroll-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  /* 좌우 여백을 살려서 '아까 그 크기' 느낌 유지 */
+  padding: 10px 20px 20px;
+
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 스크롤바 예쁘게 (선택) */
+.mode-scroll-wrapper::-webkit-scrollbar {
+  height: 14px;
+}
+
+.mode-scroll-wrapper::-webkit-scrollbar-track {
+  background: #2c2c2c;
+  border-radius: 10px;
+}
+
+.mode-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: #0ca678;
+  border-radius: 10px;
+  border: 3px solid #2c2c2c;
+}
+
+.mode-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #20c997;       /* hover 시 더 밝게 */
+}
+
 .mode-group {
   display: flex;
   gap: 24px;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  width: max-content;
+  min-width: max-content;
 }
 
 .mode-btn {
   width: 160px;
   height: 160px;
+  flex: 0 0 auto;
+
   background: #fff;
   border: 3px solid var(--game-border-color);
   border-radius: 20px;
-  
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  
   cursor: pointer;
   position: relative;
-  box-shadow: 0 8px 0 rgba(0,0,0,0.1); /* 카드 띄우기 */
+  box-shadow: 0 8px 0 rgba(0,0,0,0.1);
   transition: all 0.15s;
+  user-select: none;
 }
 
 .mode-btn:hover {
@@ -198,6 +235,15 @@
   height: 64px;
   object-fit: contain;
   filter: drop-shadow(2px 4px 0 rgba(0,0,0,0.2)); /* 아이콘 그림자 */
+}
+
+.drag-scroll {
+  cursor: grab;
+  user-select: none;
+}
+
+.drag-scroll:active {
+  cursor: grabbing;
 }
 
 /* =========================================
