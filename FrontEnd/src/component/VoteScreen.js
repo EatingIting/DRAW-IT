@@ -6,34 +6,26 @@ import { Client } from '@stomp/stompjs';
 import { API_BASE_URL } from '../api/config';
 import './VoteScreen.css';
 
-// 숫자가 0에서 target까지 올라가는 컴포넌트
 const CountUp = ({ target, duration = 1500 }) => {
   const [count, setCount] = useState(0);
-
   useEffect(() => {
     let startTime;
     let animationFrame;
-
     const animate = (timestamp) => {
       if (!startTime) startTime = timestamp;
       const progress = timestamp - startTime;
       const progressRatio = Math.min(progress / duration, 1);
-      
       const easeOut = 1 - Math.pow(2, -10 * progressRatio);
-      
       setCount(Math.floor(target * easeOut));
-
       if (progress < duration) {
         animationFrame = requestAnimationFrame(animate);
       } else {
         setCount(target);
       }
     };
-
     animationFrame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrame);
   }, [target, duration]);
-
   return <span className="score-point">{count} 점</span>;
 };
 
@@ -59,6 +51,8 @@ const VoteScreen = () => {
   const FINAL_RESULTS_KEY = `finalResults_${lobbyId}`;
   const MY_USER_ID_KEY = `voteUserId_${lobbyId}`;
   const TOTAL_ROUNDS_KEY = `totalRounds_${lobbyId}`;
+
+  const [isLoading, setIsLoading] = useState(true);
 
   const [players, setPlayers] = useState(location.state?.players || []);
   const [images, setImages] = useState([]);
@@ -113,14 +107,33 @@ const VoteScreen = () => {
   }, [images]);
 
   useEffect(() => {
+    // 이미 결과가 있거나 투표가 끝난 상태라면 로딩 스킵 (새로고침 시 사용자 경험 고려, 원하시면 이 조건 제거 가능)
+    if (showResults) {
+        setIsLoading(false);
+        return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 3000); // 3초 후 로딩 종료
+
+    return () => clearTimeout(timer);
+  }, [showResults]);
+
+  useEffect(() => {
+    // 로딩 중이면 타이머 설정 안 함
+    if (isLoading) return;
+
     if (!sessionStorage.getItem(VOTE_END_TIME_KEY)) {
       const endTime = Date.now() + 30 * 1000;
       sessionStorage.setItem(VOTE_END_TIME_KEY, endTime.toString());
+      // 타이머가 바로 시작되도록 state도 업데이트 (필요 시)
+      setTimeLeft(30);
     }
-  }, [lobbyId]);
+  }, [lobbyId, isLoading]); // isLoading 의존성 추가
 
-  // 타이머 로직
   useEffect(() => {
+    if (isLoading) return;
     if (showResults) return;
 
     if (timeLeft <= 0) {
@@ -135,7 +148,7 @@ const VoteScreen = () => {
       setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [timeLeft, isVotingDisabled, showResults, images.length]);
+  }, [timeLeft, isVotingDisabled, showResults, images.length, isLoading]); // isLoading 의존성 추가
 
   const calculateAndShowResults = async () => {
     const currentImages = imagesRef.current;
@@ -163,7 +176,6 @@ const VoteScreen = () => {
     for (let i = 0; i < sortedImages.length; i++) {
         const thisVoteCount = parseInt(sortedImages[i].voteCount || 0, 10);
         
-        // 이전 사람보다 표가 적으면 랭크 갱신 (SQL Rank 방식: 1, 1, 3, 4...)
         if (i > 0 && thisVoteCount < parseInt(sortedImages[i - 1].voteCount || 0, 10)) {
             currentRank = i + 1;
         }
@@ -171,28 +183,21 @@ const VoteScreen = () => {
         const sameScoreCount = voteFrequency[thisVoteCount];
         let bonus = 0;
 
-        // 🔥 [조건 수정됨]
         if (currentRank === 1) {
-            // 1등이 4명 이상이면 보너스 없음 (기존 3명 -> 4명으로 변경)
             if (sameScoreCount >= 4) {
                 bonus = 0;
-                console.log(`⚠️ 1등이 ${sameScoreCount}명이므로 보너스 취소 (4명 이상 제한)`);
             } else {
                 bonus = 50;
             }
         } else if (currentRank === 2) {
-            // 2등이 3명 이상이면 보너스 없음
             if (sameScoreCount >= 3) {
                 bonus = 0;
-                console.log(`⚠️ 2등이 ${sameScoreCount}명이므로 보너스 취소 (3명 이상 제한)`);
             } else {
                 bonus = 30;
             }
         } else if (currentRank === 3) {
-            // 3등이 2명 이상이면 보너스 없음
             if (sameScoreCount >= 2) {
                 bonus = 0;
-                console.log(`⚠️ 3등이 ${sameScoreCount}명이므로 보너스 취소 (2명 이상 제한)`);
             } else {
                 bonus = 20;
             }
@@ -201,10 +206,7 @@ const VoteScreen = () => {
         }
 
         if (bonus > 0 && sortedImages[i].userId) {
-            console.log(`🏅 [Rank ${currentRank}] ${sortedImages[i].nickname} (${thisVoteCount}표) -> +${bonus}`);
             bonusMap[String(sortedImages[i].userId)] = bonus;
-        } else {
-            console.log(`❌ [Rank ${currentRank}] ${sortedImages[i].nickname} (${thisVoteCount}표) -> +0`);
         }
     }
 
@@ -233,15 +235,11 @@ const VoteScreen = () => {
     });
 
     if (sortedImages.length > 0) {
-        // 1. 투표수 순으로 정렬된 이미지 중 상위 3개만 자름
         const top3Images = sortedImages
-          .filter(img => parseInt(img.voteCount || 0, 10) > 0) // 🔥 이 부분 추가
+          .filter(img => parseInt(img.voteCount || 0, 10) > 0)
           .slice(0, 3);
         
-        // 2. 서버로 보낼 데이터 가공 (파일명 추출 등)
         const winnersPayload = top3Images.map(img => {
-            // imageUrl 예시: "/game/image/{lobbyId}/{filename}"
-            // 여기서 파일명만 추출
             const parts = img.imageUrl.split('/');
             const filename = parts[parts.length - 1]; 
             
@@ -253,18 +251,12 @@ const VoteScreen = () => {
             };
         });
 
-        // 3. 백엔드에 저장 요청 전송
         try {
-            console.log("🏆 명예의 전당 저장 요청:", winnersPayload);
-            // await를 쓰지 않아도 요청은 전송되므로 화면 전환에 방해되지 않게 처리
             axios.post(`${API_BASE_URL}/monRnk/saveWinners`, winnersPayload); 
         } catch (error) {
             console.error("명예의 전당 저장 실패:", error);
         }
     }
-
-    console.log("🏆 최종 결과:", updatedPlayers);
-    console.log("================ [계산 종료] ================");
 
     setRankedPlayers(updatedPlayers);
     sessionStorage.setItem(FINAL_RESULTS_KEY, JSON.stringify(updatedPlayers));
@@ -289,6 +281,7 @@ const VoteScreen = () => {
   useEffect(() => {
     if (!lobbyId) return;
 
+    // 데이터 로딩은 로딩 화면이 떠있는 동안 백그라운드에서 진행
     let retryCount = 0;
     const maxRetries = 10; 
 
@@ -303,10 +296,7 @@ const VoteScreen = () => {
         setImages(initializedData);
 
         const EXPECTED_ROUNDS = totalRounds; 
-        console.log(`🖼️ 이미지 로드 현황: ${initializedData.length} / ${EXPECTED_ROUNDS}`);
-
         if (initializedData.length < EXPECTED_ROUNDS && retryCount < maxRetries) {
-            console.log(`⏳ 이미지 로딩 대기 중... (${initializedData.length}/${EXPECTED_ROUNDS})`);
             retryCount++;
             setTimeout(fetchVoteData, 1000); 
         }
@@ -354,6 +344,7 @@ const VoteScreen = () => {
   }, [lobbyId, totalRounds]);
 
   const handleVote = (index) => {
+    // ... (기존 로직 동일) ...
     if (isVotingDisabled) return;
     if (myVote === index) return;
     
@@ -385,6 +376,40 @@ const VoteScreen = () => {
     ));
   };
 
+  // ============================================
+  // 5. 로딩 화면 렌더링 추가
+  // ============================================
+  if (isLoading) {
+    return (
+      <div className="loading-screen" style={{ 
+          display: 'flex', 
+          flexDirection: 'column', // 세로 방향 정렬 (이미지 -> 텍스트)
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '100vh', 
+          // backgroundColor 삭제됨 (투명 배경)
+      }}>
+        <img 
+          src="/img/loading.gif" 
+          alt="Loading..." 
+          style={{ width: '150px', height: '150px' }} 
+        />
+        
+        {/* 문구 추가 */}
+        <p style={{
+            marginTop: '20px',          // 이미지와 간격
+            fontSize: '1.5rem',         // 글자 크기
+            fontWeight: 'bold',         // 굵게
+            color: '#fff',              // 글자색 (흰색)
+            textShadow: '2px 2px 4px rgba(0,0,0,0.6)', // 배경이 복잡할 경우를 대비한 그림자
+            fontFamily: '"Galmuri9", "DungGeunMo", "Press Start 2P", sans-serif' // 폰트 적용 (없으면 기본 폰트)
+        }}>
+            다른 플레이어를 기다리고 있습니다...
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="vote-screen-container">
       <h1 className="vote-title">The Art of The Match</h1>
@@ -401,6 +426,7 @@ const VoteScreen = () => {
         </div>
       </div>
       
+      {/* ... 이하 갤러리 및 결과 화면 코드는 기존과 동일 ... */}
       <div className="gallery-container-frame">
         <div className="gallery-grid">
           {images.map((img, idx) => {

@@ -448,7 +448,6 @@ function GameScreen({ maxPlayers = 10 }) {
               saveMyDrawing(keywordRef.current);
             }
             setTimeOverModal(false);
-            alert(`게임이 종료되었습니다.`);
             
             const totalRounds = data.totalRounds || 3;
 
