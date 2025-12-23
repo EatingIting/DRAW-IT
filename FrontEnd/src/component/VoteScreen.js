@@ -52,7 +52,7 @@ const VoteScreen = () => {
   const MY_USER_ID_KEY = `voteUserId_${lobbyId}`;
   const TOTAL_ROUNDS_KEY = `totalRounds_${lobbyId}`;
   const VOTE_LOADING_SHOWN_KEY = `voteLoadingShown_${lobbyId}`;
-  
+
   const [isLoading, setIsLoading] = useState(() => {
     // 결과가 이미 있으면 로딩 X
     if (sessionStorage.getItem(FINAL_RESULTS_KEY)) return false;
@@ -281,7 +281,7 @@ const VoteScreen = () => {
         }
         return prevCount + 1;
       });
-    }, 1500);
+    }, 800);
     return () => clearInterval(interval);
   }, [showResults, rankedPlayers]);
 
@@ -305,7 +305,7 @@ const VoteScreen = () => {
         const EXPECTED_ROUNDS = totalRounds; 
         if (initializedData.length < EXPECTED_ROUNDS && retryCount < maxRetries) {
             retryCount++;
-            setTimeout(fetchVoteData, 1000); 
+            setTimeout(fetchVoteData, 20); 
         }
 
         if (players.length === 0) {
