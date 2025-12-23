@@ -522,35 +522,25 @@ function GameScreen({ maxPlayers = 10 }) {
             }
           }
 
-          if (data.type === 'GAME_OVER') {                
-                // 출제자 그림 저장 (에러나도 무시하고 진행)
-                if (String(prevDrawerIdRef.current) === String(userId)) {
-                    try {
-                        saveMyDrawing(keywordRef.current || "");
-                    } catch (e) {
-                        console.error("그림 저장 실패:", e);
-                    }
-                }
-
-                // 기존 모달 닫기
-                sessionStorage.removeItem('currentRoundSignature');
-                
-                setAnswerModal({ visible: false, winner: '', answer: '' });
-                setTimeOverModal(false);
-                setRoundModal({ visible: false, role: null, word: '' });
-
-                // 게임 종료 모달
-                setGameOverModal(true);
-
-                // 3초 뒤에 투표 페이지로 이동
-                setTimeout(() => {
-                    navigate(`/vote/${lobbyId}`, { 
-                        state: { players: playersRef.current } 
-                    });
-                }, 3000);
+          if (data.type === 'GAME_OVER') {
+            if (String(prevDrawerIdRef.current) === String(userId)) {
+              saveMyDrawing(keywordRef.current);
             }
+            setTimeOverModal(false);
+            
+            const totalRounds = data.totalRounds || 3;
+
+            navigate(`/vote/${lobbyId}`, { 
+              state: { 
+                players: playersRef.current,
+                totalRounds: totalRounds
+              }
+            }); // playersRef 사용 권장
+          }
         });
 
+        // ... (draw, history, chat 등 기존 구독 로직 동일)
+        // [수정] subDraw 변수에 할당하도록 수정
         const subDraw = client.subscribe(`/topic/lobby/${lobbyId}/draw`, (msg) => {
             const evt = JSON.parse(msg.body);
             applyRemoteDraw(evt);

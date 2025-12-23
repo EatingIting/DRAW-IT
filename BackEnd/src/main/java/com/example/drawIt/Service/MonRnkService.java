@@ -9,6 +9,12 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -18,22 +24,22 @@ public class MonRnkService {
     @Autowired
     private MonRnkRepository monRnkRepository;
 
-    public List<MonRnkDTO> getMonRnk(String yyMM, Pageable pageable) { // 매개변수 추가
+    private final String GAME_TEMP_DIR = "C:/DrawIt/GameTemp/";
+    private final String MONTHLY_RANK_DIR = "C:/DrawIt/MonthlyRank/";
+
+    public List<MonRnkDTO> getMonRnk(String yyMM, Pageable pageable) {
 
         Calendar cal = Calendar.getInstance();
         SimpleDateFormat sdf = new SimpleDateFormat("yyMM");
 
         try {
-            Date targetDate = sdf.parse(yyMM); // "2412" -> 2024년 12월 1일 00:00:00 (Date 객체)
+            Date targetDate = sdf.parse(yyMM);
             cal.setTime(targetDate);
         } catch (ParseException e) {
-            // 날짜 형식이 잘못되었을 경우 예외 처리 (로그 출력 후 빈 리스트 반환 등)
             e.printStackTrace();
             return new ArrayList<>();
         }
 
-        // [변경 2] 해당 월의 1일 00:00:00 설정 (Start Date)
-        // 위에서 cal.setTime()을 했으므로 년/월은 이미 설정됨. 일/시/분/초만 초기화
         cal.set(Calendar.DAY_OF_MONTH, 1);
         cal.set(Calendar.HOUR_OF_DAY, 0);
         cal.set(Calendar.MINUTE, 0);
@@ -41,7 +47,6 @@ public class MonRnkService {
         cal.set(Calendar.MILLISECOND, 0);
         Date startDate = cal.getTime();
 
-        // [변경 3] 해당 월의 마지막 날 23:59:59 설정 (End Date)
         cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH));
         cal.set(Calendar.HOUR_OF_DAY, 23);
         cal.set(Calendar.MINUTE, 59);
@@ -49,7 +54,6 @@ public class MonRnkService {
         cal.set(Calendar.MILLISECOND, 999);
         Date endDate = cal.getTime();
 
-        // DB 조회
         Slice<MonRnk> entities = monRnkRepository.findByRegDateBetweenOrderByRecommendDesc(startDate, endDate, pageable);
 
         List<MonRnkDTO> dtoList = new ArrayList<>();
@@ -58,7 +62,10 @@ public class MonRnkService {
         for(MonRnk entity: entities){
             String dateFolder = folderFormat.format(entity.getRegDate());
             String filename = entity.getImgName();
-            String accessUrl = "http://localhost:8080/image/" + dateFolder + "/" + filename + ".jpg";
+
+            // [수정 완료] filename에 이미 확장자가 있으므로 .jpg를 제거했습니다.
+            // URL 경로는 Controller 설정(/monRnk/image/...)에 맞췄습니다.
+            String accessUrl = "http://localhost:8080/monRnk/image/" + dateFolder + "/" + filename;
 
             MonRnkDTO dto = MonRnkDTO.builder()
                     .imgId(entity.getImgId())
@@ -73,6 +80,58 @@ public class MonRnkService {
     }
 
     @Transactional
+    public void saveWinners(List<Map<String, String>> winners) {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyMM");
+        Date now = new Date();
+        String currentMonthFolder = sdf.format(now);
+
+        String targetDirPath = MONTHLY_RANK_DIR + currentMonthFolder;
+        File targetDir = new File(targetDirPath);
+        if (!targetDir.exists()) {
+            targetDir.mkdirs();
+        }
+
+        for (Map<String, String> info : winners) {
+            String lobbyId = info.get("lobbyId");
+            String filename = info.get("filename"); // UUID가 포함된 고유한 파일명
+            String keyword = info.get("keyword");
+
+            // 🔥 [중복 방지 로직 추가]
+            // 이미 DB에 동일한 파일명(UUID 포함)으로 저장된 기록이 있다면 건너뜁니다.
+            if (monRnkRepository.existsByImgName(filename)) {
+                System.out.println("⚠️ 이미 저장된 이미지입니다. 중복 저장을 건너뜁니다: " + filename);
+                continue;
+            }
+
+            Path sourcePath = Paths.get(GAME_TEMP_DIR + lobbyId + "/" + filename);
+            Path targetPath = Paths.get(targetDirPath + "/" + filename);
+
+            try {
+                if (Files.exists(sourcePath)) {
+                    // ... (기존 파일 복사 로직 동일)
+                    Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println("💾 파일 복사 완료: " + targetPath.toString());
+
+                    MonRnk monRnk = MonRnk.builder()
+                            .imgName(filename)
+                            .imgUrl(targetPath.toString()) // 절대 경로보다는 웹 접근 경로로 저장하는 것을 추천하지만, 기존 로직 유지
+                            .topic(keyword)
+                            .recommend(0)
+                            .regDate(now)
+                            .build();
+
+                    monRnkRepository.save(monRnk);
+                } else {
+                    System.err.println("❌ 원본 파일을 찾을 수 없음: " + sourcePath);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.err.println("❌ 파일 복사 중 에러 발생: " + filename);
+            }
+        }
+    }
+
+    @Transactional
     public boolean increaseRec(long imgId){
         Optional<MonRnk> optionalMonRnk = monRnkRepository.findById(imgId);
 
@@ -82,7 +141,6 @@ public class MonRnkService {
             monRnkRepository.save(monRnk);
             return true;
         }
-
         return false;
     }
 }
