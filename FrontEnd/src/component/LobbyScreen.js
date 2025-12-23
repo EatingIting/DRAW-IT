@@ -7,6 +7,18 @@ import "./LobbyScreen.css";
 import { API_BASE_URL } from "../api/config";
 import axios from "axios";
 import CreateRoomModal from "./CreateRoomModal";
+// 새로 만든 모달 컴포넌트 import (경로 주의)
+import EditProfileModal from "./profilemodal/EditProfileModal";
+
+// 프로필 이미지 경로 헬퍼 함수
+const getProfileImgPath = (profileValue) => {
+  // 값이 없거나 "default" 문자열이면 default.jpg 반환
+  if (!profileValue || profileValue === "default") {
+    return "/img/profile/default.jpg";
+  }
+  // 그 외(숫자 1~10)면 해당 번호 이미지 반환
+  return `/img/profile/profile${profileValue}.jpg`;
+};
 
 function LobbyScreen() {
   const navigate = useNavigate();
@@ -47,8 +59,22 @@ function LobbyScreen() {
 
   const [modal, setModal] = useState(null);
 
+  // 닉네임 모달 표시 여부
   const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
-  const [newNickname, setNewNickname] = useState(myNickname);
+
+  // 내 정보 찾기
+  const myPlayerInfo = players.find(p => p.userId === userIdRef.current);
+
+  // 내 정보가 players에 있으면 그 닉네임을 쓰고, 없으면 초기값(myNickname)을 씁니다.
+  const currentDisplayNickname = myPlayerInfo ? myPlayerInfo.nickname : myNickname;
+
+  // 프로필 이미지가 없으면 default
+  const currentProfileIndex = myPlayerInfo?.profileImage || "default";
+
+  // 사용 중인 프로필 이미지 찾기 (default는 제외)
+  const usedProfileIndexes = players
+    .map(p => p.profileImage)
+    .filter(img => img && img !== "default");
 
   // 방 정보 REST 로드
   const fetchRoomInfo = async () => {
@@ -57,21 +83,36 @@ function LobbyScreen() {
     setRoomInfo(data);
   };
 
-  const handleConfirmNickname = () => {
-    const trimmed = newNickname.trim();
-    if (!trimmed) return;
+  // ============================================================
+  // [수정됨] 닉네임 및 프로필 이미지 변경 확정 처리
+  // EditProfileModal에서 (닉네임, 이미지인덱스) 두 개의 인자를 넘겨줍니다.
+  // ============================================================
+  const handleConfirmProfile = (updatedNickname, updatedProfileImage) => {
+    console.log("[profile] confirm clicked", {
+      connected: clientRef.current?.connected,
+      updatedNickname,
+      updatedProfileImage,
+      type: typeof updatedProfileImage,
+    });
+
     if (!clientRef.current?.connected) return;
 
+    // 서버로 변경 요청 전송
     clientRef.current.publish({
-      destination: `/app/lobby/${roomId}/nickname`,
+      // ★ 주의: 백엔드 컨트롤lobby러의 @MessageMapping 주소와 일치해야 합니다.
+      // 닉네임과 프로필을 같이 처리하는 엔드포인트(예: /profile)를 사용한다고 가정했습니다.
+      destination: `/app/lobby/${roomId}/profile`,
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         userId: userIdRef.current,
-        nickname: trimmed,
+        nickname: updatedNickname,
+        profileImage: Number(updatedProfileImage), // ★ 선택된 이미지 번호 추가
       }),
     });
 
-    // 로컬 저장 (새로고침 대비)
-    sessionStorage.setItem("nickname", trimmed);
+    // 로컬 스토리지 업데이트 (새로고침 대비)
+    sessionStorage.setItem("nickname", updatedNickname);
+    // 필요하다면 프로필 이미지도 저장 가능: sessionStorage.setItem("profileImage", updatedProfileImage);
 
     setIsNicknameModalOpen(false);
   };
@@ -149,7 +190,6 @@ function LobbyScreen() {
 
           const uid = data.userId;
 
-          // 같은 유저가 연속으로 말하면 이전 타이머 제거
           const prevTimeout = bubbleTimeoutRef.current[uid];
           if (prevTimeout) clearTimeout(prevTimeout);
 
@@ -173,6 +213,7 @@ function LobbyScreen() {
         localStorage.setItem("userId", userIdRef.current);
         localStorage.setItem("nickname", myNickname);
 
+        // 입장 시에도 기본 정보 전송 (필요 시 profileImage 추가 가능)
         client.publish({
           destination: `/app/lobby/${roomId}/join`,
           body: JSON.stringify({
@@ -217,8 +258,6 @@ function LobbyScreen() {
   const handleUserCardClick = (user) => {
     if (!user) return;
     if (user.userId !== userIdRef.current) return;
-
-    setNewNickname(user.nickname);
     setIsNicknameModalOpen(true);
   };
 
@@ -253,6 +292,7 @@ function LobbyScreen() {
 
   const renderUserCard = (user, index) => {
     const isMe = user?.userId === userIdRef.current;
+    const profileValue = user?.profileImage || "default";
 
     return (
       <div
@@ -264,11 +304,17 @@ function LobbyScreen() {
           if (user && el) userCardRefs.current[user.userId] = el;
         }}
       >
-        <div className="avatar" />
-        <span className="username">
-          {user ? user.nickname : "Empty"}
-          {user?.host && <span style={{ color: "gold", marginLeft: 6 }}>★</span>}
-        </span>
+        {user?.host && <span className="host-badge">★</span>}
+        <div className="avatar">
+          {user && (
+            <img
+              src={getProfileImgPath(profileValue)}
+              alt="avatar"
+              style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+            />
+          )}
+        </div>
+        <span className="username">{user ? user.nickname : "Empty"}</span>
       </div>
     );
   };
@@ -280,48 +326,15 @@ function LobbyScreen() {
 
   return (
     <>
-      {isNicknameModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>닉네임 변경</h2>
-
-            <input
-              type="text"
-              value={newNickname}
-              onChange={(e) => setNewNickname(e.target.value)}
-              maxLength={12}
-              placeholder="새 닉네임"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleConfirmNickname();
-                }
-
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setIsNicknameModalOpen(false);
-                }
-              }}
-            />
-
-            <div className="modal-btn-group">
-              <button
-                className="cancel-btn"
-                onClick={() => setIsNicknameModalOpen(false)}
-              >
-                취소
-              </button>
-
-              <button
-                className="confirm-btn"
-                onClick={handleConfirmNickname}>
-                확인
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* [수정됨] onConfirm에 handleConfirmProfile 연결 */}
+      <EditProfileModal
+        isOpen={isNicknameModalOpen}
+        onClose={() => setIsNicknameModalOpen(false)}
+        currentNickname={currentDisplayNickname}
+        currentProfileIndex={currentProfileIndex}
+        usedProfileIndexes={usedProfileIndexes}
+        onConfirm={handleConfirmProfile}
+      />
 
       {modal && (
         <div className="modal-overlay">

@@ -10,6 +10,8 @@ public class UserSessionState {
     public String nickname;
     public boolean host;
 
+    private Object profileImage;
+
     public String sessionId;     // 현재 연결된 ws sessionId
     public long disconnectAt;    // 끊긴 시각(ms), 0이면 연결중
 
@@ -24,5 +26,6 @@ public class UserSessionState {
         this.disconnectAt = 0;
         this.joinedAt = System.currentTimeMillis();
         this.score = 0; //초기점수 0
+        this.profileImage = "default";
     }
 }

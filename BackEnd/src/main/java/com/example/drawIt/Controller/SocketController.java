@@ -1,6 +1,7 @@
 package com.example.drawIt.Controller;
 
 import com.example.drawIt.DTO.SocketJoinDTO;
+import com.example.drawIt.DTO.SocketProfileDTO;
 import com.example.drawIt.Domain.DrawEvent;
 import com.example.drawIt.Domain.GameState;
 import com.example.drawIt.Domain.GameStateManager;
@@ -57,7 +58,7 @@ public class SocketController {
         payload.put("hostUserId", lobby.getHostUserId());
         payload.put("gameStarted", gameStarted);
         payload.put("drawerUserId", drawerUserId);
-        if(gameStarted && currentWord != null) payload.put("word", currentWord);
+        if (gameStarted && currentWord != null) payload.put("word", currentWord);
 
         // 중간 입장 시 타이머 동기화
         if (gameStarted) {
@@ -104,7 +105,7 @@ public class SocketController {
     public void startGame(@DestinationVariable String roomId) {
         var users = lobbyUserStore.getUsers(roomId);
 
-        if(users == null || users.size() < 2) {
+        if (users == null || users.size() < 2) {
             messagingTemplate.convertAndSend("/topic/lobby/" + roomId,
                     Map.of(
                             "type", "GAME_START_DENIED",
@@ -171,12 +172,14 @@ public class SocketController {
                     state.getRedoStack().clear();
                 }
                 break;
-            case "FILL": case "CLEAR":
+            case "FILL":
+            case "CLEAR":
                 state.getDrawEvents().add(evt);
                 state.getRedoStack().clear();
                 break;
             case "UNDO":
-                if (!state.getDrawEvents().isEmpty()) state.getRedoStack().push(state.getDrawEvents().remove(state.getDrawEvents().size()-1));
+                if (!state.getDrawEvents().isEmpty())
+                    state.getRedoStack().push(state.getDrawEvents().remove(state.getDrawEvents().size() - 1));
                 break;
             case "REDO":
                 if (!state.getRedoStack().isEmpty()) state.getDrawEvents().add(state.getRedoStack().pop());
@@ -216,7 +219,7 @@ public class SocketController {
         if (state != null && message.trim().equals(state.getCurrentWord())) {
 
             // 출제자가 본인 답을 말하는 건 무시
-            if(userId.equals(state.getDrawerUserId())) return;
+            if (userId.equals(state.getDrawerUserId())) return;
 
             // 정답자의 닉네임 조회
             String winnerNickname = lobbyUserStore.getUsers(roomId).stream()
@@ -229,7 +232,7 @@ public class SocketController {
 
             lobbyUserStore.addScore(roomId, userId, 10);
 
-            if(state.getDrawerUserId() != null) { //출제자가 방에 남아있을 경우
+            if (state.getDrawerUserId() != null) { //출제자가 방에 남아있을 경우
                 lobbyUserStore.addScore(roomId, state.getDrawerUserId(), 5);
             }
 
@@ -425,5 +428,21 @@ public class SocketController {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    @MessageMapping("/lobby/{roomId}/profile")
+    public void updateProfile(@DestinationVariable String roomId, @Payload SocketProfileDTO dto) {
+
+        System.out.println("프로필 이미지 변경 메소드 진입");
+        if (dto.getUserId() == null) return;
+
+
+        // Store 업데이트 및 자동 브로드캐스트
+        lobbyUserStore.updateProfile(
+                roomId,
+                dto.getUserId(),
+                dto.getNickname(),
+                dto.getProfileImage()
+        );
     }
 }

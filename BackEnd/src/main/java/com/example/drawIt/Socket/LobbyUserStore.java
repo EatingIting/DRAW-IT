@@ -334,11 +334,42 @@ public class LobbyUserStore {
     private void sendUserUpdate(String roomId) {
         GameState state = gameStateManager.getGame(roomId);
 
-        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
-                "type", "USER_UPDATE",
-                "users", getUsers(roomId),
-                "gameStarted", state != null
-        ));
+        // ★ 방 정보를 조회해서 현재 방장 ID를 가져옴
+        Lobby lobby = lobbyRepository.findById(roomId).orElse(null);
+        String hostUserId = (lobby != null) ? lobby.getHostUserId() : null;
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", "USER_UPDATE");
+        payload.put("users", getUsers(roomId));
+        payload.put("gameStarted", state != null);
+
+        // ★ 메시지에 hostUserId 포함
+        if (hostUserId != null) {
+            payload.put("hostUserId", hostUserId);
+        }
+
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, payload);
+    }
+
+    public synchronized void updateProfile(String roomId, String userId, String newNickname, Object newProfileImage) {
+        Map<String, UserSessionState> users = rooms.get(roomId);
+        if (users == null) return;
+
+        UserSessionState user = users.get(userId);
+        if (user != null) {
+            // 닉네임 중복 처리 (본인 닉네임이면 스킵)
+            if (!user.getNickname().equals(newNickname)) {
+                String resolved = resolveDuplicateNickname(roomId, newNickname);
+                user.setNickname(resolved);
+            }
+            // 프로필 이미지 업데이트
+            if (newProfileImage != null) {
+                user.setProfileImage(newProfileImage);
+            }
+
+            // 변경 사항 즉시 방송
+            sendUserUpdate(roomId);
+        }
     }
 
     /* =========================
@@ -359,7 +390,8 @@ public class LobbyUserStore {
                         "userId", u.getUserId(),
                         "nickname", u.getNickname(),
                         "host", u.isHost(),
-                        "score", u.getScore()
+                        "score", u.getScore(),
+                        "profileImage", u.getProfileImage() != null ? u.getProfileImage() : "default" // ★ 추가됨
                 ))
                 .collect(Collectors.toList());
     }
