@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
@@ -7,6 +7,8 @@ import "./LobbyScreen.css";
 import { API_BASE_URL } from "../api/config";
 import axios from "axios";
 import CreateRoomModal from "./CreateRoomModal";
+// 새로 만든 모달 컴포넌트 import (경로 주의)
+import EditProfileModal from "./profilemodal/editProfileModal"; 
 
 function LobbyScreen() {
   const navigate = useNavigate();
@@ -47,8 +49,13 @@ function LobbyScreen() {
 
   const [modal, setModal] = useState(null);
 
+  // 닉네임 모달 관련 state (입력값 state인 newNickname은 자식 컴포넌트로 이동하여 삭제됨)
   const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
-  const [newNickname, setNewNickname] = useState(myNickname);
+
+  const myPlayerInfo = players.find(p => p.userId === userIdRef.current);
+  
+  // 내 정보가 players에 있으면 그 닉네임을 쓰고, 없으면 초기값(myNickname)을 씁니다.
+  const currentDisplayNickname = myPlayerInfo ? myPlayerInfo.nickname : myNickname;
 
   // 방 정보 REST 로드
   const fetchRoomInfo = async () => {
@@ -57,21 +64,20 @@ function LobbyScreen() {
     setRoomInfo(data);
   };
 
-  const handleConfirmNickname = () => {
-    const trimmed = newNickname.trim();
-    if (!trimmed) return;
+  // 닉네임 변경 확정 처리 (자식 컴포넌트에서 호출)
+  const handleConfirmNickname = (updatedNickname) => {
     if (!clientRef.current?.connected) return;
 
     clientRef.current.publish({
       destination: `/app/lobby/${roomId}/nickname`,
       body: JSON.stringify({
         userId: userIdRef.current,
-        nickname: trimmed,
+        nickname: updatedNickname,
       }),
     });
 
     // 로컬 저장 (새로고침 대비)
-    sessionStorage.setItem("nickname", trimmed);
+    sessionStorage.setItem("nickname", updatedNickname);
 
     setIsNicknameModalOpen(false);
   };
@@ -220,7 +226,7 @@ function LobbyScreen() {
     // 나 자신만 허용
     if (user.userId !== userIdRef.current) return;
 
-    setNewNickname(myNickname);
+    // 모달을 열기만 함 (초기값은 EditProfileModal에 prop으로 전달)
     setIsNicknameModalOpen(true);
   };
 
@@ -280,48 +286,14 @@ function LobbyScreen() {
 
   return (
     <>
-      {isNicknameModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>닉네임 변경</h2>
+      {/* 분리된 닉네임 변경 모달 사용 */}
+      <EditProfileModal
+        isOpen={isNicknameModalOpen}
+        onClose={() => setIsNicknameModalOpen(false)}
+        currentNickname={currentDisplayNickname}
+        onConfirm={handleConfirmNickname}
+      />
 
-            <input
-              type="text"
-              value={newNickname}
-              onChange={(e) => setNewNickname(e.target.value)}
-              maxLength={12}
-              placeholder="새 닉네임"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleConfirmNickname();
-                }
-
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setIsNicknameModalOpen(false);
-                }
-              }}
-            />
-
-            <div className="modal-btn-group">
-              <button
-                onClick={() => setIsNicknameModalOpen(false)}
-                className="cancel-btn"
-              >
-                취소
-              </button>
-
-              <button
-                className="confirm-btn"
-                onClick={handleConfirmNickname}>
-                확인
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {modal && (
         <div className="modal-overlay">
           <div className="modal">
