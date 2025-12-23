@@ -51,8 +51,16 @@ const VoteScreen = () => {
   const FINAL_RESULTS_KEY = `finalResults_${lobbyId}`;
   const MY_USER_ID_KEY = `voteUserId_${lobbyId}`;
   const TOTAL_ROUNDS_KEY = `totalRounds_${lobbyId}`;
+  const VOTE_LOADING_SHOWN_KEY = `voteLoadingShown_${lobbyId}`;
+  
+  const [isLoading, setIsLoading] = useState(() => {
+    // 결과가 이미 있으면 로딩 X
+    if (sessionStorage.getItem(FINAL_RESULTS_KEY)) return false;
 
-  const [isLoading, setIsLoading] = useState(true);
+    // 로딩을 이미 한번 보여줬으면 로딩 X (새로고침 포함)
+    const alreadyShown = sessionStorage.getItem(VOTE_LOADING_SHOWN_KEY) === "1";
+    return !alreadyShown;
+  });
 
   const [players, setPlayers] = useState(location.state?.players || []);
   const [images, setImages] = useState([]);
@@ -107,18 +115,17 @@ const VoteScreen = () => {
   }, [images]);
 
   useEffect(() => {
-    // 이미 결과가 있거나 투표가 끝난 상태라면 로딩 스킵 (새로고침 시 사용자 경험 고려, 원하시면 이 조건 제거 가능)
-    if (showResults) {
-        setIsLoading(false);
-        return;
-    }
+    if (!isLoading) return;
+
+    // 로딩을 "지금부터 한 번 보여줬다"로 즉시 기록 (새로고침해도 다시 안 뜸)
+    sessionStorage.setItem(VOTE_LOADING_SHOWN_KEY, "1");
 
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 3000); // 3초 후 로딩 종료
+    }, 3000);
 
     return () => clearTimeout(timer);
-  }, [showResults]);
+  }, [isLoading, VOTE_LOADING_SHOWN_KEY]);
 
   useEffect(() => {
     // 로딩 중이면 타이머 설정 안 함
@@ -364,7 +371,9 @@ const VoteScreen = () => {
     sessionStorage.removeItem(MY_VOTE_KEY);
     sessionStorage.removeItem(FINAL_RESULTS_KEY);
     sessionStorage.removeItem(MY_USER_ID_KEY);
-    sessionStorage.removeItem(TOTAL_ROUNDS_KEY); 
+    sessionStorage.removeItem(TOTAL_ROUNDS_KEY);
+    sessionStorage.removeItem(VOTE_LOADING_SHOWN_KEY);
+ 
     navigate('/');
   };
 
