@@ -17,7 +17,7 @@ public class MonRnk {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long imgId;
-    @Column(nullable=false, length=200)
+    @Column(nullable=false, length=200, unique=true)
     private String imgName;
     @Column(nullable=false, length=200)
     private String imgUrl; // C:\MonthlyRank\{month}\{fileName}
