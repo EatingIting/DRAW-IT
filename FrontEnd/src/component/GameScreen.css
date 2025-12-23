@@ -143,6 +143,53 @@
   text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
 }
 
+.user-card.me {
+  border-color: #fcc419; /* 밝은 노란색 */
+  box-shadow: 0 0 10px rgba(252, 196, 25, 0.6);
+  background-color: #fff9db; /* 아주 연한 노란 배경 */
+}
+
+/* 2. 출제자 (Drawer) : 눈에 확 띄는 스타일 (붉은색 계열) 
+   => '나' 스타일보다 우선 적용되도록 !important 사용 */
+.user-card.drawer {
+  border-color: #ff6b6b !important; 
+  box-shadow: 0 0 15px rgba(255, 107, 107, 0.8) !important;
+  background-color: #fff0f0 !important; /* 연한 붉은 배경 */
+  transform: scale(1.05); /* 살짝 커짐 */
+  z-index: 10;
+}
+
+/* 출제자 닉네임 강조 */
+.user-card.drawer .username {
+  color: #e03131 !important;
+}
+
+/* 출제자 표시 아이콘 (붓) */
+.drawer-badge {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 32px;
+  height: 32px;
+  font-size: 1.2rem;
+  background: white;
+  border: 2px solid #ff6b6b;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  z-index: 20;
+  
+  /* 통통 튀는 애니메이션 */
+  animation: bounceBadge 1s infinite;
+}
+
+@keyframes bounceBadge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
 .avatar {
   width: 72px;
   height: 72px;

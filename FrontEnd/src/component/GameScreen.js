@@ -917,13 +917,23 @@ function GameScreen({ maxPlayers = 10 }) {
 }, []);
 
   const renderUser = (u, index) => {
-    const profileValue = u?.profileImage || "default";  
+    const profileValue = u?.profileImage || "default";
+    
+    // ✅ 조건 확인: 나인지? / 현재 출제자인지?
+    const isMe = u && String(u.userId) === String(userId);
+    const isCurrentDrawer = u && String(u.userId) === String(currentDrawerId);
+    const isWinner = u && String(u.userId) === String(winnerId);
+
     return (
       <div
         key={index}
-        className={`user-card ${!u ? 'empty' : ''} ${u && String(u.userId) === String(winnerId) ? 'winner' : ''}`}
+        // ✅ 클래스 추가: me, drawer, winner
+        className={`user-card ${!u ? 'empty' : ''} ${isMe ? 'me' : ''} ${isCurrentDrawer ? 'drawer' : ''} ${isWinner ? 'winner' : ''}`}
         ref={(el) => { if (u && el) userCardRefs.current[u.userId] = el; }}
       >
+        {/* ✅ 출제자일 경우 붓 아이콘 뱃지 표시 */}
+        {isCurrentDrawer && <div className="drawer-badge">🎨</div>}
+
         <div className="avatar">
            {u && (
              <img 
@@ -934,32 +944,28 @@ function GameScreen({ maxPlayers = 10 }) {
            )}
         </div>
         
-        {/* ✅ [수정] 닉네임과 점수를 중앙 정렬하여 확실하게 표시 */}
-        <div className="user-info" style={{ textAlign: 'center', marginTop: '1px' }}>
+        <div className="user-info" style={{ textAlign: 'center', marginTop: '2px' }}>
             <span className="username" style={{ 
                 display: 'block', 
                 fontWeight: 'bold', 
-                fontSize: '1rem', 
-                color: '#333'  // 글자색 검정
+                fontSize: '0.9rem', 
+                color: '#333'  
             }}>
+              {/* 이름 옆에 ★ 표시는 제거하거나 유지하셔도 됩니다 (뱃지가 있어서 중복일 수 있음) */}
               {u ? u.nickname : 'Empty'}
-              {u && String(u.userId) === String(currentDrawerId) && (
-                <span style={{ color: 'gold', marginLeft: '4px' }}>★</span>
-              )}
             </span>
             {u && (
               <span className="user-score" style={{ 
                   display: 'block', 
-                  fontSize: '0.9rem', 
+                  fontSize: '0.8rem', 
                   color: '#1971c2', 
                   fontWeight: 'bold',
-                  marginTop: '2px' 
+                  marginTop: '0px'
               }}>
                 Score: {u.score || 0}
               </span>
             )}
         </div>
-
       </div>
     );
   };
