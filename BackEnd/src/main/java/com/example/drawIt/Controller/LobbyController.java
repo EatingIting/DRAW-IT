@@ -4,6 +4,8 @@ import com.example.drawIt.DTO.CreateLobbyDTO;
 import com.example.drawIt.DTO.LobbyResponseDTO;
 import com.example.drawIt.DTO.UpdateLobbyDTO;
 import com.example.drawIt.Entity.Lobby;
+import com.example.drawIt.Repository.LobbyRepository;
+import com.example.drawIt.Repository.UserRepository;
 import com.example.drawIt.Service.LobbyService;
 import com.example.drawIt.Socket.LobbyUserStore;
 import lombok.RequiredArgsConstructor;
@@ -12,10 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -26,19 +25,47 @@ public class LobbyController {
     private final LobbyService lobbyService;
     private final SimpMessagingTemplate messagingTemplate;
     private final LobbyUserStore lobbyUserStore;
+    private final LobbyRepository lobbyRepository;
 
     // 방 목록 갱신 알림
-    private void broadcastLobbyList() {
+    private List<LobbyResponseDTO> buildValidLobbyList() {
+
+        List<LobbyResponseDTO> result = new ArrayList<>();
+
         List<Lobby> lobbies = lobbyService.getAllRooms();
-        List<LobbyResponseDTO> dtos = lobbies.stream().map(lobby -> {
-            LobbyResponseDTO dto = new LobbyResponseDTO(lobby);
+        if (lobbies == null) {
+            return result;
+        }
+
+        for (Lobby lobby : lobbies) {
+
             List<Map<String, Object>> users = lobbyUserStore.getUsers(lobby.getId());
-            dto.setCurrentCount((users != null) ? users.size() : 0);
+            int currentCount = (users != null) ? users.size() : 0;
+
+            // 0명 방 제거
+            if (currentCount <= 0) {
+                continue;
+            }
+
+            // 게임 중인데 2명 미만 → 제거
+            if (lobby.isGameStarted() && currentCount < 2) {
+                continue;
+            }
+
+            // 정상 방만 DTO 생성
+            LobbyResponseDTO dto = new LobbyResponseDTO(lobby);
+            dto.setCurrentCount(currentCount);
             dto.setMaxCount(10);
-            return dto;
-        }).collect(Collectors.toList());
-        messagingTemplate.convertAndSend("/topic/lobbies", dtos);
+
+            result.add(dto);
+        }
+
+        return result;
     }
+
+    /* ============================================================
+       WebSocket: 방 목록 브로드캐스트
+    ============================================================ */
 
     // 비밀번호 검증 API
     @PostMapping("/lobby/verify")
@@ -59,54 +86,50 @@ public class LobbyController {
 
     @PostMapping("/lobby")
     public ResponseEntity<LobbyResponseDTO> createLobby(@RequestBody CreateLobbyDTO dto) {
-        // 유효성 검사 생략 (기존 유지)
+
+        // 1. 방 생성
         Lobby lobby = lobbyService.createLobby(dto);
-        broadcastLobbyList(); // 목록 갱신
-        return ResponseEntity.status(HttpStatus.CREATED).body(new LobbyResponseDTO(lobby));
+        // 2. 🔥 방장 즉시 입장 처리 (sessionId는 가짜 값)
+        lobbyUserStore.addUser(
+                lobby.getId(),
+                "INIT-" + dto.getHostUserId(), // 임시 세션 ID
+                dto.getHostUserId(),
+                dto.getHostNickname()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(new LobbyResponseDTO(lobby));
     }
 
     // 🔥 [핵심 수정] 리턴 타입과 변수가 올바르게 수정됨
     @GetMapping("/lobby/{lobbyId}")
     public ResponseEntity<Map<String, Object>> getLobby(@PathVariable String lobbyId) {
-        Lobby lobby = lobbyService.getLobby(lobbyId);
 
-        // 접속자 목록 가져오기
+        Lobby lobby = lobbyService.getLobby(lobbyId);
         List<Map<String, Object>> users = lobbyUserStore.getUsers(lobbyId);
 
-        // 응답 맵 생성
         Map<String, Object> response = new HashMap<>();
 
-        // 로비 정보 넣기
         LobbyResponseDTO dto = new LobbyResponseDTO(lobby);
         dto.setCurrentCount(users != null ? users.size() : 0);
         dto.setMaxCount(10);
+
         response.put("lobby", dto);
+        response.put("users", users != null ? users : List.of());
 
-        // 유저 목록 넣기 (null이면 빈 리스트)
-        response.put("users", users != null ? users : new ArrayList<>());
-
-        // 🚨 중요: dto가 아니라 'response' 맵을 리턴해야 함!
         return ResponseEntity.ok(response);
     }
 
-    
-
     @GetMapping("/api/lobbies")
     public List<LobbyResponseDTO> getLobbyList() {
-        return lobbyService.getAllRooms().stream().map(lobby -> {
-            LobbyResponseDTO dto = new LobbyResponseDTO(lobby);
-            List<Map<String, Object>> users = lobbyUserStore.getUsers(lobby.getId());
-            dto.setCurrentCount((users != null) ? users.size() : 0);
-            dto.setMaxCount(10);
-            return dto;
-        }).collect(Collectors.toList());
+        return buildValidLobbyList();
     }
 
     // updateLobby 등 나머지는 기존과 동일
     @PutMapping("/lobby/{lobbyId}")
     public ResponseEntity<LobbyResponseDTO> updateLobby(@PathVariable String lobbyId, @RequestBody UpdateLobbyDTO dto) {
         Lobby updated = lobbyService.updateLobby(lobbyId, dto);
-        broadcastLobbyList();
         return ResponseEntity.ok(new LobbyResponseDTO(updated));
     }
 }

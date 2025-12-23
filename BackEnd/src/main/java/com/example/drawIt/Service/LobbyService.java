@@ -3,10 +3,12 @@ package com.example.drawIt.Service;
 import com.example.drawIt.DTO.CreateLobbyDTO;
 import com.example.drawIt.DTO.UpdateLobbyDTO;
 import com.example.drawIt.Entity.Lobby;
+import com.example.drawIt.Handler.GlobalExceptionHandler;
 import com.example.drawIt.Repository.LobbyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.drawIt.Handler.GlobalExceptionHandler.RoomAlreadyExistsException;
 
 import java.util.List;
 
@@ -21,8 +23,8 @@ public class LobbyService {
     ============================================================ */
     @Transactional
     public Lobby createLobby(CreateLobbyDTO dto) {
-        if (lobbyRepository.existsById(dto.getId())) {
-            throw new IllegalArgumentException("이미 존재하는 방 ID입니다.");
+        if (lobbyRepository.existsByName(dto.getName())) {
+            throw new RoomAlreadyExistsException("이미 존재하는 방 ID입니다.");
         }
 
         Lobby lobby = new Lobby();

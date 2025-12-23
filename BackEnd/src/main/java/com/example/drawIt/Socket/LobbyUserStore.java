@@ -2,6 +2,7 @@ package com.example.drawIt.Socket;
 
 import com.example.drawIt.Domain.GameState;
 import com.example.drawIt.Domain.GameStateManager;
+import com.example.drawIt.Entity.Lobby;
 import com.example.drawIt.Repository.LobbyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -29,6 +30,41 @@ public class LobbyUserStore {
     /* =========================
        입장 / 재접속
     ========================= */
+    private void broadcastLobbyList() {
+
+        List<Lobby> lobbies = lobbyRepository.findAll();
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (Lobby lobby : lobbies) {
+
+            Map<String, UserSessionState> users = rooms.get(lobby.getId());
+            int count = (users != null) ? users.size() : 0;
+
+            // 0명 방 제외
+            if (count <= 0) continue;
+
+            // 게임 중인데 2명 미만이면 제외
+            if (lobby.isGameStarted() && count < 2) continue;
+
+            Map<String, Object> dto = new HashMap<>();
+            dto.put("id", lobby.getId());
+            dto.put("name", lobby.getName());
+            dto.put("mode", lobby.getMode());
+            dto.put("hostNickname", lobby.getHostNickname());
+            dto.put("gameStarted", lobby.isGameStarted());
+            dto.put("currentCount", count);
+            dto.put("maxCount", 10);
+            dto.put(
+                    "passwordEnabled",
+                    lobby.getPassword() != null && !lobby.getPassword().isBlank()
+            );
+
+            result.add(dto);
+        }
+
+        messagingTemplate.convertAndSend("/topic/lobbies", result);
+    }
+
     @Transactional
     public synchronized void addUser(String roomId, String sessionId, String userId, String nickname) {
 
@@ -39,19 +75,24 @@ public class LobbyUserStore {
 
         if (state == null) {
             boolean isFirst = users.isEmpty();
-            state = new UserSessionState(userId, nickname, isFirst);
+            String resolvedNickname = resolveDuplicateNickname(roomId, nickname);
+            state = new UserSessionState(userId, resolvedNickname, isFirst);
             users.put(userId, state);
 
             if (isFirst) {
-                lobbyRepository.updateHost(roomId, userId, nickname);
+                lobbyRepository.updateHost(roomId, userId, resolvedNickname);
             }
         } else {
             state.setDisconnectAt(0);
-            state.setNickname(nickname);
+
+            String resolvedNickname = resolveDuplicateNickname(roomId, nickname);
+            state.setNickname(resolvedNickname);
         }
 
         state.setSessionId(sessionId);
         sessionIndex.put(sessionId, new String[]{roomId, userId});
+
+        broadcastLobbyList();
     }
 
     /* =========================
@@ -69,6 +110,7 @@ public class LobbyUserStore {
 
         processUserRemoval(roomId, users, removed);
         sendUserUpdate(roomId);
+        broadcastLobbyList();
     }
 
     /* =========================
@@ -117,14 +159,61 @@ public class LobbyUserStore {
             }
         }
     }
+    /*
+        닉네임 중복(2), (3)
+    */
+    private String resolveDuplicateNickname(String roomId, String requestedNickname) {
+
+        Map<String, UserSessionState> users = rooms.get(roomId);
+        if (users == null || users.isEmpty()) {
+            return requestedNickname;
+        }
+
+        // 현재 사용 중인 닉네임 목록
+        Set<String> usedNicknames = users.values().stream()
+                .map(UserSessionState::getNickname)
+                .collect(Collectors.toSet());
+
+        // 그대로 사용 가능하면 OK
+        if (!usedNicknames.contains(requestedNickname)) {
+            return requestedNickname;
+        }
+
+        // (2), (3), (4) ...
+        int index = 2;
+        while (true) {
+            String candidate = requestedNickname + "(" + index + ")";
+            if (!usedNicknames.contains(candidate)) {
+                return candidate;
+            }
+            index++;
+        }
+    }
 
     /* =========================
        유저 제거 후 처리
     ========================= */
     private void processUserRemoval(String roomId, Map<String, UserSessionState> users, UserSessionState removed) {
 
-        if (users.isEmpty()) {
+        Lobby lobby = lobbyRepository.findById(roomId).orElse(null);
+
+        if (lobby != null && lobby.isGameStarted() && users.size() < 2) {
+            System.out.println("🔥 [Server] 게임 중 인원 부족 → 방 삭제: " + roomId);
+            // 게임 상태 제거
+            gameStateManager.removeGame(roomId);
+            // DB 방 삭제
             lobbyRepository.deleteById(roomId);
+            // 메모리 정리
+            rooms.remove(roomId);
+            return;
+        }
+
+        if (users.isEmpty()) {
+            if (lobby != null) {
+                // 대기 중 방만 실제 삭제
+                    lobbyRepository.deleteById(roomId);
+                    System.out.println("[Server] 대기 중 0명 방 삭제: " + roomId);
+            }
             rooms.remove(roomId);
             gameStateManager.removeGame(roomId);
             return;
@@ -133,10 +222,17 @@ public class LobbyUserStore {
         if (removed != null && removed.isHost()) {
             UserSessionState next = users.values().iterator().next();
             next.setHost(true);
-            lobbyRepository.updateHost(roomId, next.getUserId(), next.getNickname());
+            lobbyRepository.updateHost(
+                    roomId,
+                    next.getUserId(),
+                    next.getNickname()
+            );
         }
 
-        handleGameLogicOnRemoval(roomId, removed != null ? removed.getUserId() : null);
+        handleGameLogicOnRemoval(
+                roomId,
+                removed != null ? removed.getUserId() : null
+        );
     }
 
     /* =========================

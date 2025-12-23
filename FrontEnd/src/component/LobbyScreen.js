@@ -47,6 +47,9 @@ function LobbyScreen() {
 
   const [modal, setModal] = useState(null);
 
+  const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
+  const [newNickname, setNewNickname] = useState(myNickname);
+
   // 방 정보 REST 로드
   const fetchRoomInfo = async () => {
     const res = await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
@@ -192,6 +195,16 @@ function LobbyScreen() {
     });
   };
 
+  const handleUserCardClick = (user) => {
+    if (!user) return;
+
+    // 나 자신만 허용
+    if (user.userId !== userIdRef.current) return;
+
+    setNewNickname(myNickname);
+    setIsNicknameModalOpen(true);
+  };
+
   const handleSendMessage = () => {
     if (!chatMessage.trim()) return;
     if (!clientRef.current?.connected) return;
@@ -221,21 +234,27 @@ function LobbyScreen() {
   // 3. 오른쪽 컬럼: 홀수 인덱스
   const rightSlots = totalSlots.filter((_, i) => i % 2 === 1);
 
-  const renderUserCard = (user, index) => (
-    <div
-      key={index}
-      className={`user-card ${!user ? "empty" : ""}`}
-      ref={(el) => {
-        if (user && el) userCardRefs.current[user.userId] = el;
-      }}
-    >
-      <div className="avatar" />
-      <span className="username">
-        {user ? user.nickname : "Empty"}
-        {user?.host && <span style={{ color: "gold", marginLeft: 6 }}>★</span>}
-      </span>
-    </div>
-  );
+  const renderUserCard = (user, index) => {
+    const isMe = user?.userId === userIdRef.current;
+
+    return (
+      <div
+        key={index}
+        className={`user-card ${!user ? "empty" : ""} ${isMe ? "me" : ""}`}
+        onClick={() => handleUserCardClick(user)}
+        style={{ cursor: isMe ? "pointer" : "default" }}
+        ref={(el) => {
+          if (user && el) userCardRefs.current[user.userId] = el;
+        }}
+      >
+        <div className="avatar" />
+        <span className="username">
+          {user ? user.nickname : "Empty"}
+          {user?.host && <span style={{ color: "gold", marginLeft: 6 }}>★</span>}
+        </span>
+      </div>
+    );
+  };
 
   const closeEditModal = async () => {
     setIsEditOpen(false);
@@ -244,6 +263,56 @@ function LobbyScreen() {
 
   return (
     <>
+      {isNicknameModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>닉네임 변경</h2>
+
+            <input
+              type="text"
+              value={newNickname}
+              onChange={(e) => setNewNickname(e.target.value)}
+              maxLength={12}
+              placeholder="새 닉네임"
+              autoFocus
+            />
+
+            <div className="modal-btn-group">
+              <button
+                onClick={() => setIsNicknameModalOpen(false)}
+                className="cancel-btn"
+              >
+                취소
+              </button>
+
+              <button
+                className="confirm-btn"
+                onClick={() => {
+                  if (!newNickname.trim()) return;
+
+                  // 1. 로컬 저장
+                  sessionStorage.setItem("nickname", newNickname);
+
+                  // 2. 상태 갱신
+                  setIsNicknameModalOpen(false);
+
+                  // 3. 서버에 다시 join (닉네임 갱신 효과)
+                  clientRef.current?.publish({
+                    destination: `/app/lobby/${roomId}/join`,
+                    body: JSON.stringify({
+                      roomId,
+                      userId: userIdRef.current,
+                      nickname: newNickname,
+                    }),
+                  });
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {modal && (
         <div className="modal-overlay">
           <div className="modal">

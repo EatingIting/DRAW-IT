@@ -110,15 +110,15 @@ function Join() {
     const filterValidRooms = (roomList) => {
         if (!Array.isArray(roomList)) return [];
         return roomList.filter(room => {
-
+            const current = Number(room.currentCount ?? 0);
     
         // 1. [추가됨] 대기중이든 뭐든, 사람이 0명이면 무조건 삭제!
-            if (room.currentCount <= 0) {
+            if (current <= 0) {
                 return false;
             }
 
             // 2. [팀원 코드 유지] 게임 중인데 사람이 2명 미만이면 삭제 (비정상 종료)
-            if (room.gameStarted && room.currentCount < 2) {
+            if (room.gameStarted && current < 2) {
                 return false;
             }
             
@@ -131,28 +131,28 @@ function Join() {
         try {
             const res = await axios.get(`${API_BASE_URL}/api/lobbies`);
 
-            // ✅ 받아온 데이터를 필터링 후 상태 저장
-            const validRooms = filterValidRooms(res.data);
+            const validRooms = filterValidRooms(res.data)
+                .sort((a, b) => {
+                    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
 
-            // 시간 데이터값을 오른차순으로 정렬
-            validRooms.sort((a, b) => {
-                const dateA = new Date(a.createdAt).getTime();
-                const dateB = new Date(b.createdAt).getTime();
-                
-                if (!dateA) return 1;
-                if (!dateB) return -1;
+                    // createdAt 없는 데이터는 뒤로
+                    if (!dateA && dateB) return 1;
+                    if (dateA && !dateB) return -1;
 
-                return dateA - dateB; // 👈 여기가 포인트! (작은 날짜가 먼저)
-            })
-            
+                    return dateA - dateB; // 오래된 방이 위로
+                });
+
             console.log("🔥 [확인] 필터링된 방 목록:", validRooms);
             setRooms(validRooms);
 
-            console.log("📦 [HTTP] 방 목록 로드 완료:", validRooms.length + "개");
+            console.log(`📦 [HTTP] 방 목록 로드 완료: ${validRooms.length}개`);
         } catch (err) {
             console.error("❌ [HTTP] 방 목록 로드 실패:", err);
+            setRooms([]); // 🔥 실패 시 이전 목록 잔상 방지
         }
     };
+
 
     // [WebSocket] 소켓 연결 및 구독
     const connectWebSocket = () => {

@@ -103,7 +103,14 @@ function CreateRoomModal({ onClose, mode = "create", roomData = null }) {
       onClose();
     } catch (error) {
       console.log(error);
-      alert("요청에 실패했습니다.");
+      if (error.response) {
+        if (error.response?.status === 409) {
+          alert(error.response.data);
+          return;
+        }
+      }
+      // 기타 오류
+      alert("방 생성 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
     }

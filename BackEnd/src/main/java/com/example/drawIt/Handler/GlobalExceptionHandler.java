@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /* 이미 존재하는 방 이름 */
     public static class RoomAlreadyExistsException extends RuntimeException {
         public RoomAlreadyExistsException(String message) {
             super(message);
@@ -22,31 +21,35 @@ public class GlobalExceptionHandler {
         }
     }
 
+    // 방 이름 중복 (409)
     @ExceptionHandler(RoomAlreadyExistsException.class)
     public ResponseEntity<String> handleRoomAlreadyExists(RoomAlreadyExistsException e) {
         return ResponseEntity
-                .status(HttpStatus.CONFLICT) // 409
+                .status(HttpStatus.CONFLICT)
                 .body(e.getMessage());
     }
 
+    // 존재하지 않는 로비 (404)
     @ExceptionHandler(LobbyNotFoundException.class)
     public ResponseEntity<String> handleLobbyNotFound(LobbyNotFoundException e) {
         return ResponseEntity
-                .status(HttpStatus.NOT_FOUND) // 404
+                .status(HttpStatus.NOT_FOUND)
                 .body(e.getMessage());
     }
 
+    // 그 외 잘못된 요청 (400)
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST) // 400
+                .status(HttpStatus.BAD_REQUEST)
                 .body(e.getMessage());
     }
 
+    // 서버 내부 오류 (500)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleException(Exception e) {
         return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR) // 500
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body("서버 내부 오류가 발생했습니다.");
     }
 }
