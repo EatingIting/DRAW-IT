@@ -33,6 +33,7 @@ public class LobbyService {
         lobby.setHostUserId(dto.getHostUserId());
         lobby.setHostNickname(dto.getHostNickname());
         lobby.setGameStarted(false); // 초기값은 대기중
+        lobby.setCreatedAt(java.time.LocalDateTime.now());
 
         return lobbyRepository.save(lobby);
     }
