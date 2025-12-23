@@ -247,11 +247,9 @@ function LobbyScreen() {
           if (user && el) userCardRefs.current[user.userId] = el;
         }}
       >
+        {user?.host && <span className="host-badge">★</span>}
         <div className="avatar" />
-        <span className="username">
-          {user ? user.nickname : "Empty"}
-          {user?.host && <span style={{ color: "gold", marginLeft: 6 }}>★</span>}
-        </span>
+        <span className="username">{user ? user.nickname : "Empty"}</span>
       </div>
     );
   };

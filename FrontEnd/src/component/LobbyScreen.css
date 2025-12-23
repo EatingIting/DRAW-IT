@@ -107,22 +107,27 @@
 
 /* 유저 카드 (채워진 상태) */
 .user-card {
-  width: 100%;
-  max-width: 220px;
-  height: 52px;
-  
+  width: 120px;            /* 사진처럼 타일형 */
+  height: 120px;
+
   background: #fff;
   border: 3px solid var(--game-border-color);
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
-  
+
   display: flex;
+  flex-direction: column;  /* ✅ 세로 배치 */
   align-items: center;
-  gap: 10px;
-  padding: 0 10px;
-  
+  justify-content: flex-start;
+  gap: 8px;
+
+  padding: 10px 8px;
+  box-sizing: border-box;
+
   transition: transform 0.2s;
   cursor: default;
+
+  position: relative;      /* ★ 배지 위치용 */
 }
 
 .user-card.me {
@@ -155,20 +160,36 @@
 
 /* 공통 요소 */
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 72px;
+  height: 72px;
   background-color: #eee;
   border: 2px solid var(--game-border-color);
   border-radius: 50%;
 }
 
 .username {
+  width: 100%;
+  text-align: center;
   font-size: 16px;
   font-weight: 700;
   color: #333;
+
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis; /* 긴 이름 말줄임표 */
+  text-overflow: ellipsis;
+}
+
+.user-card.me .username {
+  color: #1c7ed6;
+}
+
+.host-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: gold;
+  font-size: 16px;
+  line-height: 1;
 }
 
 /* =========================================
