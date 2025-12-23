@@ -57,6 +57,25 @@ function LobbyScreen() {
     setRoomInfo(data);
   };
 
+  const handleConfirmNickname = () => {
+    const trimmed = newNickname.trim();
+    if (!trimmed) return;
+    if (!clientRef.current?.connected) return;
+
+    clientRef.current.publish({
+      destination: `/app/lobby/${roomId}/nickname`,
+      body: JSON.stringify({
+        userId: userIdRef.current,
+        nickname: trimmed,
+      }),
+    });
+
+    // 로컬 저장 (새로고침 대비)
+    sessionStorage.setItem("nickname", trimmed);
+
+    setIsNicknameModalOpen(false);
+  };
+
   const MODE_LABEL = {
     POKEMON: "포켓몬",
     ANIMAL: "동물",
@@ -273,6 +292,17 @@ function LobbyScreen() {
               maxLength={12}
               placeholder="새 닉네임"
               autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleConfirmNickname();
+                }
+
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setIsNicknameModalOpen(false);
+                }
+              }}
             />
 
             <div className="modal-btn-group">
@@ -285,26 +315,7 @@ function LobbyScreen() {
 
               <button
                 className="confirm-btn"
-                onClick={() => {
-                  if (!newNickname.trim()) return;
-
-                  // 1. 로컬 저장
-                  sessionStorage.setItem("nickname", newNickname);
-
-                  // 2. 상태 갱신
-                  setIsNicknameModalOpen(false);
-
-                  // 3. 서버에 다시 join (닉네임 갱신 효과)
-                  clientRef.current?.publish({
-                    destination: `/app/lobby/${roomId}/join`,
-                    body: JSON.stringify({
-                      roomId,
-                      userId: userIdRef.current,
-                      nickname: newNickname,
-                    }),
-                  });
-                }}
-              >
+                onClick={handleConfirmNickname}>
                 확인
               </button>
             </div>
