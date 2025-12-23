@@ -748,3 +748,27 @@
   from { transform: rotate(-10deg); }
   to { transform: rotate(10deg); }
 }
+
+.score-float {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #00aaff; /* 노란색 */
+  font-weight: 900;
+  font-size: 28px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  animation: scoreUp 1s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes scoreUp {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -10px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50px);
+  }
+}

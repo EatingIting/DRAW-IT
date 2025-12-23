@@ -21,12 +21,13 @@ function CreateRoomModal({ onClose, mode = "create", roomData = null }) {
 
   const MODE_LIST = [
     { key: "RANDOM", label: "무작위" },
+    { key: "WORD_CHAIN", label: "끝말잇기" },
     { key: "ANIMAL", label: "동물" },
     { key: "FOOD", label: "음식" },
     { key: "JOB", label: "직업" },
     { key: "SPORT", label: "스포츠" },
     { key: "OBJECT", label: "사물" },
-    { key: "POKEMON", label: "포켓몬", icon: "/img/pokemon_mode.png" },
+    { key: "POKEMON", label: "포켓몬"/* , icon: "/img/pokemon_mode.png"  */},
   ];
 
   // ✅ edit 모드일 때 초기값 주입

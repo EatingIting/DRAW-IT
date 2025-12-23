@@ -45,6 +45,7 @@ function LobbyScreen() {
   const [chatMessage, setChatMessage] = useState("");
 
   const [roomInfo, setRoomInfo] = useState(null);
+  const roomInfoRef = useRef(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   /* Chat Bubble */
@@ -81,6 +82,7 @@ function LobbyScreen() {
     const res = await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
     const data = res.data?.lobby ?? res.data;
     setRoomInfo(data);
+    roomInfoRef.current = data;
   };
 
   // ============================================================
@@ -125,6 +127,7 @@ function LobbyScreen() {
     OBJECT: "사물",
     SPORT: "스포츠",
     RANDOM: "랜덤",
+    WORD_CHAIN: "끝말잇기",
   };
 
   useEffect(() => {
@@ -157,16 +160,27 @@ function LobbyScreen() {
           }
 
           if (data.type === "ROOM_UPDATED") {
-            setRoomInfo((prev) => ({
-              ...(prev || {}),
-              id: data.roomId ?? prev?.id,
-              name: data.roomName ?? prev?.name,
-              mode: data.mode ?? prev?.mode,
-            }));
+            const newData = {
+              ...(roomInfoRef.current || {}), // Ref 값 사용
+              id: data.roomId ?? roomInfoRef.current?.id,
+              name: data.roomName ?? roomInfoRef.current?.name,
+              mode: data.mode ?? roomInfoRef.current?.mode,
+            };
+            setRoomInfo(newData);
+            roomInfoRef.current = newData;
           }
 
           if (data.type === "GAME_START") {
-            navigate(`/gaming/${roomId}`);
+            const currentMode = data.mode || roomInfoRef.current?.mode;
+            if (currentMode === "WORD_CHAIN") {
+              navigate(`/wordchain/${roomId}`, { 
+                state: { nickname: myNickname } 
+              });
+            } else {
+              navigate(`/gaming/${roomId}`, {
+                 state: { nickname: myNickname } 
+              });
+            }
           }
 
           if (data.type === "ROOM_DESTROYED") {
@@ -249,10 +263,21 @@ function LobbyScreen() {
     if (!isHost) return;
     if (!clientRef.current?.connected) return;
 
-    clientRef.current.publish({
-      destination: `/app/lobby/${roomId}/start`,
-      body: JSON.stringify({ roomId }),
-    });
+    if (roomInfo?.mode === "WORD_CHAIN") {
+       clientRef.current.publish({
+        destination: `/app/wordchain/${roomId}/start`,
+        body: JSON.stringify({}),
+      });
+    }
+
+    // 2. 0.2초 딜레이 후 로비 상태 변경 (화면 이동 트리거)
+    // 이 딜레이가 있어야 소켓 끊기기 전에 서버가 시작 처리를 완료함
+    setTimeout(() => {
+        clientRef.current.publish({
+          destination: `/app/lobby/${roomId}/start`,
+          body: JSON.stringify({ roomId }),
+        });
+    }, 500);
   };
 
   const handleUserCardClick = (user) => {
