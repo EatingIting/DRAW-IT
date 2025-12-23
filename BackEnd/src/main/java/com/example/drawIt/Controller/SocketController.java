@@ -124,7 +124,7 @@ public class SocketController {
 
         state.setRoundEndTime(0L);
 
-        // ✅ [확인] createGame 안에서 roundEndTime이 설정되므로, 여기서 get 해서 보냄
+        // createGame 안에서 roundEndTime이 설정되므로, 여기서 get 해서 보냄
         messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                 "type", "GAME_START",
                 "drawerUserId", drawerUserId,
@@ -156,7 +156,7 @@ public class SocketController {
         String newWord = gameStateManager.pickNextWord(state);
         state.setCurrentWord(newWord);
 
-        // ✅ 시간 갱신
+        // 시간 갱신
         long endTime = System.currentTimeMillis() + 60000;
         state.setRoundEndTime(endTime);
 
@@ -259,7 +259,7 @@ public class SocketController {
             messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
                     "type", "CORRECT_ANSWER",
                     "winnerUserId", userId,
-                    "winnerNickname", winnerNickname, // ✅ 닉네임 추가 전송
+                    "winnerNickname", winnerNickname, // 닉네임 추가 전송
                     "answer", state.getCurrentWord()
             ));
 

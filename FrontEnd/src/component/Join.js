@@ -24,6 +24,16 @@ const RoomCard = ({ room, onJoin }) => {
     const isFull = current >= max;
     const isPlaying = room.gameStarted; // 백엔드에서 받은 게임 상태
 
+    const MODE_LABEL = {
+        POKEMON: "포켓몬",
+        ANIMAL: "동물",
+        JOB: "직업",
+        FOOD: "음식",
+        OBJECT: "사물",
+        SPORT: "스포츠",
+        RANDOM: "랜덤",
+    };
+
     return (
         // CSS 변수(--ratio)를 통해 배경색 자동 조절 (초록 -> 빨강)
         <div className='room-card' style={{ '--ratio': ratio }}>
@@ -50,7 +60,7 @@ const RoomCard = ({ room, onJoin }) => {
             {/* --- 카드 중단: 방장, 모드 정보 --- */}
             <div className='room-card-middle'>
                 <div className='owner-name'>👑 방장: {room.hostNickname}</div>
-                <div className='room-desc'>🎮 모드: {room.mode}</div>
+                <div className='room-desc'>🎮 모드: {MODE_LABEL[room.mode]}</div>
             </div>
 
             {/* --- 카드 하단: 입장 버튼 --- */}
@@ -150,7 +160,7 @@ function Join() {
             webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
             reconnectDelay: 5000, 
             onConnect: () => {
-                console.log("🟢 [WS] 소켓 연결 성공!");
+                console.log("[WS] 소켓 연결 성공!");
                 
                 client.current.subscribe('/topic/lobbies', (message) => {
                     const updatedRoomsRaw = JSON.parse(message.body);
@@ -159,7 +169,7 @@ function Join() {
 
                     setRooms(validRooms);
                     
-                    console.groupCollapsed(`🔄 [WS] 방 목록 갱신됨 (${new Date().toLocaleTimeString()})`);
+                    console.groupCollapsed(`[WS] 방 목록 갱신됨 (${new Date().toLocaleTimeString()})`);
                     console.table(validRooms.map(r => ({
                         제목: r.name,
                         인원: `${r.currentCount}/${r.maxCount}`,
@@ -175,14 +185,14 @@ function Join() {
                         if (!dateA) return 1;
                         if (!dateB) return -1;
 
-                        return dateA - dateB; // 👈 작은 날짜가 먼저
+                        return dateA - dateB; // 작은 날짜가 먼저
                     });
 
                     console.groupEnd();
                 });
             },
             onStompError: (frame) => {
-                console.error("🔴 [WS] 소켓 에러 발생:", frame.headers['message']);
+                console.error("[WS] 소켓 에러 발생:", frame.headers['message']);
             }
         });
         client.current.activate();
@@ -242,7 +252,7 @@ function Join() {
     const verifyAndJoin = async (room, password) => {
         try {
             // 3. 서버에 입장 가능 여부 확인 (비밀번호 검증)
-            console.log(`🔍 [Join] 방 입장 시도: ${room.name} (ID: ${room.id})`);
+            console.log(`[Join] 방 입장 시도: ${room.name} (ID: ${room.id})`);
             
             await axios.post(`${API_BASE_URL}/lobby/verify`, {
                 roomId: room.id,
@@ -265,9 +275,9 @@ function Join() {
 
         } catch (error) {
             // 5. 에러 처리
-            console.error("❌ [Join] 입장 실패:", error);
+            console.error("[Join] 입장 실패:", error);
             if (error.response && error.response.status === 401) {
-                showAlert("🚫 비밀번호가 일치하지 않습니다.");
+                showAlert("비밀번호가 일치하지 않습니다.");
             } else if (error.response && error.response.status === 404) {
                 showAlert("존재하지 않는 방입니다");
             } else {

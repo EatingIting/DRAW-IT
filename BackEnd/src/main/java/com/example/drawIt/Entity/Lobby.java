@@ -17,7 +17,7 @@ public class Lobby {
     @Column(length = 20)
     private String id;
 
-    @Column(nullable = false, length = 50)
+    @Column(nullable = false, length = 50, unique = true)
     private String name;
 
     @Column(nullable = false, length = 20)

@@ -20,7 +20,7 @@ public class GameStateManager {
         String word = wordProvider.pickUniqueWord(state, mode);
         state.setCurrentWord(word);
 
-        // ✅ [추가] 게임 생성 시 종료 시간 설정 (60초)
+        // 게임 생성 시 종료 시간 설정 (60초)
         state.setRoundEndTime(System.currentTimeMillis() + 60000);
         games.put(roomId, state);
         return state;

@@ -160,7 +160,7 @@ public class LobbyUserStore {
         String newDrawer = gameStateManager.pickRandomDrawer(users);
         state.setDrawerUserId(newDrawer);
 
-        // ✅ lobby에서 mode 조회
+        // lobby에서 mode 조회
         String mode = lobbyRepository.findById(roomId)
                 .map(l -> l.getMode())
                 .orElse("RANDOM");

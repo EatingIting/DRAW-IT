@@ -228,6 +228,16 @@ function GameScreen({ maxPlayers = 10 }) {
     }
   };
 
+  const MODE_LABEL = {
+    POKEMON: "포켓몬",
+    ANIMAL: "동물",
+    JOB: "직업",
+    FOOD: "음식",
+    OBJECT: "사물",
+    SPORT: "스포츠",
+    RANDOM: "랜덤",
+  };
+
   useEffect(() => {
     keywordRef.current = keyword;
   }, [keyword]);
@@ -1102,7 +1112,7 @@ function GameScreen({ maxPlayers = 10 }) {
                 <h2>당신이 출제자 입니다!</h2>
                 <div className="modal-info">
                   <p style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>
-                    주제어: <span className="highlight-text">{roundModal.word}</span>
+                    제시어: <span className="highlight-text">{roundModal.word}</span>
                   </p>
                   <p style={{ marginTop: '15px' }}>그림을 그려주세요 🎨</p>
                 </div>
@@ -1172,7 +1182,7 @@ function GameScreen({ maxPlayers = 10 }) {
                        <div className="tool-container">
                           {keyword && (
                             <div className="keyword-badge">
-                              주제어: <strong>{keyword}</strong>
+                              제시어: <strong>{keyword}</strong>
                             </div>
                           )}
                           <div className="tool-box">

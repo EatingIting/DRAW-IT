@@ -27,7 +27,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.setUserDestinationPrefix("/user");
     }
 
-    // ✅ [핵심 해결책] WebSocket 메시지 버퍼 크기를 160KB(기본 64KB) 이상으로 늘립니다.
+    // WebSocket 메시지 버퍼 크기를 160KB(기본 64KB) 이상으로 늘립니다.
     // 여기서는 넉넉하게 512KB(512 * 1024)로 설정합니다.
     @Override
     public void configureWebSocketTransport(WebSocketTransportRegistration registry) {
@@ -36,7 +36,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.setSendBufferSizeLimit(512 * 1024);
     }
 
-    // ✅ 혹시 위 설정이 안 먹힐 경우를 대비해 컨테이너 레벨에서도 설정을 추가합니다.
+    // 혹시 위 설정이 안 먹힐 경우를 대비해 컨테이너 레벨에서도 설정을 추가합니다.
     @Bean
     public ServletServerContainerFactoryBean createWebSocketContainer() {
         ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
