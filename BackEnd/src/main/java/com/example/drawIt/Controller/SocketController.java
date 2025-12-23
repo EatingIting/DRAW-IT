@@ -142,34 +142,18 @@ public class SocketController {
         }, 3, TimeUnit.SECONDS);
     }
 
-    @MessageMapping("/lobby/{roomId}/timeover")
-    public void timeOver(@DestinationVariable String roomId) {
-        /*processNextRound(roomId);
-        GameState state = gameStateManager.getGame(roomId);
-        if (state == null) return;
-        var users = lobbyUserStore.getUsers(roomId);
-        if (users.isEmpty()) return;
+    @MessageMapping("/lobby/{roomId}/nickname")
+    public void changeNickname(@DestinationVariable String roomId,
+                               @Payload Map<String, String> payload) {
+        String userId = payload.get("userId");
+        String nickname = payload.get("nickname");
 
-        String newDrawer = gameStateManager.pickRandomDrawer(users);
-        state.setDrawerUserId(newDrawer);
-
-        String newWord = gameStateManager.pickNextWord(state);
-        state.setCurrentWord(newWord);
-
-        // 시간 갱신
-        long endTime = System.currentTimeMillis() + 60000;
-        state.setRoundEndTime(endTime);
-
-        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
-                "type", "DRAWER_CHANGED",
-                "drawerUserId", newDrawer,
-                "word", newWord,
-                "roundEndTime", endTime
-        ));*/
+        lobbyUserStore.changeNickname(roomId, userId, nickname);
     }
 
     @MessageMapping("/lobby/{roomId}/leave")
-    public void leave(@DestinationVariable String roomId, @Payload Map<String, String> payload) {
+    public void leave(@DestinationVariable String roomId,
+                      @Payload Map<String, String> payload) {
         lobbyUserStore.leaveRoom(roomId, payload.get("userId"));
     }
 

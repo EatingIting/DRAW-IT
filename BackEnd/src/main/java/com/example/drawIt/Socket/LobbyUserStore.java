@@ -86,7 +86,6 @@ public class LobbyUserStore {
             state.setDisconnectAt(0);
 
             String resolvedNickname = resolveDuplicateNickname(roomId, nickname);
-            state.setNickname(resolvedNickname);
         }
 
         state.setSessionId(sessionId);
@@ -188,6 +187,53 @@ public class LobbyUserStore {
             }
             index++;
         }
+    }
+
+    /*
+        닉네임 변경
+    */
+    @Transactional
+    public synchronized String changeNickname(
+            String roomId,
+            String userId,
+            String newNickname
+    ) {
+        Map<String, UserSessionState> users = rooms.get(roomId);
+        if (users == null) return null;
+
+        UserSessionState state = users.get(userId);
+        if (state == null) return null;
+
+        // 🔥 중복 처리 (기존 유저들 기준, 자기 자신 제외)
+        Set<String> usedNicknames = users.values().stream()
+                .filter(u -> !u.getUserId().equals(userId))
+                .map(UserSessionState::getNickname)
+                .collect(Collectors.toSet());
+
+        String resolved = newNickname;
+        if (usedNicknames.contains(newNickname)) {
+            int index = 2;
+            while (true) {
+                String candidate = newNickname + "(" + index + ")";
+                if (!usedNicknames.contains(candidate)) {
+                    resolved = candidate;
+                    break;
+                }
+                index++;
+            }
+        }
+
+        state.setNickname(resolved);
+
+        // 방장인 경우 DB도 갱신
+        if (state.isHost()) {
+            lobbyRepository.updateHost(roomId, userId, resolved);
+        }
+
+        // 🔥 로비에 유저 목록 갱신 알림
+        sendUserUpdate(roomId);
+
+        return resolved;
     }
 
     /* =========================
