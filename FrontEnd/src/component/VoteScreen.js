@@ -46,8 +46,10 @@ const VoteScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [isHost, setIsHost] = useState(false);
+  // 🗑️ [삭제] isHost, isHostRef 관련 로직 전부 제거
+
   const SAVE_WINNERS_DONE_KEY = `saveWinnersDone_${lobbyId}`;
+  // hasSavedRef는 "이 브라우저에서 중복 요청 방지"를 위해 남겨둡니다.
   const hasSavedRef = useRef(sessionStorage.getItem(SAVE_WINNERS_DONE_KEY) === "true");
 
   const VOTE_END_TIME_KEY = `voteEndTime_${lobbyId}`;
@@ -122,60 +124,41 @@ const VoteScreen = () => {
     imagesRef.current = images;
   }, [images]);
 
-  // ✅ [수정 3] 로딩 타이머 로직 변경
+  // 로딩 타이머
   useEffect(() => {
     if (!isLoading) return;
-
-    // 로딩을 "지금부터 한 번 보여줬다"로 즉시 기록 (새로고침해도 다시 안 뜸)
     sessionStorage.setItem(VOTE_LOADING_SHOWN_KEY, "1");
-
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 3000);
-
     return () => clearTimeout(timer);
   }, [isLoading, VOTE_LOADING_SHOWN_KEY]);
 
-  // ✅ [수정 4] 종료 시간 설정 (타이머 동기화)
+  // 종료 시간 설정
   useEffect(() => {
-    // 로딩 중이면 타이머 시작점 설정 보류
     if (isLoading) return;
-
-    // 로딩이 끝났는데 종료 시간이 설정되어 있지 않다면 -> 최초 진입 후 3초 지난 시점
     if (!sessionStorage.getItem(VOTE_END_TIME_KEY)) {
       const endTime = Date.now() + 30 * 1000;
       sessionStorage.setItem(VOTE_END_TIME_KEY, endTime.toString());
       setTimeLeft(30);
     } 
-    // 새로고침의 경우: isLoading은 false지만 Key는 이미 있음 -> 아래 타이머 로직이 Date.now() 기준으로 자동 계산
   }, [lobbyId, isLoading, VOTE_END_TIME_KEY]);
 
-  // ✅ [수정 5] 카운트다운 로직
-  // isLoading 의존성을 제거하여 UI 렌더링과 별개로 시간 계산 로직이 돌도록 해도 되지만,
-  // 위에서 isLoading일 때 UI를 막고 있으므로, 로딩이 false가 되는 순간 정확한 잔여 시간이 표시됨.
+  // 카운트다운 및 종료 처리
   useEffect(() => {
-    // 1. 결과가 이미 나왔거나 로딩 중이면 타이머 로직 중단
     if (showResults || isLoading) return;
 
     const savedEndTime = sessionStorage.getItem(VOTE_END_TIME_KEY);
-    
-    // 종료 시간이 없으면 로직 수행 불가
     if (!savedEndTime) return;
 
     const checkTimeAndProcess = () => {
       const now = Date.now();
       const end = parseInt(savedEndTime, 10);
-      
-      // 남은 시간 계산 (음수 방지)
       const remainingSeconds = Math.max(0, Math.floor((end - now) / 1000));
       
-      // UI 시간 업데이트
       setTimeLeft(remainingSeconds);
 
-      // 시간이 다 됐을 때 (0초 이하)
       if (remainingSeconds <= 0) {
-        // ⚠️ 중요: setInterval 안에서는 state인 images 대신 ref인 imagesRef.current를 사용해야
-        // 최신 이미지 목록을 정확히 가져올 수 있습니다.
         if (!isVotingDisabled && imagesRef.current.length > 0) {
            console.log("⏰ 타이머 종료! 결과 집계 시작");
            setIsVotingDisabled(true); 
@@ -184,16 +167,18 @@ const VoteScreen = () => {
       }
     };
 
-    // 2. 컴포넌트 렌더링 시 즉시 한 번 체크
     checkTimeAndProcess();
-
-    // 3. 1초마다 주기적으로 체크 (timeLeft가 변해도 이 인터벌은 유지됨)
     const timer = setInterval(checkTimeAndProcess, 1000);
-
     return () => clearInterval(timer);
   }, [showResults, isLoading, isVotingDisabled, VOTE_END_TIME_KEY]);
 
   const calculateAndShowResults = async () => {
+    // 🗑️ [삭제] isHost 로그 제거
+    console.log("[calculateAndShowResults 진입]", {
+      hasSaved: hasSavedRef.current,
+      imagesLen: imagesRef.current.length,
+    });
+    
     const currentImages = imagesRef.current;
     
     console.log("================ [점수 계산 시작] ================");
@@ -275,14 +260,23 @@ const VoteScreen = () => {
         };
       });
 
-      // ✅ host만 + ✅ 1회만 저장
-      if (isHost && !hasSavedRef.current && winnersPayload.length > 0) {
+      console.log("📦 winnersPayload 체크", {
+        hasSaved: hasSavedRef.current,
+        winnersPayloadLen: winnersPayload.length,
+      });
+
+      // ✅ [수정] isHost 조건 제거! 
+      // 방장 여부와 상관없이 누구나 결과를 집계하면 저장을 시도합니다.
+      // (DB에서 중복은 알아서 처리됨)
+      if (!hasSavedRef.current && winnersPayload.length > 0) {
         try {
           await axios.post(`${API_BASE_URL}/monRnk/saveWinners`, winnersPayload);
           hasSavedRef.current = true;
           sessionStorage.setItem(SAVE_WINNERS_DONE_KEY, "true");
+          console.log("✅ 명예의 전당 저장 요청 전송 완료!");
         } catch (error) {
-          console.error("명예의 전당 저장 실패:", error);
+          // 중복 저장 에러 등이 발생할 수 있으나, 무시하거나 로그만 남김
+          console.error("명예의 전당 저장 실패 (중복일 수 있음):", error);
         }
       }
     }
@@ -317,17 +311,13 @@ const VoteScreen = () => {
       try {
         const galleryRes = await axios.get(`${API_BASE_URL}/api/game/${lobbyId}/gallery`);
         
-        // ✅ [수정] 중복 제거 로직 추가
-        // 서버 DB에 중복 저장되었더라도, 프론트에서 imageUrl이 같은 것은 하나만 남김
         const uniqueMap = new Map();
         galleryRes.data.forEach((item) => {
-            // imageUrl을 key로 사용하여 중복 방지 (이미 존재하는 키면 무시)
             if (item.imageUrl && !uniqueMap.has(item.imageUrl)) {
                 uniqueMap.set(item.imageUrl, item);
             }
         });
         
-        // 중복이 제거된 배열 생성
         const uniqueData = Array.from(uniqueMap.values());
 
         const initializedData = uniqueData.map(img => ({
@@ -340,32 +330,22 @@ const VoteScreen = () => {
         const EXPECTED_ROUNDS = totalRounds; 
         console.log(`🖼️ 이미지 로드 현황: ${initializedData.length} / ${EXPECTED_ROUNDS}`);
 
-        // 데이터가 아직 다 안 왔으면 재시도 (중복 제거된 개수 기준)
         if (initializedData.length < EXPECTED_ROUNDS && retryCount < maxRetries) {
             console.log(`⏳ 이미지 로딩 대기 중... (${initializedData.length}/${EXPECTED_ROUNDS})`);
             retryCount++;
             setTimeout(fetchVoteData, 20); 
         }
 
-        if (players.length === 0) {
-            try {
-              const lobbyRes = await axios.get(`${API_BASE_URL}/lobby/${lobbyId}`);
-              const lobbyData = lobbyRes.data.lobby || lobbyRes.data;
+        try {
+          // 🗑️ [삭제] 방장 정보 확인 로직(setIsHost) 전부 제거
+          const lobbyRes = await axios.get(`${API_BASE_URL}/lobby/${lobbyId}`);
+          const lobbyData = lobbyRes.data.lobby || lobbyRes.data;
 
-              const hostId =
-                lobbyData.hostUserId ??
-                lobbyData.host_user_id ??
-                lobbyData.host_userId;
-
-              setIsHost(String(hostId) === String(sessionStorage.getItem("userId")));
-
-              // players는 비어있을 때만 채우기 (덮어쓰기 방지)
-              if (players.length === 0) {
-                setPlayers(lobbyData.users || []);
-              }
-            } catch (e) {
-              console.error("로비 정보 로딩 실패:", e);
-            }
+          if (players.length === 0) {
+            setPlayers(lobbyData.users || []);
+          }
+        } catch (e) {
+          console.error("로비 정보 로딩 실패:", e);
         }
       } catch (err) {
         console.error("데이터 로딩 실패:", err);
