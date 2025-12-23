@@ -92,49 +92,65 @@ public class MonRnkService {
         }
 
         for (Map<String, String> info : winners) {
-            String lobbyId = info.get("lobbyId");
-            String filename = info.get("filename"); // UUID가 포함된 고유한 파일명
-            String keyword = info.get("keyword");
 
-            // 🔥 [중복 방지 로직 추가]
-            // 이미 DB에 동일한 파일명(UUID 포함)으로 저장된 기록이 있다면 건너뜁니다.
-            if (monRnkRepository.existsByImgName(filename)) {
-                System.out.println("⚠️ 이미 저장된 이미지입니다. 중복 저장을 건너뜁니다: " + filename);
-                continue;
-            }
-
-            Path sourcePath = Paths.get(GAME_TEMP_DIR + lobbyId + "/" + filename);
-            Path targetPath = Paths.get(targetDirPath + "/" + filename);
-
+            // ✅ (2) 아이템별 예외 로그: for문 1개 아이템 단위로 try-catch
             try {
+                String lobbyId = info.get("lobbyId");
+                String filename = info.get("filename");
+                String keyword = info.get("keyword");
+
+                // ✅ (3) filename 쿼리스트링 제거 (있을 때만)
+                if (filename != null) {
+                    filename = filename.split("\\?")[0];
+                }
+
+                // ✅ (1) payload 검증: null/빈값이면 그냥 스킵 (NPE/DB오류 방지)
+                if (lobbyId == null || lobbyId.isBlank() || filename == null || filename.isBlank()) {
+                    System.out.println("⚠️ invalid payload: " + info);
+                    continue;
+                }
+
+                // 🔥 [중복 방지]
+                if (monRnkRepository.existsByImgName(filename)) {
+                    System.out.println("⚠️ 이미 저장된 이미지입니다. 중복 저장을 건너뜁니다: " + filename);
+                    continue;
+                }
+
+                Path sourcePath = Paths.get(GAME_TEMP_DIR + lobbyId + "/" + filename);
+                Path targetPath = Paths.get(targetDirPath + "/" + filename);
+
                 if (Files.exists(sourcePath)) {
-                    // ... (기존 파일 복사 로직 동일)
                     Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
-                    System.out.println("💾 파일 복사 완료: " + targetPath.toString());
+                    System.out.println("💾 파일 복사 완료: " + targetPath);
 
                     MonRnk monRnk = MonRnk.builder()
                             .imgName(filename)
-                            .imgUrl(targetPath.toString()) // 절대 경로보다는 웹 접근 경로로 저장하는 것을 추천하지만, 기존 로직 유지
+                            .imgUrl(targetPath.toString())
                             .topic(keyword)
                             .recommend(0)
                             .regDate(now)
                             .build();
 
-                    try{
+                    try {
                         monRnkRepository.save(monRnk);
-                    }catch (DataIntegrityViolationException e){
+                    } catch (DataIntegrityViolationException e) {
+                        // 여기도 로그 남기면 원인 파악에 도움됨(선택)
+                        System.out.println("⚠️ DB 제약 위반(중복 등)으로 저장 스킵: " + filename);
                         continue;
                     }
 
                 } else {
                     System.err.println("❌ 원본 파일을 찾을 수 없음: " + sourcePath);
                 }
-            } catch (IOException e) {
+
+            } catch (Exception e) {
+                // ✅ (2) 여기서 500 원인 스택트레이스가 확실히 찍힘
                 e.printStackTrace();
-                System.err.println("❌ 파일 복사 중 에러 발생: " + filename);
+                System.err.println("❌ saveWinners item failed: " + info);
             }
         }
     }
+
 
     @Transactional
     public boolean increaseRec(long imgId){
