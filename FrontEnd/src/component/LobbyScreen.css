@@ -465,6 +465,41 @@
   z-index: -1;
 }
 
+.chat-bubble-float.mirror::before {
+  /* 기존 border 속성 초기화 (삼각형 방식 제거) */
+  border: none;
+  width: 14px;
+  height: 14px;
+  background: #2c2c2c;
+  border-bottom-left-radius: 0; /* 왼쪽 둥근 모서리 제거 */
+  border-bottom-right-radius: 4px; /* 오른쪽 끝을 둥글게 */
+
+  /* 위치 반전 */
+  left: auto; 
+  right: -10px;
+
+  /* 각도 반전: 45도 회전은 유지하되, skew 방향 등을 조절하여 대칭 생성 */
+  /* scaleX(-1)을 추가하면 좌우 반전이 되어 편하게 대칭을 만들 수 있습니다. */
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg) scaleX(-1);
+}
+
+/* 2. 흰색 배경 꼬리 (::after) */
+.chat-bubble-float.mirror::after {
+  /* 기존 border 속성 초기화 */
+  border: none;
+  width: 14px;
+  height: 14px;
+  background: white;
+  
+  /* 위치 반전 (테두리보다 살짝 안쪽) */
+  left: auto;
+  right: -6px;
+
+  /* 각도 반전 (before와 동일하게) */
+  transform: translateY(-50%) rotate(45deg) skew(-10deg, -10deg) scaleX(-1);
+}
+
+
 /* 등장 애니메이션 */
 @keyframes bubbleFloat {
   0% { opacity: 0; transform: translateY(6px); }

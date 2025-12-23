@@ -433,12 +433,20 @@ function LobbyScreen() {
           return (
             <div
               key={uid}
-              className="chat-bubble-float"
+              // 화자가 오른쪽이면 mirror 클래스 추가
+              className={`chat-bubble-float ${isRightSide ? "mirror" : ""}`}
               style={{
                 position: "fixed",
-                top: rect.top - 6,
+                // ✅ [수정 1] 기준점을 카드의 수직 정중앙으로 변경
+                top: rect.top + rect.height / 2,
+                
                 left: isRightSide ? rect.left - 14 : rect.right + 14,
-                transform: isRightSide ? "translateX(-100%)" : "none",
+                
+                // ✅ [수정 2] transform에 Y축 -50%를 추가하여 말풍선이 정확히 중앙에 오도록 조정
+                transform: isRightSide 
+                  ? "translate(-100%, -50%)"   // 오른쪽: X축(왼쪽으로) 이동 + Y축(위로) 이동
+                  : "translateY(-50%)",        // 왼쪽: Y축(위로) 이동
+                  
                 zIndex: 9999,
               }}
             >

@@ -44,12 +44,10 @@ function GameScreen({ maxPlayers = 10 }) {
 
   const stompRef = useRef(null);
   
-  // 누락된 Ref 정의 추가
   const connectedRef = useRef(false);
   const reconnectingRef = useRef(false);
   const subsRef = useRef([]);
 
-  // 소켓 연결 후 첫 업데이트인지 확인하는 변수
   const isFirstSocketUpdate = useRef(true);
 
   const [players, setPlayers] = useState([]);
@@ -58,26 +56,20 @@ function GameScreen({ maxPlayers = 10 }) {
   
   const [isGameStarted, setIsGameStarted] = useState(false);
   
-  // 서버 동기화용 종료 시간
   const [roundEndTime, setRoundEndTime] = useState(0); 
 
-  //정답자 ID (하늘색 배경으로 표시용)
   const [winnerId, setWinnerId] = useState(null);
 
-  //현재 출제자 ID 저장 (별 표시용)
   const [currentDrawerId, setCurrentDrawerId] = useState(null);
 
-  // 정답 알림 모달 상태
   const [answerModal, setAnswerModal] = useState({ visible: false, winner: '', answer: '' });
 
-  // 시간 초과 알림 모달
   const [timeOverModal, setTimeOverModal] = useState(false);
 
   const [forceExitModal, setForceExitModal] = useState(false);
 
   const [gameOverModal, setGameOverModal] = useState(false);
 
-  // 출제자, 유저한테 뜨는 모달
   const [roundModal, setRoundModal] = useState({
     visible: false,
     role: null,   // 'drawer' | 'guesser'
@@ -96,7 +88,7 @@ function GameScreen({ maxPlayers = 10 }) {
   const pendingHistoryRef = useRef([]);
   const canvasReadyRef = useRef(false);
 
-  const customCursorRef = useRef(null); // 커서 굵기에 따른 변화 관리
+  const customCursorRef = useRef(null); 
 
   const [activeTool, setActiveTool] = useState(() => localStorage.getItem('activeTool') || 'pen');
   const [showModal, setShowModal] = useState(false);
@@ -126,7 +118,6 @@ function GameScreen({ maxPlayers = 10 }) {
   const [remainingSeconds, setRemainingSeconds] = useState(null);
 
   const handleLeaveGame = useCallback (() => {
-    // 1. 소켓 먼저 끊기 (중복 메시지 수신 방지)
     if (stompRef.current?.connected) {
       stompRef.current.publish({
         destination: `/app/lobby/${lobbyId}/leave`,
@@ -134,7 +125,6 @@ function GameScreen({ maxPlayers = 10 }) {
       });
       stompRef.current.deactivate();
     }
-    // 2. 페이지 이동
     navigate('/join');
   }, [lobbyId, userId, navigate]);
 
@@ -182,7 +172,6 @@ function GameScreen({ maxPlayers = 10 }) {
       customCursorRef.current.style.left = `${e.clientX}px`;
       customCursorRef.current.style.top = `${e.clientY}px`;
     }
-    // 그림 그리기 함수(draw)도 호출해야 함 (기존 로직 유지)
     draw(e); 
   };
 
@@ -196,29 +185,22 @@ function GameScreen({ maxPlayers = 10 }) {
     if (customCursorRef.current) {
       customCursorRef.current.style.display = 'none';
     }
-    endDraw(); // 기존 캔버스 벗어날 때 그리기 종료
+    endDraw(); 
   };
 
   const saveMyDrawing = async (currentKeyword) => {
     if (!canvasRef.current) return;
     
-    // 1. 원본 캔버스 가져오기
     const sourceCanvas = canvasRef.current;
-
-    // 2. 임시 캔버스 생성 (메모리 상에만 존재)
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = sourceCanvas.width;
     tempCanvas.height = sourceCanvas.height;
     const tCtx = tempCanvas.getContext('2d');
 
-    // 3. 임시 캔버스에 '흰색' 배경 채우기 (이게 없으면 투명 = 검은색이 됨)
     tCtx.fillStyle = '#FFFFFF';
     tCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-    // 4. 흰색 배경 위에 원본 그림 복사하기
     tCtx.drawImage(sourceCanvas, 0, 0);
 
-    // 5. 임시 캔버스에서 이미지 데이터 추출
     const base64Data = tempCanvas.toDataURL('image/jpeg', 0.8);
 
     try {
@@ -233,16 +215,6 @@ function GameScreen({ maxPlayers = 10 }) {
     } catch (err) {
       console.error("❌ 그림 저장 실패:", err);
     }
-  };
-
-  const MODE_LABEL = {
-    POKEMON: "포켓몬",
-    ANIMAL: "동물",
-    JOB: "직업",
-    FOOD: "음식",
-    OBJECT: "사물",
-    SPORT: "스포츠",
-    RANDOM: "랜덤",
   };
 
   useEffect(() => {
@@ -279,7 +251,7 @@ function GameScreen({ maxPlayers = 10 }) {
     };
   }, []);
 
-  const playersRef = useRef([]); // 최신 플레이어 상태를 담을 Ref
+  const playersRef = useRef([]); 
     useEffect(() => {
       playersRef.current = players;
     }, [players]);
@@ -297,10 +269,8 @@ function GameScreen({ maxPlayers = 10 }) {
   useEffect(() => {
     if (!userId || !nickname || !lobbyId) return;
     
-    // isMounted 변수 정의
     let isMounted = true; 
 
-    // safeUnsubscribeAll 함수 정의
     const safeUnsubscribeAll = () => {
         if (subsRef.current) {
             subsRef.current.forEach(sub => sub.unsubscribe());
@@ -308,7 +278,6 @@ function GameScreen({ maxPlayers = 10 }) {
         }
     };
 
-    // safeDeactivate 함수 정의
     const safeDeactivate = (client) => {
         if (client && client.active) {
             client.deactivate();
@@ -317,19 +286,12 @@ function GameScreen({ maxPlayers = 10 }) {
 
     isFirstSocketUpdate.current = true;
 
-    // connect 함수로 래핑
     const connect = () => {
       const client = new Client({
         webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
-
-        // 자동 재연결
         reconnectDelay: 3000,
-
-        // heartbeat (서버가 지원할 때 안정성 ↑)
         heartbeatIncoming: 10000,
         heartbeatOutgoing: 10000,
-
-        // 디버그 로그 줄이기(원하면 주석)
         debug: () => {},
 
         onConnect: () => {
@@ -337,13 +299,10 @@ function GameScreen({ maxPlayers = 10 }) {
 
           connectedRef.current = true;
           reconnectingRef.current = false;
-
-          // 구독 중복 방지: 연결될 때마다 기존 구독 정리 후 다시 구독
           safeUnsubscribeAll();
 
           console.log("Game STOMP connected");
 
-          // 1) lobby topic
           const subLobby = client.subscribe(`/topic/lobby/${lobbyId}`, (msg) => {
             const data = JSON.parse(msg.body);
 
@@ -355,7 +314,7 @@ function GameScreen({ maxPlayers = 10 }) {
           };
 
           const updateRoundSignature = (drawerId, word) => {
-            const safeWord = word || "???"; // 단어가 없으면 ???로 통일
+            const safeWord = word || "???"; 
             const signature = `${lobbyId}_${drawerId}_${safeWord}`;
             sessionStorage.setItem('currentRoundSignature', signature);
           };
@@ -376,7 +335,6 @@ function GameScreen({ maxPlayers = 10 }) {
 
           if (data.type === 'USER_UPDATE') {
             const hostId = data.hostUserId;
-
             const mappedUsers = (data.users || [])
               .map((u) => ({
                 ...u,
@@ -385,10 +343,6 @@ function GameScreen({ maxPlayers = 10 }) {
               .sort((a, b) => (a.host === b.host ? 0 : a.host ? -1 : 1));
 
             setPlayers(mappedUsers);
-
-            console.log(
-              `[USER_UPDATE] 인원: ${mappedUsers.length}, 게임중: ${data.gameStarted}`
-            );
 
             if (
               (data.gameStarted || isGameStartedRef.current) &&
@@ -399,9 +353,6 @@ function GameScreen({ maxPlayers = 10 }) {
               return;
             }
 
-            /* =========================
-              게임 시작 상태 동기화
-            ========================= */
             if (data.gameStarted) {
               setIsGameStarted(true);
 
@@ -423,12 +374,10 @@ function GameScreen({ maxPlayers = 10 }) {
                     
                     const storedSig = sessionStorage.getItem('currentRoundSignature');
 
-                    // 저장된 키와 다를 때만 모달 띄움
                     if (currentSig !== storedSig) {
                         setTimeout(() => {
                             showRoundModal(data.drawerUserId, data.word);
                         }, 300);
-                        // 모달 띄웠으니 키 업데이트
                         sessionStorage.setItem('currentRoundSignature', currentSig);
                     } else {
                         console.log("🔄 새로고침 감지됨: 모달 생략");
@@ -451,14 +400,10 @@ function GameScreen({ maxPlayers = 10 }) {
             setKeyword(targetWord);
 
             showRoundModal(targetDrawerId, targetWord);
-
             updateRoundSignature(targetDrawerId, targetWord);
-
-            // 현재 출제자 기록
             prevDrawerIdRef.current = String(targetDrawerId);
             isFirstSocketUpdate.current = false;
           }
-
 
           if (data.type === 'ROUND_START') {
             setRoundEndTime(data.roundEndTime);
@@ -468,16 +413,10 @@ function GameScreen({ maxPlayers = 10 }) {
           }
 
           if (data.type === 'DRAWER_CHANGED') {
-            /* =========================
-              이전 출제자면 그림 저장
-            ========================= */
             if (String(prevDrawerIdRef.current) === String(userId)) {
               saveMyDrawing(keywordRef.current);
             }
 
-            /* =========================
-              라운드 상태 초기화
-            ========================= */
             setRoundFinished(false);
             setWinnerId(null);
             setRoundEndTime(0);
@@ -486,24 +425,13 @@ function GameScreen({ maxPlayers = 10 }) {
 
             resetCanvasLocal();
 
-            /* =========================
-              출제자 / 단어 결정
-            ========================= */
             const targetDrawerId = data.drawerUserId || data.drawerId;
             const targetWord = data.word || data.keyword || '???';
 
             updateDrawerState(targetDrawerId, targetWord, 0);
-
-            /* =========================
-              통합 모달 (showRoundModal)
-            ========================= */
             showRoundModal(targetDrawerId, targetWord);
-
             updateRoundSignature(targetDrawerId, targetWord);
 
-            /* =========================
-              내가 출제자라면 캔버스 클리어 + 펜 초기화
-            ========================= */
             if (String(targetDrawerId) === String(userId)) {
               stompRef.current?.publish({
                 destination: `/app/draw/${lobbyId}/clear`,
@@ -513,13 +441,8 @@ function GameScreen({ maxPlayers = 10 }) {
               setPenColor('#000000ff');
               setActiveTool('pen');
             }
-
-            /* =========================
-              현재 출제자 기록
-            ========================= */
             prevDrawerIdRef.current = String(targetDrawerId);
           }
-
 
           if (data.type === 'ROOM_DESTROYED') {
             setTimeout(() => {
@@ -544,26 +467,21 @@ function GameScreen({ maxPlayers = 10 }) {
               saveMyDrawing(keywordRef.current);
             }
             setTimeOverModal(false);
-            
             const totalRounds = data.totalRounds || 3;
-
             navigate(`/vote/${lobbyId}`, { 
               state: { 
                 players: playersRef.current,
                 totalRounds: totalRounds
               }
-            }); // playersRef 사용 권장
+            }); 
           }
         });
 
-        // ... (draw, history, chat 등 기존 구독 로직 동일)
-        // [수정] subDraw 변수에 할당하도록 수정
         const subDraw = client.subscribe(`/topic/lobby/${lobbyId}/draw`, (msg) => {
             const evt = JSON.parse(msg.body);
             applyRemoteDraw(evt);
           });
 
-          // history topic
           const subHistory = client.subscribe(`/topic/history/${userId}`, (msg) => {
             const data = JSON.parse(msg.body);
             const historyList = data.history || [];
@@ -577,7 +495,6 @@ function GameScreen({ maxPlayers = 10 }) {
             redoStackRef.current = redoList;
           });
 
-          // chat bubble
           const subChat = client.subscribe('/topic/chat/bubble', (msg) => {
             const data = JSON.parse(msg.body);
             if (data.type !== 'CHAT_BUBBLE') return;
@@ -597,7 +514,6 @@ function GameScreen({ maxPlayers = 10 }) {
 
           subsRef.current = [subLobby, subDraw, subHistory, subChat];
 
-          // (재)연결될 때마다 join 보냄
           try {
             client.publish({
               destination: `/app/lobby/${lobbyId}/join`,
@@ -608,12 +524,9 @@ function GameScreen({ maxPlayers = 10 }) {
           }
         },
 
-        // STOMP 레벨 에러
         onStompError: (frame) => {
           console.error("STOMP error:", frame?.headers?.message || frame);
         },
-
-        // WebSocket 레벨 에러/종료
         onWebSocketError: (evt) => {
           console.warn("WebSocket error:", evt);
         },
@@ -630,7 +543,7 @@ function GameScreen({ maxPlayers = 10 }) {
 
       stompRef.current = client;
       client.activate();
-    }; // connect 함수 종료
+    }; 
 
     connect();
 
@@ -867,7 +780,6 @@ function GameScreen({ maxPlayers = 10 }) {
 
   const startDraw = (e) => {
     if (!isDrawer) return;
-
     if (!stompRef.current?.connected) return;
 
     calculateScale();
@@ -921,7 +833,6 @@ function GameScreen({ maxPlayers = 10 }) {
     if (ctx && canvasRef.current) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     historyRef.current.push({ type: 'CLEAR' });
     redoStackRef.current = [];
-    // STOMP 연결이 살아있을 때만 publish
     if (stompRef.current?.connected) {
       try {
         stompRef.current.publish({
@@ -995,10 +906,8 @@ function GameScreen({ maxPlayers = 10 }) {
     const input = chatInputRef.current;
     if (!input) return;
 
-    // 이미 input에 포커스가 있으면 → 아무것도 안 함
     if (document.activeElement === input) return;
 
-    // 다른 곳에서 Enter 누르면 → input으로 포커스 이동
     e.preventDefault();
     input.focus();
   };
@@ -1024,15 +933,33 @@ function GameScreen({ maxPlayers = 10 }) {
              />
            )}
         </div>
-        <span className="username">
-          {u ? u.nickname : 'Empty'}
-          {u && String(u.userId) === String(currentDrawerId) && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
-        </span>
-          {u && (
-            <span className="user-score" style={{ fontSize: '12px', color: '#1971c2', fontWeight: 'bold' }}>
-              Score: {u.score || 0}
+        
+        {/* ✅ [수정] 닉네임과 점수를 중앙 정렬하여 확실하게 표시 */}
+        <div className="user-info" style={{ textAlign: 'center', marginTop: '1px' }}>
+            <span className="username" style={{ 
+                display: 'block', 
+                fontWeight: 'bold', 
+                fontSize: '1rem', 
+                color: '#333'  // 글자색 검정
+            }}>
+              {u ? u.nickname : 'Empty'}
+              {u && String(u.userId) === String(currentDrawerId) && (
+                <span style={{ color: 'gold', marginLeft: '4px' }}>★</span>
+              )}
             </span>
-          )}
+            {u && (
+              <span className="user-score" style={{ 
+                  display: 'block', 
+                  fontSize: '0.9rem', 
+                  color: '#1971c2', 
+                  fontWeight: 'bold',
+                  marginTop: '2px' 
+              }}>
+                Score: {u.score || 0}
+              </span>
+            )}
+        </div>
+
       </div>
     );
   };
@@ -1164,7 +1091,7 @@ function GameScreen({ maxPlayers = 10 }) {
        <div className="game-area">
           <div className="game-grid">
              
-             <div className="user-column left">
+             <div className="user-column left" style={{gap: "20px"}}>
                 {leftUsers.map((u, i) => renderUser(u, i * 2))}
              </div>
 
@@ -1229,7 +1156,6 @@ function GameScreen({ maxPlayers = 10 }) {
                               >
                                 <img src="/svg/fill.svg" alt="fill" />
                               </div>
-                              {/* 채우기 설정창 */}
                               {showModal && activeTool === 'fill' && (
                                 <div className="settings-popover">
                                   <FillSettings 
@@ -1247,7 +1173,6 @@ function GameScreen({ maxPlayers = 10 }) {
                               >
                                 <img src="/svg/eraser.svg" alt="eraser" />
                               </div>
-                              {/* 지우개 설정창: 지우개 버튼 옆에 렌더링 */}
                               {showModal && activeTool === 'eraser' && (
                                 <div className="settings-popover">
                                   <EraserSettings 
@@ -1278,7 +1203,7 @@ function GameScreen({ maxPlayers = 10 }) {
                 </div>
              </div>
              
-             <div className="user-column right">
+             <div className="user-column right" style={{gap: "30px"}}>
                 {rightUsers.map((u, i) => renderUser(u, i * 2 + 1))}
              </div>
 
