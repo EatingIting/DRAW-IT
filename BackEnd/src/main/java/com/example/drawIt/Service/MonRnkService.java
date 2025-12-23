@@ -4,6 +4,7 @@ import com.example.drawIt.DTO.MonRnkDTO;
 import com.example.drawIt.Entity.MonRnk;
 import com.example.drawIt.Repository.MonRnkRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
@@ -79,7 +80,6 @@ public class MonRnkService {
         return dtoList;
     }
 
-    @Transactional
     public void saveWinners(List<Map<String, String>> winners) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyMM");
         Date now = new Date();
@@ -120,7 +120,12 @@ public class MonRnkService {
                             .regDate(now)
                             .build();
 
-                    monRnkRepository.save(monRnk);
+                    try{
+                        monRnkRepository.save(monRnk);
+                    }catch (DataIntegrityViolationException e){
+                        continue;
+                    }
+
                 } else {
                     System.err.println("❌ 원본 파일을 찾을 수 없음: " + sourcePath);
                 }
