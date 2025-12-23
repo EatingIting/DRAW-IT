@@ -295,6 +295,27 @@ public class LobbyUserStore {
         ));
     }
 
+    public synchronized void updateProfile(String roomId, String userId, String newNickname, Object newProfileImage) {
+        Map<String, UserSessionState> users = rooms.get(roomId);
+        if (users == null) return;
+
+        UserSessionState user = users.get(userId);
+        if (user != null) {
+            // 닉네임 중복 처리 (본인 닉네임이면 스킵)
+            if (!user.getNickname().equals(newNickname)) {
+                String resolved = resolveDuplicateNickname(roomId, newNickname);
+                user.setNickname(resolved);
+            }
+            // 프로필 이미지 업데이트
+            if (newProfileImage != null) {
+                user.setProfileImage(newProfileImage);
+            }
+
+            // 변경 사항 즉시 방송
+            sendUserUpdate(roomId);
+        }
+    }
+
     /* =========================
        유저 목록 반환
     ========================= */
@@ -313,7 +334,8 @@ public class LobbyUserStore {
                         "userId", u.getUserId(),
                         "nickname", u.getNickname(),
                         "host", u.isHost(),
-                        "score", u.getScore()
+                        "score", u.getScore(),
+                        "profileImage", u.getProfileImage() != null ? u.getProfileImage() : "default" // ★ 추가됨
                 ))
                 .collect(Collectors.toList());
     }

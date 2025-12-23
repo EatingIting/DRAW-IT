@@ -1,6 +1,7 @@
 package com.example.drawIt.Controller;
 
 import com.example.drawIt.DTO.SocketJoinDTO;
+import com.example.drawIt.DTO.SocketProfileDTO;
 import com.example.drawIt.Domain.DrawEvent;
 import com.example.drawIt.Domain.GameState;
 import com.example.drawIt.Domain.GameStateManager;
@@ -441,5 +442,22 @@ public class SocketController {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    @MessageMapping("/lobby/{roomId}/profile")
+    public void updateProfile(@DestinationVariable String roomId, @Payload SocketProfileDTO dto) {
+
+        System.out.println("프로필 이미지 변경 메소드 진입");
+        if (dto.getUserId() == null) return;
+
+
+
+        // Store 업데이트 및 자동 브로드캐스트
+        lobbyUserStore.updateProfile(
+                roomId,
+                dto.getUserId(),
+                dto.getNickname(),
+                dto.getProfileImage()
+        );
     }
 }

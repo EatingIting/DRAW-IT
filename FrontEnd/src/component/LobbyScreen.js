@@ -92,7 +92,7 @@ function LobbyScreen() {
 
     // 서버로 변경 요청 전송
     clientRef.current.publish({
-      // ★ 주의: 백엔드 컨트롤러의 @MessageMapping 주소와 일치해야 합니다.
+      // ★ 주의: 백엔드 컨트롤lobby러의 @MessageMapping 주소와 일치해야 합니다.
       // 닉네임과 프로필을 같이 처리하는 엔드포인트(예: /profile)를 사용한다고 가정했습니다.
       destination: `/app/lobby/${roomId}/profile`, 
       body: JSON.stringify({
