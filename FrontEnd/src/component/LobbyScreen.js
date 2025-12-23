@@ -8,7 +8,7 @@ import { API_BASE_URL } from "../api/config";
 import axios from "axios";
 import CreateRoomModal from "./CreateRoomModal";
 // 새로 만든 모달 컴포넌트 import (경로 주의)
-import EditProfileModal from "./profilemodal/EditProfileModal"; // 경로가 맞는지 확인해주세요
+import EditProfileModal from "./profilemodal/EditProfileModal";
 
 // 프로필 이미지 경로 헬퍼 함수
 const getProfileImgPath = (profileValue) => {
@@ -88,17 +88,25 @@ function LobbyScreen() {
   // EditProfileModal에서 (닉네임, 이미지인덱스) 두 개의 인자를 넘겨줍니다.
   // ============================================================
   const handleConfirmProfile = (updatedNickname, updatedProfileImage) => {
+    console.log("[profile] confirm clicked", {
+      connected: clientRef.current?.connected,
+      updatedNickname,
+      updatedProfileImage,
+      type: typeof updatedProfileImage,
+    });
+
     if (!clientRef.current?.connected) return;
 
     // 서버로 변경 요청 전송
     clientRef.current.publish({
       // ★ 주의: 백엔드 컨트롤lobby러의 @MessageMapping 주소와 일치해야 합니다.
       // 닉네임과 프로필을 같이 처리하는 엔드포인트(예: /profile)를 사용한다고 가정했습니다.
-      destination: `/app/lobby/${roomId}/profile`, 
+      destination: `/app/lobby/${roomId}/profile`,
+      headers: { "content-type": "application/json" }, 
       body: JSON.stringify({
         userId: userIdRef.current,
         nickname: updatedNickname,
-        profileImage: updatedProfileImage, // ★ 선택된 이미지 번호 추가
+        profileImage: Number(updatedProfileImage), // ★ 선택된 이미지 번호 추가
       }),
     });
 

@@ -288,11 +288,21 @@ public class LobbyUserStore {
     private void sendUserUpdate(String roomId) {
         GameState state = gameStateManager.getGame(roomId);
 
-        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, Map.of(
-                "type", "USER_UPDATE",
-                "users", getUsers(roomId),
-                "gameStarted", state != null
-        ));
+        // ★ 방 정보를 조회해서 현재 방장 ID를 가져옴
+        Lobby lobby = lobbyRepository.findById(roomId).orElse(null);
+        String hostUserId = (lobby != null) ? lobby.getHostUserId() : null;
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", "USER_UPDATE");
+        payload.put("users", getUsers(roomId));
+        payload.put("gameStarted", state != null);
+
+        // ★ 메시지에 hostUserId 포함
+        if (hostUserId != null) {
+            payload.put("hostUserId", hostUserId);
+        }
+
+        messagingTemplate.convertAndSend("/topic/lobby/" + roomId, payload);
     }
 
     public synchronized void updateProfile(String roomId, String userId, String newNickname, Object newProfileImage) {
