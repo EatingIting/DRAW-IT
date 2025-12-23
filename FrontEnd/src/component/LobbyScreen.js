@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
@@ -8,7 +8,17 @@ import { API_BASE_URL } from "../api/config";
 import axios from "axios";
 import CreateRoomModal from "./CreateRoomModal";
 // 새로 만든 모달 컴포넌트 import (경로 주의)
-import EditProfileModal from "./profilemodal/editProfileModal"; 
+import EditProfileModal from "./profilemodal/EditProfileModal"; // 경로가 맞는지 확인해주세요
+
+// 프로필 이미지 경로 헬퍼 함수
+const getProfileImgPath = (profileValue) => {
+  // 값이 없거나 "default" 문자열이면 default.jpg 반환
+  if (!profileValue || profileValue === "default") {
+    return "/img/profile/default.jpg";
+  }
+  // 그 외(숫자 1~10)면 해당 번호 이미지 반환
+  return `/img/profile/profile${profileValue}.jpg`;
+};
 
 function LobbyScreen() {
   const navigate = useNavigate();
@@ -49,13 +59,22 @@ function LobbyScreen() {
 
   const [modal, setModal] = useState(null);
 
-  // 닉네임 모달 관련 state (입력값 state인 newNickname은 자식 컴포넌트로 이동하여 삭제됨)
+  // 닉네임 모달 표시 여부
   const [isNicknameModalOpen, setIsNicknameModalOpen] = useState(false);
 
+  // 내 정보 찾기
   const myPlayerInfo = players.find(p => p.userId === userIdRef.current);
   
   // 내 정보가 players에 있으면 그 닉네임을 쓰고, 없으면 초기값(myNickname)을 씁니다.
   const currentDisplayNickname = myPlayerInfo ? myPlayerInfo.nickname : myNickname;
+
+  // 프로필 이미지가 없으면 default
+  const currentProfileIndex = myPlayerInfo?.profileImage || "default";
+
+  // 사용 중인 프로필 이미지 찾기 (default는 제외)
+  const usedProfileIndexes = players
+    .map(p => p.profileImage)
+    .filter(img => img && img !== "default");
 
   // 방 정보 REST 로드
   const fetchRoomInfo = async () => {
@@ -64,20 +83,28 @@ function LobbyScreen() {
     setRoomInfo(data);
   };
 
-  // 닉네임 변경 확정 처리 (자식 컴포넌트에서 호출)
-  const handleConfirmNickname = (updatedNickname) => {
+  // ============================================================
+  // [수정됨] 닉네임 및 프로필 이미지 변경 확정 처리
+  // EditProfileModal에서 (닉네임, 이미지인덱스) 두 개의 인자를 넘겨줍니다.
+  // ============================================================
+  const handleConfirmProfile = (updatedNickname, updatedProfileImage) => {
     if (!clientRef.current?.connected) return;
 
+    // 서버로 변경 요청 전송
     clientRef.current.publish({
-      destination: `/app/lobby/${roomId}/nickname`,
+      // ★ 주의: 백엔드 컨트롤러의 @MessageMapping 주소와 일치해야 합니다.
+      // 닉네임과 프로필을 같이 처리하는 엔드포인트(예: /profile)를 사용한다고 가정했습니다.
+      destination: `/app/lobby/${roomId}/profile`, 
       body: JSON.stringify({
         userId: userIdRef.current,
         nickname: updatedNickname,
+        profileImage: updatedProfileImage, // ★ 선택된 이미지 번호 추가
       }),
     });
 
-    // 로컬 저장 (새로고침 대비)
+    // 로컬 스토리지 업데이트 (새로고침 대비)
     sessionStorage.setItem("nickname", updatedNickname);
+    // 필요하다면 프로필 이미지도 저장 가능: sessionStorage.setItem("profileImage", updatedProfileImage);
 
     setIsNicknameModalOpen(false);
   };
@@ -155,7 +182,6 @@ function LobbyScreen() {
 
           const uid = data.userId;
 
-          // 같은 유저가 연속으로 말하면 이전 타이머 제거
           const prevTimeout = bubbleTimeoutRef.current[uid];
           if (prevTimeout) clearTimeout(prevTimeout);
 
@@ -179,6 +205,7 @@ function LobbyScreen() {
         localStorage.setItem("userId", userIdRef.current);
         localStorage.setItem("nickname", myNickname);
 
+        // 입장 시에도 기본 정보 전송 (필요 시 profileImage 추가 가능)
         client.publish({
           destination: `/app/lobby/${roomId}/join`,
           body: JSON.stringify({
@@ -222,11 +249,7 @@ function LobbyScreen() {
 
   const handleUserCardClick = (user) => {
     if (!user) return;
-
-    // 나 자신만 허용
     if (user.userId !== userIdRef.current) return;
-
-    // 모달을 열기만 함 (초기값은 EditProfileModal에 prop으로 전달)
     setIsNicknameModalOpen(true);
   };
 
@@ -246,21 +269,14 @@ function LobbyScreen() {
     setChatMessage("");
   };
 
-  // ============================================================
-  // 유저 슬롯 배치 로직 (좌->우->좌->우)
-  // ============================================================
-
-  // 1. 전체 슬롯 생성 (최대 10명)
+  // 슬롯 배치 로직
   const totalSlots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
-
-  // 2. 왼쪽 컬럼: 짝수 인덱스
   const leftSlots = totalSlots.filter((_, i) => i % 2 === 0);
-
-  // 3. 오른쪽 컬럼: 홀수 인덱스
   const rightSlots = totalSlots.filter((_, i) => i % 2 === 1);
 
   const renderUserCard = (user, index) => {
     const isMe = user?.userId === userIdRef.current;
+    const profileValue = user?.profileImage || "default";
 
     return (
       <div
@@ -273,7 +289,15 @@ function LobbyScreen() {
         }}
       >
         {user?.host && <span className="host-badge">★</span>}
-        <div className="avatar" />
+        <div className="avatar">
+          {user && (
+            <img 
+              src={getProfileImgPath(profileValue)}
+              alt="avatar"
+              style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+            />
+          )}
+        </div>
         <span className="username">{user ? user.nickname : "Empty"}</span>
       </div>
     );
@@ -286,12 +310,14 @@ function LobbyScreen() {
 
   return (
     <>
-      {/* 분리된 닉네임 변경 모달 사용 */}
+      {/* [수정됨] onConfirm에 handleConfirmProfile 연결 */}
       <EditProfileModal
         isOpen={isNicknameModalOpen}
         onClose={() => setIsNicknameModalOpen(false)}
         currentNickname={currentDisplayNickname}
-        onConfirm={handleConfirmNickname}
+        currentProfileIndex={currentProfileIndex}
+        usedProfileIndexes={usedProfileIndexes}
+        onConfirm={handleConfirmProfile} 
       />
 
       {modal && (
@@ -322,7 +348,6 @@ function LobbyScreen() {
 
         <div className="play-area">
           <div className="play-grid">
-            {/* 왼쪽 컬럼 (짝수번째 유저들) */}
             <div className="user-column left">
               {leftSlots.map((u, i) => renderUserCard(u, i * 2))}
             </div>
@@ -362,7 +387,6 @@ function LobbyScreen() {
               )}
             </div>
 
-            {/* 오른쪽 컬럼 (홀수번째 유저들) */}
             <div className="user-column right">
               {rightSlots.map((u, i) => renderUserCard(u, i * 2 + 1))}
             </div>
@@ -380,7 +404,6 @@ function LobbyScreen() {
           <button onClick={handleSendMessage}>전송</button>
         </div>
 
-        {/* 말풍선 렌더링: 오른쪽 컬럼이면 카드 왼쪽에 띄움 */}
         {Object.entries(chatBubbles).map(([uid, message]) => {
           const el = userCardRefs.current[uid];
           if (!el) return null;

@@ -1,22 +1,27 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import "../LobbyScreen.css"; 
 
 function EditProfileModal({
   isOpen,
   onClose,
   currentNickname,
-  currentProfileIndex = 1, // 값이 안 넘어오면 기본 1번
+  currentProfileIndex, // default 혹은 1~10
   usedProfileIndexes = [], // 값이 안 넘어오면 빈 배열 (에러 방지)
   onConfirm,
 }) {
   const [nickname, setNickname] = useState(currentNickname || "");
-  const [selectedProfile, setSelectedProfile] = useState(currentProfileIndex);
+  const [selectedProfile, setSelectedProfile] = useState(
+    (currentProfileIndex === "default" || !currentProfileIndex) ? null : currentProfileIndex
+  );
 
   // 모달이 열릴 때마다 초기화
   useEffect(() => {
     if (isOpen) {
       setNickname(currentNickname || "");
-      setSelectedProfile(currentProfileIndex || 1);
+      // 모달 열릴 때마다 상태 동기화
+      setSelectedProfile(
+        (currentProfileIndex === "default" || !currentProfileIndex) ? null : currentProfileIndex
+      );
     }
   }, [isOpen, currentNickname, currentProfileIndex]);
 
@@ -37,7 +42,15 @@ function EditProfileModal({
       alert("닉네임을 입력해주세요.");
       return;
     }
-    // 닉네임과 선택한 프로필 번호를 함께 전달
+    
+    // ★ 추가됨: 프로필을 선택하지 않고 확인을 누른 경우 처리
+    // 만약 "기본 이미지 상태"를 유지하게 하려면 selectedProfile이 null일 때 그냥 두거나 경고를 띄울 수 있습니다.
+    // 여기서는 "프로필을 선택해주세요"라고 알림을 띄우는 것이 일반적입니다.
+    if (!selectedProfile) {
+      alert("프로필 이미지를 선택해주세요!");
+      return;
+    }
+
     onConfirm(trimmed, selectedProfile);
   };
 

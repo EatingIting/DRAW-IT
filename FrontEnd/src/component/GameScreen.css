@@ -98,7 +98,7 @@
 
 .user-card {
   width: 120px;            /* 사진처럼 타일형 */
-  height: 120px;
+  height: 130px;
 
   background: #fff;
   border: 3px solid var(--game-border-color);
