@@ -12,6 +12,13 @@ import EraserSettings from './settingmodals/EraserSettings';
 import FillSettings from './settingmodals/FillSettings';
 import PenSettings from './settingmodals/PenSettings';
 
+const getProfileImgPath = (profileValue) => {
+  if (!profileValue || profileValue === "default") {
+    return "/img/profile/default.jpg";
+  }
+  return `/img/profile/profile${profileValue}.jpg`;
+};
+
 const hexToRgba = (hex) => {
   let c;
   if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
@@ -1000,24 +1007,35 @@ function GameScreen({ maxPlayers = 10 }) {
   return () => window.removeEventListener("keydown", handleGlobalKeyDown);
 }, []);
 
-  const renderUser = (u, index) => (
-    <div
-      key={index}
-      className={`user-card ${!u ? 'empty' : ''} ${u && String(u.userId) === String(winnerId) ? 'winner' : ''}`}
-      ref={(el) => { if (u && el) userCardRefs.current[u.userId] = el; }}
-    >
-      <div className="avatar" />
-      <span className="username">
-        {u ? u.nickname : 'Empty'}
-        {u && String(u.userId) === String(currentDrawerId) && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
-      </span>
-        {u && (
-          <span className="user-score" style={{ fontSize: '12px', color: '#1971c2', fontWeight: 'bold' }}>
-            Score: {u.score || 0}
-          </span>
-        )}
-    </div>
-  );
+  const renderUser = (u, index) => {
+    const profileValue = u?.profileImage || "default";  
+    return (
+      <div
+        key={index}
+        className={`user-card ${!u ? 'empty' : ''} ${u && String(u.userId) === String(winnerId) ? 'winner' : ''}`}
+        ref={(el) => { if (u && el) userCardRefs.current[u.userId] = el; }}
+      >
+        <div className="avatar">
+           {u && (
+             <img 
+               src={getProfileImgPath(profileValue)}
+               alt="profile"
+               style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+             />
+           )}
+        </div>
+        <span className="username">
+          {u ? u.nickname : 'Empty'}
+          {u && String(u.userId) === String(currentDrawerId) && <span style={{ color: 'gold', marginLeft: 6 }}>★</span>}
+        </span>
+          {u && (
+            <span className="user-score" style={{ fontSize: '12px', color: '#1971c2', fontWeight: 'bold' }}>
+              Score: {u.score || 0}
+            </span>
+          )}
+      </div>
+    );
+  };
 
   return (
     <div className="game-wrapper">

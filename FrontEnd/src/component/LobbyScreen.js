@@ -8,7 +8,7 @@ import { API_BASE_URL } from "../api/config";
 import axios from "axios";
 import CreateRoomModal from "./CreateRoomModal";
 // 새로 만든 모달 컴포넌트 import (경로 주의)
-import EditProfileModal from "./profilemodal/EditProfileModal";
+import EditProfileModal from "./profilemodal/editProfileModal";
 
 // 프로필 이미지 경로 헬퍼 함수
 const getProfileImgPath = (profileValue) => {
