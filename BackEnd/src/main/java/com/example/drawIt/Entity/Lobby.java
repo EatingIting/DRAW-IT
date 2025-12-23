@@ -3,6 +3,8 @@ package com.example.drawIt.Entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Getter
 @Setter
@@ -32,4 +34,8 @@ public class Lobby {
 
     @Column(nullable = false)
     private boolean gameStarted;
+
+    @Column(nullable = false)
+    private LocalDateTime createdAt;
+
 }

@@ -12,6 +12,8 @@ import SockJS from 'sockjs-client';
 import '../layout/Fragment.css';
 import './Join.css';
 import { API_BASE_URL } from "../api/config";
+import PasswordModal from './PasswordModal';
+import AlertModal from './AlertModal';
 
 // ✅ [컴포넌트] 방 목록의 각 카드를 담당 (코드를 분리하여 가독성 향상)
 const RoomCard = ({ room, onJoin }) => {
@@ -69,19 +71,16 @@ function Join() {
     const navigate = useNavigate();
     const [rooms, setRooms] = useState([]); // 방 목록 상태 관리
     const client = useRef(null);            // 소켓 클라이언트 참조
-
     const nickname = sessionStorage.getItem("nickname") || "";
 
-    const filterValidRooms = (roomList) => {
-        if (!Array.isArray(roomList)) return [];
-        return roomList.filter(room => {
-            // 게임 중인데 1명 이하(0명, 1명)라면 유령 세션이므로 false 반환 (제거)
-            if (room.gameStarted && room.currentCount < 2) {
-                return false;
-            }
-            return true; // 그 외에는 표시
-        });
-    };
+    // 모달
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [targetRoom, setTargetRoom] = useState(null);
+    const [alertMessage, setAlertMessage] = useState(null);
+
+    //페이지네이션 추가 (6개 단위)
+    const [currentPage, setCurrentPage] = useState(1); // 현재 페이지
+    const roomsPerPage = 6; // 한 페이지에 보여줄 방 개수
 
     // 🔄 [Effect] 초기 로드 및 소켓 연결
     useEffect(() => {
@@ -97,13 +96,48 @@ function Join() {
         };
     }, []);
 
+    // 유효한 방만 걸러냄
+    const filterValidRooms = (roomList) => {
+        if (!Array.isArray(roomList)) return [];
+        return roomList.filter(room => {
+
+    
+        // 1. [추가됨] 대기중이든 뭐든, 사람이 0명이면 무조건 삭제!
+            if (room.currentCount <= 0) {
+                return false;
+            }
+
+            // 2. [팀원 코드 유지] 게임 중인데 사람이 2명 미만이면 삭제 (비정상 종료)
+            if (room.gameStarted && room.currentCount < 2) {
+                return false;
+            }
+            
+            return true; // 통과된 정상 방들만 표시
+        });
+    };
+
     // 📡 [HTTP] 방 목록 가져오기 (초기 로딩용)
     const fetchRoomList = async () => {
         try {
             const res = await axios.get(`${API_BASE_URL}/api/lobbies`);
+
             // ✅ 받아온 데이터를 필터링 후 상태 저장
             const validRooms = filterValidRooms(res.data);
+
+            // 시간 데이터값을 오른차순으로 정렬
+            validRooms.sort((a, b) => {
+                const dateA = new Date(a.createdAt).getTime();
+                const dateB = new Date(b.createdAt).getTime();
+                
+                if (!dateA) return 1;
+                if (!dateB) return -1;
+
+                return dateA - dateB; // 👈 여기가 포인트! (작은 날짜가 먼저)
+            })
+            
+            console.log("🔥 [확인] 필터링된 방 목록:", validRooms);
             setRooms(validRooms);
+
             console.log("📦 [HTTP] 방 목록 로드 완료:", validRooms.length + "개");
         } catch (err) {
             console.error("❌ [HTTP] 방 목록 로드 실패:", err);
@@ -115,16 +149,14 @@ function Join() {
         client.current = new Client({
             webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws-stomp`),
             reconnectDelay: 5000, 
-            
             onConnect: () => {
                 console.log("🟢 [WS] 소켓 연결 성공!");
                 
                 client.current.subscribe('/topic/lobbies', (message) => {
                     const updatedRoomsRaw = JSON.parse(message.body);
-                    
                     // 소켓으로 온 데이터도 필터링 적용!
                     const validRooms = filterValidRooms(updatedRoomsRaw);
-                    
+
                     setRooms(validRooms);
                     
                     console.groupCollapsed(`🔄 [WS] 방 목록 갱신됨 (${new Date().toLocaleTimeString()})`);
@@ -134,6 +166,18 @@ function Join() {
                         상태: r.gameStarted ? '게임중' : '대기중',
                         잠금: r.passwordEnabled ? 'ON' : 'OFF'
                     })));
+
+                    // 시간 데이터값을 오름차순으로 정렬
+                    validRooms.sort((a, b) => {
+                        const dateA = new Date(a.createdAt).getTime();
+                        const dateB = new Date(b.createdAt).getTime();
+                        
+                        if (!dateA) return 1;
+                        if (!dateB) return -1;
+
+                        return dateA - dateB; // 👈 작은 날짜가 먼저
+                    });
+
                     console.groupEnd();
                 });
             },
@@ -144,29 +188,65 @@ function Join() {
         client.current.activate();
     };
 
-    // [Handler] 방 입장 처리 로직
+    // 비밀번호 틀릴 시 함수
+    const showAlert = (msg) => {
+        setAlertMessage(msg); // 메시지를 설정하면 모달이 열림
+    };
+
+    const closeAlert = () => {
+        setAlertMessage(null); // 메시지를 지우면 모달이 닫힘
+    };
+
+    // 현재 페이지에 보여줄 방 계산하기
+    const indexOfLastRoom = currentPage * roomsPerPage; // 예: 1페이지면 6, 2페이지면 12
+    const indexOfFirstRoom = indexOfLastRoom - roomsPerPage; // 예: 1페이지면 0, 2페이지면 6
+    const currentRooms = rooms.slice(indexOfFirstRoom, indexOfLastRoom); // 0~6번방, 6~12번방 자르기
+    const totalPages = Math.ceil(rooms.length / roomsPerPage); // 전체 페이지 수 계산
+
+    // 페이지 방 이동 함수
+    const handleNextPage = () => {
+        if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+    };
+
+    const handlePrevPage = () => {
+        if (currentPage > 1) setCurrentPage(currentPage - 1);
+    };
+
+    // 🚪 [Handler] 방 입장 처리 로직
     const handleJoinRoom = async (room) => {
         // 1. 닉네임 체크
         if (!nickname.trim()) {
-            alert("닉네임을 먼저 설정해 주세요.");
+            showAlert("닉네임을 먼저 설정해 주세요.");
             return;
         }
 
-        let inputPassword = null;
-
         // 2. 비밀번호 체크 (잠금 방일 경우)
         if (room.passwordEnabled) {
-            inputPassword = prompt("🔒 잠금된 방입니다. 비밀번호를 입력하세요:");
-            if (inputPassword === null) return; // 취소 버튼 누름
+            setTargetRoom(room); // 입장하려는 방 저장
+            setIsPasswordModalOpen(true); // 모달 열기
+        } else {
+            verifyAndJoin(room, null); // 비밀번호 없으면 바로 입장
         }
 
+    };
+
+    // 모달에서 비밀번호 입력 후 확인 눌렀을 때
+    const handlePasswordSubmit = (password) => {
+        setIsPasswordModalOpen(false); // 모달 닫기
+        if(targetRoom) {
+            verifyAndJoin(targetRoom, password) // 검증 요청
+        }
+    };
+
+    // 실제 서버 검증 및 입장 로직
+    const verifyAndJoin = async (room, password) => {
         try {
             // 3. 서버에 입장 가능 여부 확인 (비밀번호 검증)
             console.log(`🔍 [Join] 방 입장 시도: ${room.name} (ID: ${room.id})`);
             
             await axios.post(`${API_BASE_URL}/lobby/verify`, {
                 roomId: room.id,
-                password: inputPassword
+                password: password
             });
 
             // 4. 검증 성공 시 이동 처리
@@ -179,7 +259,7 @@ function Join() {
             navigate(targetPath, { 
                 state: { 
                     nickname, 
-                    password: inputPassword // 소켓 연결 시 인증용
+                    password: password // 소켓 연결 시 인증용
                 } 
             });
 
@@ -187,9 +267,11 @@ function Join() {
             // 5. 에러 처리
             console.error("❌ [Join] 입장 실패:", error);
             if (error.response && error.response.status === 401) {
-                alert("🚫 비밀번호가 일치하지 않습니다.");
+                showAlert("🚫 비밀번호가 일치하지 않습니다.");
+            } else if (error.response && error.response.status === 404) {
+                showAlert("존재하지 않는 방입니다");
             } else {
-                alert("입장할 수 없는 방입니다. (존재하지 않거나 서버 오류)");
+                showAlert("입장할 수 없습니다");
             }
         }
     };
@@ -225,7 +307,7 @@ function Join() {
                     )}
 
                     {/* 방 카드 리스트 렌더링 (분리한 컴포넌트 사용) */}
-                    {rooms.map((room) => (
+                    {currentRooms.map((room) => (
                         <RoomCard 
                             key={room.id} 
                             room={room} 
@@ -233,7 +315,47 @@ function Join() {
                         />
                     ))}
                 </div>
+
+                {/* 페이지네이션 컨트롤 (방이 있을 때만 표시) */}
+                {rooms.length > 0 && (
+                    <div className="pagination-box">
+                        <button 
+                            className="page-btn prev" 
+                            onClick={handlePrevPage} 
+                            disabled={currentPage === 1}
+                        >
+                            ◀
+                        </button>
+                        
+                        <span className="page-info">
+                            {currentPage} / {totalPages === 0 ? 1 : totalPages}
+                        </span>
+                        
+                        <button 
+                            className="page-btn next" 
+                            onClick={handleNextPage} 
+                            disabled={currentPage === totalPages}
+                        >
+                            ▶
+                        </button>
+                    </div>
+                )}
             </div>
+
+            {/* 비밀번호 입력 모달 */}
+            <PasswordModal
+                isOpen={isPasswordModalOpen}
+                close={() => setIsPasswordModalOpen(false)}
+                submit={handlePasswordSubmit}
+                roomName={targetRoom?.name}
+            />
+
+            {/* 비밀번호 틀릴 시 모달 추가 */}
+            <AlertModal 
+                isOpen={!!alertMessage} // 메시지가 있으면 true(열림)
+                message={alertMessage}
+                onClose={closeAlert}
+            />
         </div>
     );
 }

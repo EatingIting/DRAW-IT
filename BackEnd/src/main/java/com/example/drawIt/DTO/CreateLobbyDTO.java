@@ -3,6 +3,9 @@ package com.example.drawIt.DTO;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+import java.util.Date;
+
 @Getter
 @Setter
 public class CreateLobbyDTO {
@@ -12,4 +15,5 @@ public class CreateLobbyDTO {
     private String password;
     private String hostUserId;
     private String hostNickname;
+    private LocalDateTime createdAt;
 }
