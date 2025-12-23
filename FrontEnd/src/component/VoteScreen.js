@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import SockJS from 'sockjs-client';
@@ -46,6 +46,10 @@ const VoteScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [isHost, setIsHost] = useState(false);
+  const SAVE_WINNERS_DONE_KEY = `saveWinnersDone_${lobbyId}`;
+  const hasSavedRef = useRef(sessionStorage.getItem(SAVE_WINNERS_DONE_KEY) === "true");
+
   const VOTE_END_TIME_KEY = `voteEndTime_${lobbyId}`;
   const MY_VOTE_KEY = `myVote_${lobbyId}`;
   const FINAL_RESULTS_KEY = `finalResults_${lobbyId}`;
@@ -74,6 +78,9 @@ const VoteScreen = () => {
   });
 
   const [myUserId] = useState(() => {
+    const lobbyUserId = sessionStorage.getItem("userId");
+    if (lobbyUserId) return lobbyUserId;
+
     const savedId = sessionStorage.getItem(MY_USER_ID_KEY);
     if (savedId) return savedId;
     const newId = "user_" + Math.random().toString(36).substr(2, 9);
@@ -250,26 +257,31 @@ const VoteScreen = () => {
     });
 
     if (sortedImages.length > 0) {
-        const top3Images = sortedImages
-          .filter(img => parseInt(img.voteCount || 0, 10) > 0)
-          .slice(0, 3);
-        
-        const winnersPayload = top3Images.map(img => {
-            const parts = img.imageUrl.split('/');
-            const filename = parts[parts.length - 1]; 
-            return {
-                lobbyId: lobbyId,
-                filename: filename,
-                keyword: img.keyword || "Unknown",
-                voteCount: img.voteCount || 0
-            };
-        });
+      const top3Images = sortedImages
+        .filter(img => parseInt(img.voteCount || 0, 10) > 0)
+        .slice(0, 3);
 
+      const winnersPayload = top3Images.map(img => {
+        const parts = img.imageUrl.split('/');
+        const filename = parts[parts.length - 1];
+        return {
+          lobbyId: lobbyId,
+          filename: filename,
+          keyword: img.keyword || "Unknown",
+          voteCount: img.voteCount || 0
+        };
+      });
+
+      // ✅ host만 + ✅ 1회만 저장
+      if (isHost && !hasSavedRef.current && winnersPayload.length > 0) {
         try {
-            axios.post(`${API_BASE_URL}/monRnk/saveWinners`, winnersPayload); 
+          await axios.post(`${API_BASE_URL}/monRnk/saveWinners`, winnersPayload);
+          hasSavedRef.current = true;
+          sessionStorage.setItem(SAVE_WINNERS_DONE_KEY, "true");
         } catch (error) {
-            console.error("명예의 전당 저장 실패:", error);
+          console.error("명예의 전당 저장 실패:", error);
         }
+      }
     }
 
     setRankedPlayers(updatedPlayers);
@@ -334,10 +346,23 @@ const VoteScreen = () => {
 
         if (players.length === 0) {
             try {
-                const lobbyRes = await axios.get(`${API_BASE_URL}/lobby/${lobbyId}`);
-                const lobbyData = lobbyRes.data.lobby || lobbyRes.data;
+              const lobbyRes = await axios.get(`${API_BASE_URL}/lobby/${lobbyId}`);
+              const lobbyData = lobbyRes.data.lobby || lobbyRes.data;
+
+              const hostId =
+                lobbyData.hostUserId ??
+                lobbyData.host_user_id ??
+                lobbyData.host_userId;
+
+              setIsHost(String(hostId) === String(sessionStorage.getItem("userId")));
+
+              // players는 비어있을 때만 채우기 (덮어쓰기 방지)
+              if (players.length === 0) {
                 setPlayers(lobbyData.users || []);
-            } catch(e) {}
+              }
+            } catch (e) {
+              console.error("로비 정보 로딩 실패:", e);
+            }
         }
       } catch (err) {
         console.error("데이터 로딩 실패:", err);
@@ -396,6 +421,7 @@ const VoteScreen = () => {
     sessionStorage.removeItem(MY_USER_ID_KEY);
     sessionStorage.removeItem(TOTAL_ROUNDS_KEY); 
     sessionStorage.removeItem(HAS_VIEWED_LOADING_KEY); // 홈으로 갈 땐 기록 삭제 (다음 게임 위해)
+    sessionStorage.removeItem(SAVE_WINNERS_DONE_KEY);
     navigate('/');
   };
 
