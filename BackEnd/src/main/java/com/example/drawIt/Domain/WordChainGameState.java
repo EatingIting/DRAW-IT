@@ -22,7 +22,7 @@ public class WordChainGameState {
     private long turnStartAt = 0L;
 
     // 턴 제한 시간(초)
-    private int turnLimitSec = 15;
+    private double turnLimitSec = 15;
 
     // ===== 부가 상태 =====
     private Set<String> usedWords = new HashSet<>();
@@ -30,4 +30,5 @@ public class WordChainGameState {
     public boolean hasPlayers() {
         return playerIds != null && !playerIds.isEmpty();
     }
+
 }

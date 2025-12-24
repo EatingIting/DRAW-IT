@@ -113,19 +113,23 @@ function WordChainScreen() {
     if (!started || !effectiveTurnStartAt || !turnTimeLimit) return;
 
     const interval = setInterval(() => {
-      // 모달이 갑자기 켜지면 즉시 중단
       if (showStartModalRef.current) return;
+      if (!effectiveTurnStartAt || !turnTimeLimit) return;
 
       const now = Date.now();
-      const elapsedMs = now - effectiveTurnStartAt;
-      const limitMs = turnTimeLimit * 1000;
 
+      const limitMs = turnTimeLimit * 1000;
+      const elapsedMs = now - effectiveTurnStartAt;
       const remainMs = Math.max(limitMs - elapsedMs, 0);
 
-      const sec = Math.ceil(remainMs / 1000);
-      const pct = limitMs > 0 ? Math.max((remainMs / limitMs) * 100, 0) : 0;
+      const sec = Math.max(remainMs / 1000, 0);
+      const displaySec = sec.toFixed(1);
 
-      setRemainSeconds(sec);
+      const pct = limitMs > 0
+        ? Math.max((remainMs / limitMs) * 100, 0)
+        : 0;
+
+      setRemainSeconds(displaySec);
       setRemainPercent(pct);
     }, 100);
 

@@ -23,6 +23,14 @@ public class WordChainState {
     private int round = 0;
     private long turnStartAt = 0L;
 
+    private double turnLimitSec = 15;
+
+    // 최소 제한 시간
+    private static final double MIN_TURN_LIMIT = 5.0;
+
+    // 감소 단위
+    private static final double DECREASE_STEP = 0.5;
+
     // ✅ 점수 관리
     private final Map<String, Integer> scoreByUserId = new HashMap<>();
 
@@ -121,8 +129,8 @@ public class WordChainState {
     /* =========================
        라운드 제한시간
     ========================= */
-    public int getTurnTimeLimitSeconds() {
-        return 15;
+    public double getTurnTimeLimitSeconds() {
+        return turnLimitSec;
     }
 
     /* =========================
@@ -149,7 +157,8 @@ public class WordChainState {
 
         round = 0;
 
-        // ✅ 핵심: 모달 3초 동안은 서버 타이머가 시작되지 않게 "미래"로 잡음
+        turnLimitSec = 15.0;
+
         turnStartAt = System.currentTimeMillis() + delayMs;
     }
 
@@ -158,12 +167,8 @@ public class WordChainState {
     ========================= */
 
     public boolean isTimeOver(long now) {
-        if (!started || finished) return false;
-
-        // ✅ 핵심: 시작 시간이 아직 안 왔으면 타임오버 불가
-        if (now < turnStartAt) return false;
-
-        return now - turnStartAt >= getTurnTimeLimitSeconds() * 1000;
+        if (!started) return false;
+        return now - turnStartAt >= (long) (turnLimitSec * 1000);
     }
 
     /* =========================
@@ -219,5 +224,12 @@ public class WordChainState {
         this.started = true;
         this.finished = false;
         this.turnStartAt = System.currentTimeMillis();
+    }
+
+    public void decreaseTurnLimit() {
+        turnLimitSec = Math.max(
+                MIN_TURN_LIMIT,
+                turnLimitSec - DECREASE_STEP
+        );
     }
 }

@@ -162,6 +162,7 @@ public class SocketWordChainController {
 
         // ✅ 정답 처리
         state.addScore(userId, 10);
+        state.decreaseTurnLimit();
         state.onNextTurn();
 
         extra.put("message", "통과!");
