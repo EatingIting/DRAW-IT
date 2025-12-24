@@ -133,7 +133,17 @@ public class LobbyController {
 
         List<LobbyResponseDTO> currentLobbyList = buildValidLobbyList();
         messagingTemplate.convertAndSend("/topic/lobbies", currentLobbyList);
-        
+
+
+        Map<String, Object> roomUpdatePayload = new HashMap<>();
+        roomUpdatePayload.put("type", "ROOM_UPDATED");
+        roomUpdatePayload.put("roomId", updated.getId());
+        roomUpdatePayload.put("roomName", updated.getName());
+        roomUpdatePayload.put("mode", updated.getMode());
+
+        // 해당 방("/topic/lobby/{ID}")을 구독 중인 모든 유저에게 쏨
+        messagingTemplate.convertAndSend("/topic/lobby/" + lobbyId, roomUpdatePayload);
+
         return ResponseEntity.ok(new LobbyResponseDTO(updated));
     }
 }
