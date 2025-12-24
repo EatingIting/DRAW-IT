@@ -206,7 +206,7 @@ public class SocketWordChainController {
             );
 
             wordChainGameManager.remove(roomId);
-            lobbyUserStore.removeRoom(roomId);
+//            lobbyUserStore.removeRoom(roomId);
 
             return;
         }

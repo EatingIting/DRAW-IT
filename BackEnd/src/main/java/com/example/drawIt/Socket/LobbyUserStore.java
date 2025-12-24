@@ -2,6 +2,7 @@ package com.example.drawIt.Socket;
 
 import com.example.drawIt.Domain.GameState;
 import com.example.drawIt.Domain.GameStateManager;
+import com.example.drawIt.Domain.WordChainGameManager;
 import com.example.drawIt.Entity.Lobby;
 import com.example.drawIt.Repository.LobbyRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class LobbyUserStore {
 
     private final Map<String, Map<String, UserSessionState>> rooms = new ConcurrentHashMap<>();
     private final Map<String, String[]> sessionIndex = new ConcurrentHashMap<>();
+    private final WordChainGameManager wordChainGameManager;
 
     /* =========================
        입장 / 재접속
@@ -239,32 +241,56 @@ public class LobbyUserStore {
     /* =========================
        유저 제거 후 처리
     ========================= */
-    private void processUserRemoval(String roomId, Map<String, UserSessionState> users, UserSessionState removed) {
+    private void processUserRemoval(String roomId,
+                                    Map<String, UserSessionState> users,
+                                    UserSessionState removed) {
 
         Lobby lobby = lobbyRepository.findById(roomId).orElse(null);
+        int remainCount = users.size();
 
-        if (lobby != null && lobby.isGameStarted() && users.size() < 2) {
-            System.out.println("🔥 [Server] 게임 중 인원 부족 → 방 삭제: " + roomId);
-            // 게임 상태 제거
+    /* =========================
+       1️⃣ 게임 중 + 1명 이하 → 공통 강제 종료
+    ========================= */
+        if (lobby != null && lobby.isGameStarted() && remainCount <= 1) {
+
+            messagingTemplate.convertAndSend(
+                    "/topic/lobby/" + roomId,
+                    Map.of(
+                            "type", "ROOM_FORCE_END",
+                            "reason", "NOT_ENOUGH_PLAYERS"
+                    )
+            );
+
             gameStateManager.removeGame(roomId);
-            // DB 방 삭제
-            lobbyRepository.deleteById(roomId);
-            // 메모리 정리
-            rooms.remove(roomId);
+            wordChainGameManager.remove(roomId);
+
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    lobbyRepository.deleteById(roomId);
+                    rooms.remove(roomId);
+                }
+            }, 300);
+
             return;
         }
 
-        if (users.isEmpty()) {
+    /* =========================
+       2️⃣ 대기 중 + 0명 → 조용히 삭제
+    ========================= */
+        if (remainCount == 0) {
             if (lobby != null) {
-                // 대기 중 방만 실제 삭제
-                    lobbyRepository.deleteById(roomId);
-                    System.out.println("[Server] 대기 중 0명 방 삭제: " + roomId);
+                lobbyRepository.deleteById(roomId);
+                System.out.println("[Server] 대기 중 0명 방 삭제: " + roomId);
             }
             rooms.remove(roomId);
             gameStateManager.removeGame(roomId);
             return;
         }
 
+    /* =========================
+       3️⃣ 방장 이탈 → 방장 위임
+    ========================= */
         if (removed != null && removed.isHost()) {
             UserSessionState next = users.values().iterator().next();
             next.setHost(true);
@@ -275,6 +301,9 @@ public class LobbyUserStore {
             );
         }
 
+    /* =========================
+       4️⃣ 게임별 후처리 (턴 이동 등)
+    ========================= */
         handleGameLogicOnRemoval(
                 roomId,
                 removed != null ? removed.getUserId() : null
