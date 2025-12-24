@@ -130,6 +130,10 @@ public class LobbyController {
     @PutMapping("/lobby/{lobbyId}")
     public ResponseEntity<LobbyResponseDTO> updateLobby(@PathVariable String lobbyId, @RequestBody UpdateLobbyDTO dto) {
         Lobby updated = lobbyService.updateLobby(lobbyId, dto);
+
+        List<LobbyResponseDTO> currentLobbyList = buildValidLobbyList();
+        messagingTemplate.convertAndSend("/topic/lobbies", currentLobbyList);
+        
         return ResponseEntity.ok(new LobbyResponseDTO(updated));
     }
 }
