@@ -7,6 +7,13 @@ import "./LobbyScreen.css";
 import "./GameScreen.css";
 import { createPortal } from "react-dom";
 
+const getProfileImgPath = (profileValue) => {
+  if (!profileValue || profileValue === "default") {
+    return "/img/profile/default.jpg";
+  }
+  return `/img/profile/profile${profileValue}.jpg`;
+};
+
 function WordChainScreen() {
   const { lobbyId: roomId } = useParams();
   const navigate = useNavigate();
@@ -413,6 +420,8 @@ function WordChainScreen() {
   const rightSlots = totalSlots.filter((_, i) => i % 2 === 1);
 
   const renderUserCard = (user, index) => {
+    const profileValue = user?.profileImage || "default";
+
     if (!user) {
       return (
         <div key={index} className="user-card empty">
@@ -439,7 +448,15 @@ function WordChainScreen() {
           </div>
         )}
 
-        <div className="avatar" />
+        <div className="avatar">
+           {user && (
+             <img 
+               src={getProfileImgPath(profileValue)}
+               alt="profile"
+               style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+             />
+           )}
+        </div>
 
         <div className="user-info center">
           <span className="username">
