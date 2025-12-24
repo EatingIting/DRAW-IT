@@ -85,6 +85,20 @@ function LobbyScreen() {
     const data = res.data?.lobby ?? res.data;
     setRoomInfo(data);
     roomInfoRef.current = data;
+
+    if(data.gameStarted) {
+      if(data.mode === "WORD_CHAIN") {
+        navigate(`/wordchain/${roomId}`, {
+          state : { nickname : myNickname },
+          replace : true,
+        });
+      } else {
+        navigate(`/gaming/${roomId}`, {
+          state : { nickname : myNickname },
+          replace : true,
+        });
+      }
+    }
   };
 
   // ============================================================
@@ -164,6 +178,16 @@ function LobbyScreen() {
                 String(data.hostUserId) === String(userIdRef.current)
               );
             }
+            if (data.gameStarted) {
+              const mode = data.mode || roomInfoRef.current?.mode;
+
+              navigate(
+                mode === "WORD_CHAIN"
+                  ? `/wordchain/${roomId}`
+                  : `/gaming/${roomId}`,
+                { replace: true }
+              );
+            }
           }
 
           if (data.type === "ROOM_UPDATED") {
@@ -180,6 +204,17 @@ function LobbyScreen() {
 
             if (typeof newData.gameStarted === "boolean") {
               setGameStarted(newData.gameStarted);
+            }
+
+            if (data.gameStarted) {
+              const mode = data.mode || roomInfoRef.current?.mode;
+
+              navigate(
+                mode === "WORD_CHAIN"
+                  ? `/wordchain/${roomId}`
+                  : `/gaming/${roomId}`,
+                { replace: true }
+              );
             }
           }
 
@@ -248,6 +283,11 @@ function LobbyScreen() {
             userId: userIdRef.current,
             nickname: myNickname,
           }),
+        });
+
+        client.publish({
+          destination: `/app/lobby/${roomId}/sync`,
+          body: JSON.stringify({}),
         });
       },
     });
