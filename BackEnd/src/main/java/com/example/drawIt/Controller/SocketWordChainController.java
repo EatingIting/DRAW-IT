@@ -177,4 +177,64 @@ public class SocketWordChainController {
                 )
         );
     }
+
+    @MessageMapping("/wordchain/{roomId}/leave")
+    public void leaveWordChain(
+            @DestinationVariable String roomId,
+            @Payload Map<String, String> payload
+    ) {
+        String userId = payload.get("userId");
+
+        WordChainState state = wordChainGameManager.get(roomId);
+        // 끝말잇기 상태가 없으면(게임 시작 전이거나 이미 종료) 여기서는 할 게 없음
+        if (state == null) return;
+
+        // 남은 유저(leave는 SocketController에서 실제로 제거됨. 여기서는 "현재 store 기준"으로 판단)
+        List<Map<String, Object>> remainUsers = lobbyUserStore.getUsers(roomId);
+
+        /* =========================
+           케이스 A) 게임 중 + 1명만 남음 → 게임 종료 + 방 삭제
+        ========================= */
+        if (state.isStarted() && remainUsers.size() < 2) {
+
+            messagingTemplate.convertAndSend(
+                    "/topic/wordchain/" + roomId,
+                    Map.of(
+                            "type", "WORD_CHAIN_FORCE_END",
+                            "reason", "NOT_ENOUGH_PLAYERS"
+                    )
+            );
+
+            wordChainGameManager.remove(roomId);
+            lobbyUserStore.removeRoom(roomId);
+
+            return;
+        }
+
+        /* =========================
+           케이스 B) 턴 유저가 나감 → 랜덤 유저에게 턴 이동 + 모달 이벤트
+        ========================= */
+        if (state.isStarted() && userId != null && userId.equals(state.getTurnUserId())) {
+
+            List<String> ids = remainUsers.stream()
+                    .map(u -> (String) u.get("userId"))
+                    .toList();
+
+            if (!ids.isEmpty()) {
+                String nextTurnUserId = ids.get(new Random().nextInt(ids.size()));
+
+                state.setTurnUserId(nextTurnUserId);
+                state.setTurnStartAt(System.currentTimeMillis());
+
+                messagingTemplate.convertAndSend(
+                        "/topic/wordchain/" + roomId,
+                        Map.of(
+                                "type", "WORD_CHAIN_TURN_USER_LEFT",
+                                "newTurnUserId", nextTurnUserId,
+                                "turnStartAt", state.getTurnStartAt()
+                        )
+                );
+            }
+        }
+    }
 }

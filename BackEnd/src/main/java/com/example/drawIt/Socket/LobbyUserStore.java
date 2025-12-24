@@ -408,4 +408,9 @@ public class LobbyUserStore {
             user.setScore(user.getScore() + score);
         }
     }
+
+    public synchronized void removeRoom(String roomId) {
+        rooms.remove(roomId);
+        gameStateManager.removeGame(roomId);
+    }
 }

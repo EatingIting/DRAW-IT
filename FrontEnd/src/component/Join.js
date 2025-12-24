@@ -32,6 +32,7 @@ const RoomCard = ({ room, onJoin }) => {
         OBJECT: "사물",
         SPORT: "스포츠",
         RANDOM: "랜덤",
+        WORD_CHAIN : "끝말잇기"
     };
 
     return (

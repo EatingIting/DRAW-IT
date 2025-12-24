@@ -5,6 +5,7 @@ import com.example.drawIt.DTO.SocketProfileDTO;
 import com.example.drawIt.Domain.DrawEvent;
 import com.example.drawIt.Domain.GameState;
 import com.example.drawIt.Domain.GameStateManager;
+import com.example.drawIt.Domain.WordChainState;
 import com.example.drawIt.Entity.Lobby;
 import com.example.drawIt.Service.GameImageService;
 import com.example.drawIt.Service.LobbyService;
@@ -153,9 +154,22 @@ public class SocketController {
     }
 
     @MessageMapping("/lobby/{roomId}/leave")
-    public void leave(@DestinationVariable String roomId,
-                      @Payload Map<String, String> payload) {
-        lobbyUserStore.leaveRoom(roomId, payload.get("userId"));
+    public void leave(
+            @DestinationVariable String roomId,
+            @Payload Map<String, String> payload
+    ) {
+        String userId = payload.get("userId");
+
+        lobbyUserStore.leaveRoom(roomId, userId);
+
+        // 유저 목록 갱신만 브로드캐스트
+        messagingTemplate.convertAndSend(
+                "/topic/lobby/" + roomId,
+                Map.of(
+                        "type", "USER_UPDATE",
+                        "users", lobbyUserStore.getUsers(roomId)
+                )
+        );
     }
 
     @MessageMapping("/draw/{roomId}")
