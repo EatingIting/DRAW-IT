@@ -5,6 +5,7 @@ import { Client } from "@stomp/stompjs";
 import { API_BASE_URL } from "../api/config";
 import "./LobbyScreen.css";
 import "./GameScreen.css";
+import { createPortal } from "react-dom";
 
 function WordChainScreen() {
   const { lobbyId: roomId } = useParams();
@@ -83,6 +84,9 @@ function WordChainScreen() {
   // 마지막 단어
   const [displayWord, setDisplayWord] = useState("");
 
+  // 유저 1명 남았을때
+  const [forceExitModal, setForceExitModal] = useState(false);
+
   useEffect(() => {
     if (!started || !effectiveTurnStartAt) return;
 
@@ -102,6 +106,11 @@ function WordChainScreen() {
 
     return () => clearInterval(interval);
   }, [started, effectiveTurnStartAt, turnTimeLimit]);
+
+  const handleLeaveGame = () => {
+    setForceExitModal(false);
+    navigate("/join");
+  }
 
   /* =========================
      WebSocket 연결
@@ -143,6 +152,25 @@ function WordChainScreen() {
             setHostUserId(data.hostUserId || "");
           }
 
+          if (data.type === "ROOM_FORCE_END") {
+            console.log("🔥 ROOM_FORCE_END received (WordChain)");
+
+            // 게임 상태 정리
+            setStarted(false);
+            setTurnUserId("");
+            setEffectiveTurnStartAt(0);
+            setCurrentWord("");
+            setLastMessage("");
+
+            // 타이머/모달 정리
+            setShowStartModal(false);
+            setGameEnded(false);
+
+            // 🔥 강제 종료 모달
+            setForceExitModal(true);
+            return;
+          }
+
           if (data.type === "ROOM_DESTROYED") {
             alert("방이 삭제되었습니다.");
             navigate("/");
@@ -151,6 +179,7 @@ function WordChainScreen() {
 
         /* 2) WordChain 상태 구독 */
         client.subscribe(`/topic/wordchain/${roomId}`, (msg) => {
+          console.log("WORDCHAIN EVENT:", msg.body);
           const data = JSON.parse(msg.body);
 
           if (data.type === "WORD_CHAIN_TURN_USER_LEFT") {
@@ -176,14 +205,6 @@ function WordChainScreen() {
 
             return;
           }
-
-          if (data.type === "WORD_CHAIN_END") {
-            setGameEnded(true);
-            setEndReason(data.reason);
-            setWinners(data.winners || []);
-            return;
-          }
-
 
           if (data.type !== "WORD_CHAIN_STATE") return;
 
@@ -555,10 +576,14 @@ function WordChainScreen() {
 
               <div className="room-info-box">
                 <h2>끝말잇기 진행</h2>
-                <div className="room-detail">
+                <div
+                  className={`room-detail ${
+                    started && isMyTurn ? "my-turn-text" : ""
+                  }`}
+                >
                   {started
                     ? isMyTurn
-                      ? "내 턴"
+                      ? "🔥 내 턴 🔥"
                       : "상대 턴"
                     : "게임 시작 대기 중"}
                 </div>
@@ -639,6 +664,39 @@ function WordChainScreen() {
           );
         })()}
       </div>
+      {forceExitModal &&
+        createPortal(
+          <div className="answer-modal-overlay" style={{ zIndex: 99999 }}>
+            <div className="answer-modal-content">
+              <div className="confetti" style={{ fontSize: "3rem" }}>🥹</div>
+              <h2>게임 종료</h2>
+              <div className="modal-info">
+                <p style={{ fontSize: "1.1rem", marginBottom: "10px" }}>
+                  모든 플레이어가 나갔습니다.<br />
+                  대기실로 돌아갑니다.
+                </p>
+                <button
+                  className="confirm-btn"
+                  onClick={handleLeaveGame}
+                  style={{
+                    marginTop: "15px",
+                    padding: "10px 20px",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "#1971c2",
+                    color: "white",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    fontSize: "1rem"
+                  }}
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </>
   );
 }

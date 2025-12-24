@@ -609,6 +609,42 @@
   box-shadow: none;
 }
 
+/* 
+  ==========================================
+  마이턴 강조
+  ==========================================
+*/
+/* .room-detail {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  transition: all 0.2s ease;
+} */
+
+.my-turn-text {
+  font-size: 22px;
+  font-weight: 900;
+  color: #4dabf7;
+  text-shadow:
+    0 0 6px rgba(77, 171, 247, 0.6),
+    0 0 14px rgba(77, 171, 247, 0.5);
+  animation: myTurnPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes myTurnPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
 /* =========================================
    말풍선 및 애니메이션
    ========================================= */

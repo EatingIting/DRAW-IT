@@ -444,11 +444,25 @@ function GameScreen({ maxPlayers = 10 }) {
             prevDrawerIdRef.current = String(targetDrawerId);
           }
 
-          if (data.type === 'ROOM_DESTROYED') {
-            setTimeout(() => {
-                alert('방이 삭제되었습니다.');
-                navigate('/');
-            }, 0);
+          if (data.type === 'ROOM_FORCE_END') {
+            // 🔥 방 단위 강제 종료 (모든 게임 모드 공통)
+            
+            // 1️⃣ 게임 상태 완전 종료
+            setIsGameStarted(false);
+            setRoundEndTime(0);
+            setCurrentDrawerId(null);
+            setIsDrawer(false);
+
+            // 2️⃣ 그림/입력/타이머 중단
+            resetCanvasLocal();
+            setTimeOverModal(false);
+            setAnswerModal({ visible: false, winner: '', answer: '' });
+            setRoundModal({ visible: false, role: null, word: '' });
+
+            // 3️⃣ 강제 종료 모달
+            setForceExitModal(true);
+
+            return;
           }
 
           if (data.type === 'TIME_OVER') {
