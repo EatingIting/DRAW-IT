@@ -72,7 +72,7 @@ function Main() {
           <span className="nickname-label">닉네임</span>
           <input
             type="text"
-            className="nickname-input"
+            className="main-nickname-input"
             placeholder="닉네임 입력"
             value={nickname}
             maxLength={5}
