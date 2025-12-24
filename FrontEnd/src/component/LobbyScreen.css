@@ -205,20 +205,11 @@
 }
 
 .logo-placeholder {
-  width: 180px;
-  height: 90px;
-  background: rgba(0,0,0,0.2);
-  border: var(--game-border-width) solid var(--game-border-color);
-  border-radius: 16px;
+  width: 250px;
   
   display: flex;
   align-items: center;
   justify-content: center;
-  
-  color: #fff;
-  font-size: 22px;
-  font-weight: bold;
-  box-shadow: 6px 6px 0 rgba(0,0,0,0.2);
 }
 
 .room-info-box {

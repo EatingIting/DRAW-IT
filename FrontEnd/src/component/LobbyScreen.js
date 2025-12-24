@@ -395,7 +395,7 @@ function LobbyScreen() {
             </div>
 
             <div className="lobby-center">
-              <div className="logo-placeholder">LOGO</div>
+              <img src="/img/logo.png" className="logo-placeholder"/>
 
               <div className="room-info-box">
                 <h2>{roomInfo?.name ?? "로비"}</h2>
