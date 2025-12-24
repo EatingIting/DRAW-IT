@@ -122,18 +122,48 @@ public class WordChainState {
        라운드 제한시간
     ========================= */
     public int getTurnTimeLimitSeconds() {
-        int limit = 60 - round;
-        return Math.max(limit, 1);
+        return 15;
+    }
+
+    /* =========================
+       시간 보정
+    ============================ */
+    public void startWithDelay(String startWord, List<UserSnapshot> users, long delayMs) {
+        started = true;
+        finished = false;
+
+        currentWord = startWord;
+        usedWords.clear();
+        playerIds.clear();
+        nickById.clear();
+        scoreByUserId.clear();
+
+        for (UserSnapshot u : users) {
+            playerIds.add(u.userId);
+            nickById.put(u.userId, u.nickname);
+            scoreByUserId.put(u.userId, 0);
+        }
+
+        currentTurnIndex = 0;
+        turnUserId = playerIds.get(0);
+
+        round = 0;
+
+        // ✅ 핵심: 모달 3초 동안은 서버 타이머가 시작되지 않게 "미래"로 잡음
+        turnStartAt = System.currentTimeMillis() + delayMs;
     }
 
     /* =========================
        타임오버 판정
     ========================= */
+
     public boolean isTimeOver(long now) {
         if (!started || finished) return false;
 
-        long elapsed = (now - turnStartAt) / 1000;
-        return elapsed >= getTurnTimeLimitSeconds();
+        // ✅ 핵심: 시작 시간이 아직 안 왔으면 타임오버 불가
+        if (now < turnStartAt) return false;
+
+        return now - turnStartAt >= getTurnTimeLimitSeconds() * 1000;
     }
 
     /* =========================
@@ -177,5 +207,17 @@ public class WordChainState {
                 .stream()
                 .map(id -> nickById.getOrDefault(id, id))
                 .toList();
+    }
+
+    public void prepare(String startWord) {
+        this.started = false;
+        this.finished = false;
+        this.currentWord = startWord;
+    }
+
+    public void startRealTurn() {
+        this.started = true;
+        this.finished = false;
+        this.turnStartAt = System.currentTimeMillis();
     }
 }

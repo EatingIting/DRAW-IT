@@ -256,7 +256,7 @@ public class LobbyUserStore {
             messagingTemplate.convertAndSend(
                     "/topic/lobby/" + roomId,
                     Map.of(
-                            "type", "ROOM_FORCE_END",
+                            "type", "WORD_CHAIN_END",
                             "reason", "NOT_ENOUGH_PLAYERS"
                     )
             );

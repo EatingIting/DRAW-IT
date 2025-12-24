@@ -48,6 +48,8 @@ function LobbyScreen() {
   const roomInfoRef = useRef(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
 
+  const [gameStarted, setGameStarted] = useState(false);
+
   /* Chat Bubble */
   const [chatBubbles, setChatBubbles] = useState({});
   const userCardRefs = useRef({});
@@ -156,18 +158,29 @@ function LobbyScreen() {
           if (data.type === "USER_UPDATE") {
             const serverSortedUsers = data.users || [];
             setPlayers(serverSortedUsers);
-            setIsHost(data.hostUserId === userIdRef.current);
+
+            if (data.hostUserId) {
+              setIsHost(
+                String(data.hostUserId) === String(userIdRef.current)
+              );
+            }
           }
 
           if (data.type === "ROOM_UPDATED") {
             const newData = {
-              ...(roomInfoRef.current || {}), // Ref 값 사용
+              ...(roomInfoRef.current || {}),
               id: data.roomId ?? roomInfoRef.current?.id,
               name: data.roomName ?? roomInfoRef.current?.name,
               mode: data.mode ?? roomInfoRef.current?.mode,
+              gameStarted: data.gameStarted ?? roomInfoRef.current?.gameStarted,
             };
+
             setRoomInfo(newData);
             roomInfoRef.current = newData;
+
+            if (typeof newData.gameStarted === "boolean") {
+              setGameStarted(newData.gameStarted);
+            }
           }
 
           if (data.type === "GAME_START") {
@@ -410,7 +423,7 @@ function LobbyScreen() {
                 </div>
               </div>
 
-              {isHost ? (
+              {isHost ? !gameStarted &&(
                 <div className="action-btn-group">
                   <button className="start-btn" onClick={handleStartGame}>
                     GAME START

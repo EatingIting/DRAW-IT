@@ -60,9 +60,9 @@ function WordChainScreen() {
   const [round, setRound] = useState(0);
   const [turnStartAt, setTurnStartAt] = useState(0);
 
-  const [turnTimeLimit, setTurnTimeLimit] = useState(60);
-  const [remainSeconds, setRemainSeconds] = useState(60);
-  const [remainPercent, setRemainPercent] = useState(100);
+  const [turnTimeLimit, setTurnTimeLimit] = useState(null);
+  const [remainSeconds, setRemainSeconds] = useState(null);
+  const [remainPercent, setRemainPercent] = useState(null);
 
   const [gameEnded, setGameEnded] = useState(false);
   const [endReason, setEndReason] = useState("");
@@ -75,6 +75,8 @@ function WordChainScreen() {
 
   // 게임 시작 모달
   const [showStartModal, setShowStartModal] = useState(false);
+  const showStartModalRef = useRef(false);
+
   const [effectiveTurnStartAt, setEffectiveTurnStartAt] = useState(0);
 
   const startModalShownRef = useRef(false);
@@ -94,10 +96,26 @@ function WordChainScreen() {
   // 유저 1명 남았을때
   const [forceExitModal, setForceExitModal] = useState(false);
 
+  //종료 잠금 플래그
+  const [isForceEnded, setIsForceEnded] = useState(false);
+  const isForceEndedRef = useRef(false);
+
+  useEffect(()=> {
+    showStartModalRef.current = showStartModal;
+  }, [showStartModal]);
+
+  const lastLimitRef = useRef(15);
+
   useEffect(() => {
-    if (!started || !effectiveTurnStartAt) return;
+    // ✅ 모달 떠있는 동안은 타이머가 절대 돌면 안 됩니다.
+    if (showStartModalRef.current) return;
+
+    if (!started || !effectiveTurnStartAt || !turnTimeLimit) return;
 
     const interval = setInterval(() => {
+      // 모달이 갑자기 켜지면 즉시 중단
+      if (showStartModalRef.current) return;
+
       const now = Date.now();
       const elapsedMs = now - effectiveTurnStartAt;
       const limitMs = turnTimeLimit * 1000;
@@ -105,14 +123,14 @@ function WordChainScreen() {
       const remainMs = Math.max(limitMs - elapsedMs, 0);
 
       const sec = Math.ceil(remainMs / 1000);
-      const percent = Math.max((remainMs / limitMs) * 100, 0);
+      const pct = limitMs > 0 ? Math.max((remainMs / limitMs) * 100, 0) : 0;
 
       setRemainSeconds(sec);
-      setRemainPercent(percent);
+      setRemainPercent(pct);
     }, 100);
 
     return () => clearInterval(interval);
-  }, [started, effectiveTurnStartAt, turnTimeLimit]);
+  }, [started, effectiveTurnStartAt, turnTimeLimit, showStartModal]);
 
   const handleLeaveGame = () => {
     setForceExitModal(false);
@@ -159,25 +177,6 @@ function WordChainScreen() {
             setHostUserId(data.hostUserId || "");
           }
 
-          if (data.type === "ROOM_FORCE_END") {
-            console.log("🔥 ROOM_FORCE_END received (WordChain)");
-
-            // 게임 상태 정리
-            setStarted(false);
-            setTurnUserId("");
-            setEffectiveTurnStartAt(0);
-            setCurrentWord("");
-            setLastMessage("");
-
-            // 타이머/모달 정리
-            setShowStartModal(false);
-            setGameEnded(false);
-
-            // 🔥 강제 종료 모달
-            setForceExitModal(true);
-            return;
-          }
-
           if (data.type === "ROOM_DESTROYED") {
             alert("방이 삭제되었습니다.");
             navigate("/");
@@ -213,113 +212,165 @@ function WordChainScreen() {
             return;
           }
 
+          if (data.type === "WORD_CHAIN_END") {
+            console.log("🔥 WORD_CHAIN_END received", data);
+
+            // 🔒 이후 모든 상태 이벤트 차단
+            isForceEndedRef.current = true;
+
+            // 게임 종료 상태
+            setStarted(false);
+            setTurnUserId("");
+            setEffectiveTurnStartAt(0);
+
+            // 타이머 완전 정리
+            setRemainSeconds(null);
+            setRemainPercent(null);
+
+            if (data.reason === "TIME_OVER") {
+              setGameEnded(true);
+              setEndReason("TIME_OVER");
+              setWinners(data.winners || []);
+            }
+
+            return;
+          }
+
+          if (isForceEndedRef.current) {
+            return;
+          }
+
           if (data.type !== "WORD_CHAIN_STATE") return;
 
-          const SEEN_START_KEY = `wordchain_seen_start_${roomId}`;
-          const seenStartAt = sessionStorage.getItem(SEEN_START_KEY);
+            const SEEN_START_KEY = `wordchain_seen_start_${roomId}`;
+            const seenStartAt = sessionStorage.getItem(SEEN_START_KEY);
 
-          if (
-            data.started &&
-            !startModalShownRef.current &&
-            seenStartAt !== String(data.turnStartAt)
-          ) {
-            startModalShownRef.current = true;
+            // ===== 서버 타임 리밋 확정 (항상 숫자) =====
+            const serverTurnLimit =
+              data.turnTimeLimit != null ? Number(data.turnTimeLimit) : 15;
 
-            setShowStartModal(true);
-            setRemainSeconds(data.turnTimeLimit ?? 60);
-            setRemainPercent(100);
+            // 항상 최신 제한시간 저장
+            setTurnTimeLimit(serverTurnLimit);
 
-            sessionStorage.setItem(
-              SEEN_START_KEY,
-              String(data.turnStartAt)
-            );
+            // =========================
+            // 1️⃣ 게임 최초 시작 → 시작 모달
+            // =========================
+            if (
+              data.started &&
+              !startModalShownRef.current &&
+              seenStartAt !== String(data.turnStartAt)
+            ) {
+              startModalShownRef.current = true;
 
-            // ⏱️ 모달 종료 후에만 타이머 시작
-            setTimeout(() => {
-              setShowStartModal(false);
-              setEffectiveTurnStartAt(Date.now());
-            }, 3000);
-          }
+              // 🔒 모달 중에는 타이머 완전 정지
+              setEffectiveTurnStartAt(0);
 
-          else if (
-            data.started &&
-            data.turnUserId &&
-            data.turnStartAt &&
-            String(data.turnUserId) !== String(turnUserId)) {
-            // 🔥 턴이 바뀐 경우 (정답 or 유저 이탈)
+              // UI는 항상 15초부터 보이게
+              setRemainSeconds(serverTurnLimit);
+              setRemainPercent(100);
+
+              setShowStartModal(true);
+
+              sessionStorage.setItem(
+                SEEN_START_KEY,
+                String(data.turnStartAt)
+              );
+
+              // ⏱️ 모달 종료 → 이 순간부터 15초 새로 시작
+              setTimeout(() => {
+                setShowStartModal(false);
+
+                // setRemainSeconds(serverTurnLimit);
+                // setRemainPercent(100);
+
+                // 🔥 여기서부터 진짜 타이머 시작
+                setEffectiveTurnStartAt(data.turnStartAt);
+              }, 3000);
+              console.log("CLIENT RECEIVED:", {
+                now: Date.now(),
+                serverTurnStartAt: data.turnStartAt,
+                diff: Date.now() - data.turnStartAt,
+              });
+            }
+
+            // =========================
+            // 2️⃣ 턴 변경 (정답 / 유저 이탈)
+            // =========================
+            else if (
+              data.started &&
+              data.turnUserId &&
+              data.turnStartAt &&
+              String(data.turnUserId) !== String(turnUserId)
+            ) {
+              setRemainSeconds(serverTurnLimit);
+              setRemainPercent(100);
               setEffectiveTurnStartAt(data.turnStartAt);
-          }
-
-          else if (
-            data.started &&
-            seenStartAt === String(data.turnStartAt) &&
-            !startModalShownRef.current
-          ) {
-            startModalShownRef.current = true;
-            setEffectiveTurnStartAt(data.turnStartAt);
-          }
-
-          /* ===== 상태 업데이트 ===== */
-          setStarted(Boolean(data.started));
-          setCurrentWord(data.currentWord || "");
-          setTurnUserId(data.turnUserId || "");
-          setLastMessage(data.message || "");
-          setRound(data.round ?? 0);
-          setTurnTimeLimit(data.turnTimeLimit ?? 60);
-
-          if(data.scoreByUserId) {
-            setScoreByUserId(data.scoreByUserId);
-          }
-
-          if (!data.started) {
-            setDisplayWord("");
-          } else {
-            const w = data.currentWord || "";
-
-            // 첫 라운드 → 전체 단어
-            if ((data.round ?? 0) === 0) {
-              setDisplayWord(w);
-            }
-            // 그 이후 → 마지막 글자만
-            else {
-              setDisplayWord(w ? w.charAt(w.length - 1) : "");
-            }
-          }
-
-          if (data.lastAction === "ACCEPT") {
-            const who =
-              data.nickById?.[data.submitUserId] || data.submitUserId;
-            const w = data.submitWord || "";
-            if (w) {
-              setLog((prev) => [
-                { t: Date.now(), text: `${who}: ${w}` },
-                ...prev,
-              ]);
             }
 
-            // ✅ 점수 이펙트 트리거
-            setScoreEffect({
-              userId: data.submitUserId,
-              value: 10,
-            });
-
-            // ✅ 1초 후 제거
-            setTimeout(() => {
-              setScoreEffect(null);
-            }, 2500);
-          }
-          /* if (data.lastAction === "REJECT") {
-            const who =
-              data.nickById?.[data.submitUserId] || data.submitUserId;
-            const w = data.submitWord || "";
-            if (w) {
-              setLog((prev) => [
-                { t: Date.now(), text: `실패 - ${who}: ${w}` },
-                ...prev,
-              ]);
+            // =========================
+            // 3️⃣ 재접속 / 동기화
+            // =========================
+            else if (
+              data.started &&
+              seenStartAt === String(data.turnStartAt) &&
+              !startModalShownRef.current
+            ) {
+              startModalShownRef.current = true;
+              setEffectiveTurnStartAt(data.turnStartAt);
             }
-          } */
-        });
+
+            // =========================
+            // 4️⃣ 공통 상태 업데이트
+            // =========================
+            setStarted(Boolean(data.started));
+            setCurrentWord(data.currentWord || "");
+            setTurnUserId(data.turnUserId || "");
+            setLastMessage(data.message || "");
+            setRound(data.round ?? 0);
+
+            if (data.scoreByUserId) {
+              setScoreByUserId(data.scoreByUserId);
+            }
+
+            // ===== 제시어 표시 =====
+            if (!data.started) {
+              setDisplayWord("");
+            } else {
+              const w = data.currentWord || "";
+              if ((data.round ?? 0) === 0) {
+                setDisplayWord(w);                 // 첫 라운드: 전체 단어
+              } else {
+                setDisplayWord(w ? w.charAt(w.length - 1) : ""); // 이후: 마지막 글자
+              }
+            }
+
+            // =========================
+            // 5️⃣ 정답 처리 (점수 + 로그)
+            // =========================
+            if (data.lastAction === "ACCEPT") {
+              const who =
+                data.nickById?.[data.submitUserId] || data.submitUserId;
+              const w = data.submitWord || "";
+
+              if (w) {
+                setLog((prev) => [
+                  { t: Date.now(), text: `${who}: ${w}` },
+                  ...prev,
+                ]);
+              }
+
+              // 점수 이펙트
+              setScoreEffect({
+                userId: data.submitUserId,
+                value: 10,
+              });
+
+              setTimeout(() => {
+                setScoreEffect(null);
+              }, 2500);
+            }
+          }
+        )
 
         /* 3) ⭐ 핵심: 초기 USER_UPDATE 강제 요청 */
         client.publish({
@@ -561,14 +612,12 @@ function WordChainScreen() {
                   }}
                 >
                   {/* 타이머 */}
-                  {started && effectiveTurnStartAt > 0 && (
+                  {started && effectiveTurnStartAt > 0 && remainSeconds !== null && turnTimeLimit && (
                     <div className="timer-container" style={{ width: 520 }}>
                       <div className="timer-seconds">{remainSeconds}</div>
                       <div
                         className="timer-bar"
-                        style={{
-                          width: `${(remainSeconds / turnTimeLimit) * 100}%`,
-                        }}
+                        style={{ width: `${(remainSeconds / turnTimeLimit) * 100}%` }}
                       />
                     </div>
                   )}

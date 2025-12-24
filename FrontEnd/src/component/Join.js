@@ -252,37 +252,49 @@ function Join() {
     // 실제 서버 검증 및 입장 로직
     const verifyAndJoin = async (room, password) => {
         try {
-            // 3. 서버에 입장 가능 여부 확인 (비밀번호 검증)
             console.log(`[Join] 방 입장 시도: ${room.name} (ID: ${room.id})`);
-            
+
             await axios.post(`${API_BASE_URL}/lobby/verify`, {
-                roomId: room.id,
-                password: password
+            roomId: room.id,
+            password: password,
             });
 
-            // 4. 검증 성공 시 이동 처리
+            // 닉네임 저장
             sessionStorage.setItem("nickname", nickname);
-            
-            const targetPath = room.gameStarted 
-                ? `/gaming/${room.id}`  // 게임 중이면 관전/난입
-                : `/lobby/${room.id}`;  // 대기 중이면 로비
 
-            navigate(targetPath, { 
-                state: { 
-                    nickname, 
-                    password: password // 소켓 연결 시 인증용
-                } 
+            let targetPath;
+
+            // 게임이 시작된 경우
+            if (room.gameStarted) {
+            // 끝말잇기 모드
+                console.log(room.mode);
+                if (room.mode === "WORD_CHAIN") {
+                    targetPath = `/wordchain/${room.id}`;
+                }
+                // ✅ 그림 그리기 등 다른 게임
+                else {
+                    targetPath = `/gaming/${room.id}`;
+                }
+            } else {
+                targetPath = `/lobby/${room.id}`;
+            }
+
+            navigate(targetPath, {
+            state: {
+                nickname,
+                password, // 소켓 인증용
+            },
             });
 
         } catch (error) {
-            // 5. 에러 처리
             console.error("[Join] 입장 실패:", error);
-            if (error.response && error.response.status === 401) {
-                showAlert("비밀번호가 일치하지 않습니다.");
-            } else if (error.response && error.response.status === 404) {
-                showAlert("존재하지 않는 방입니다");
+
+            if (error.response?.status === 401) {
+            showAlert("비밀번호가 일치하지 않습니다.");
+            } else if (error.response?.status === 404) {
+            showAlert("존재하지 않는 방입니다");
             } else {
-                showAlert("입장할 수 없습니다");
+            showAlert("입장할 수 없습니다");
             }
         }
     };

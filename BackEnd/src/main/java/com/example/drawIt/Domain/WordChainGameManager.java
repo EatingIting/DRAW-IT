@@ -108,7 +108,7 @@ public class WordChainGameManager {
                         Map.of(
                                 "type", "WORD_CHAIN_END",
                                 "reason", "TIME_OVER",
-                                "winners", winners
+                                "winners", state.getWinnerNicknames()
                         )
                 );
                 return;

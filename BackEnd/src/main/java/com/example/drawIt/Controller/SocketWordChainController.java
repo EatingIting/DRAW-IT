@@ -76,10 +76,14 @@ public class SocketWordChainController {
         }
 
         String startWord = wordChainGameManager.pickFirstWord();
-        state.start(startWord, users);
 
-        broadcastState(roomId, "START",
-                Map.of("message", "끝말잇기 게임이 시작되었습니다."));
+        // ✅ "즉시 started=true" + "turnStartAt=now+3000"
+        state.startWithDelay(startWord, users, 3000);
+
+        broadcastState(roomId, "START", Map.of(
+                "message", "게임 시작",
+                "turnStartAt", state.getTurnStartAt()
+        ));
     }
 
     /* =========================
@@ -128,27 +132,36 @@ public class SocketWordChainController {
                 )
         );
 
+        // ✅ 공통 extra 객체 (여기서 한 번만 선언)
         Map<String, Object> extra = new HashMap<>();
         extra.put("submitUserId", userId);
         extra.put("submitNickname", nickname);
         extra.put("submitWord", word);
 
+        // ⏳ 모달 3초 동안 제출 방지
+        long now = System.currentTimeMillis();
+        if (state.isStarted() && now < state.getTurnStartAt()) {
+            extra.put("message", "잠시 후 게임이 시작됩니다.");
+            broadcastState(roomId, "REJECT", extra);
+            return;
+        }
+
+        // ❌ 사전에 없는 단어
         if (!wordChainGameManager.existsInDictionary(word)) {
             extra.put("message", "사전에 없는 단어입니다.");
             broadcastState(roomId, "REJECT", extra);
             return;
         }
 
+        // ❌ 규칙 위반
         if (!state.submit(userId, word)) {
             extra.put("message", "규칙에 맞지 않는 단어입니다.");
             broadcastState(roomId, "REJECT", extra);
             return;
         }
 
-        // ✅ 정답 → 점수 +10
+        // ✅ 정답 처리
         state.addScore(userId, 10);
-
-        // 턴 변경
         state.onNextTurn();
 
         extra.put("message", "통과!");
@@ -200,7 +213,7 @@ public class SocketWordChainController {
             messagingTemplate.convertAndSend(
                     "/topic/wordchain/" + roomId,
                     Map.of(
-                            "type", "WORD_CHAIN_FORCE_END",
+                            "type", "WORD_CHAIN_END",
                             "reason", "NOT_ENOUGH_PLAYERS"
                     )
             );
