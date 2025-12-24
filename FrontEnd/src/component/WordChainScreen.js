@@ -80,6 +80,9 @@ function WordChainScreen() {
   // 우승자
   const [winners, setWinners] = useState([]);
 
+  // 마지막 단어
+  const [displayWord, setDisplayWord] = useState("");
+
   useEffect(() => {
     if (!started || !effectiveTurnStartAt) return;
 
@@ -150,6 +153,30 @@ function WordChainScreen() {
         client.subscribe(`/topic/wordchain/${roomId}`, (msg) => {
           const data = JSON.parse(msg.body);
 
+          if (data.type === "WORD_CHAIN_TURN_USER_LEFT") {
+            const newTurnUserId = data.newTurnUserId;
+            const newTurnStartAt = data.turnStartAt || Date.now();
+
+            // ✅ 턴 즉시 변경
+            setTurnUserId(newTurnUserId);
+            setEffectiveTurnStartAt(newTurnStartAt);
+
+            // ✅ 내가 새 턴이면 UX 즉시 반영
+            if (String(newTurnUserId) === String(userId)) {
+              setLastMessage("상대가 나가서 내 차례가 되었습니다.");
+
+              // 입력창 포커스
+              setTimeout(() => {
+                const inputEl = document.querySelector(".chat-area input");
+                inputEl?.focus();
+              }, 0);
+            } else {
+              setLastMessage("턴 유저가 나가서 턴이 변경되었습니다.");
+            }
+
+            return;
+          }
+
           if (data.type === "WORD_CHAIN_END") {
             setGameEnded(true);
             setEndReason(data.reason);
@@ -186,8 +213,13 @@ function WordChainScreen() {
             }, 3000);
           }
 
-          else if (data.lastAction === "ACCEPT") {
-            setEffectiveTurnStartAt(data.turnStartAt);
+          else if (
+            data.started &&
+            data.turnUserId &&
+            data.turnStartAt &&
+            String(data.turnUserId) !== String(turnUserId)) {
+            // 🔥 턴이 바뀐 경우 (정답 or 유저 이탈)
+              setEffectiveTurnStartAt(data.turnStartAt);
           }
 
           else if (
@@ -209,6 +241,21 @@ function WordChainScreen() {
 
           if(data.scoreByUserId) {
             setScoreByUserId(data.scoreByUserId);
+          }
+
+          if (!data.started) {
+            setDisplayWord("");
+          } else {
+            const w = data.currentWord || "";
+
+            // 첫 라운드 → 전체 단어
+            if ((data.round ?? 0) === 0) {
+              setDisplayWord(w);
+            }
+            // 그 이후 → 마지막 글자만
+            else {
+              setDisplayWord(w ? w.charAt(w.length - 1) : "");
+            }
           }
 
           if (data.lastAction === "ACCEPT") {
@@ -365,18 +412,22 @@ function WordChainScreen() {
           if (el) userCardRefs.current[user.userId] = el;
         }}
       >
+        {scoreEffect?.userId === user.userId && (
+          <div className="score-float">
+            +{scoreEffect.value}
+          </div>
+        )}
+
         <div className="avatar" />
 
-        <div className="user-info">
+        <div className="user-info center">
           <span className="username">
             {user.nickname}
-            {isMe && <span className="me-mark">★</span>}
             {isTurn && <span className="turn-mark">(TURN)</span>}
           </span>
 
-          {/* ✅ 여기 반드시 필요 */}
-          <span className="user-score">
-            Score: {user.score ?? 0}
+          <span className={`user-score ${isTurn ? "turn" : ""}`}>
+            Score: {scoreByUserId[user.userId] ?? 0}
           </span>
         </div>
       </div>
@@ -497,7 +548,7 @@ function WordChainScreen() {
                       boxShadow: "6px 6px 0 rgba(0,0,0,0.25)",
                     }}
                   >
-                    {currentWord || "제시어 없음"}
+                    {displayWord || "제시어 없음"}
                   </div>
                 </div>
               )}
@@ -546,6 +597,7 @@ function WordChainScreen() {
           <div className="chat-area">
             <input
               type="text"
+              className={`wordchain-input ${isMyTurn ? "my-turn" : ""}`}
               placeholder={
                 isMyTurn ? "단어를 입력하세요..." : "채팅을 입력하세요..."
               }

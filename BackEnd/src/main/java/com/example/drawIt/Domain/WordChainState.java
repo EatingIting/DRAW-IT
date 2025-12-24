@@ -26,6 +26,14 @@ public class WordChainState {
     // ✅ 점수 관리
     private final Map<String, Integer> scoreByUserId = new HashMap<>();
 
+    public void setTurnUserId(String turnUserId) {
+        this.turnUserId = turnUserId;
+    }
+
+    public void setTurnStartAt(long turnStartAt) {
+        this.turnStartAt = turnStartAt;
+    }
+
     /* =========================
        게임 시작
     ========================= */
