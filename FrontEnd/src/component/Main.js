@@ -84,7 +84,7 @@ function Main() {
           <button
             type="button"
             onClick={() => setIsCreateModalOpen(true)}
-            disabled={!hasNickname}
+            disabled={ !hasNickname }
             style={{ opacity: !hasNickname ? 0.5 : 1, cursor: !hasNickname ? 'not-allowed' : 'pointer' }}
           >
             방만들기
@@ -93,7 +93,7 @@ function Main() {
           <button
             type="button"
             onClick={() => navigate('/join')}
-            disabled={!hasNickname}
+            disabled={ !hasNickname }
             style={{ opacity: !hasNickname ? 0.5 : 1, cursor: !hasNickname ? 'not-allowed' : 'pointer' }}
           >
             참여하기
