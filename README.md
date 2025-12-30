@@ -84,7 +84,7 @@
 ## 📸 미리보기
 
 ### 1️⃣ 시작 화면
-![start](p4/start.png)
+![start](/img/start.png)
 
 게임의 시작 화면입니다.  
 사용자는 닉네임을 입력한 뒤 방을 생성하거나 기존 방에 참여할 수 있습니다.  
@@ -93,7 +93,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 2️⃣ 방 목록 화면
-![room_list](p4/room_list.png)
+![room_list](/img/room_list.png)
 
 현재 생성되어 있는 방 목록을 확인할 수 있는 화면입니다.  
 각 방의 방장, 모드, 인원 수 상태를 한눈에 확인할 수 있으며  
@@ -102,7 +102,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 3️⃣ 방 생성 화면
-![create_room](p4/create_room.png)
+![create_room](/img/create_room.png)
 
 방 이름, 게임 모드, 비밀번호 설정 여부 등을 선택하여  
 새로운 방을 생성하는 화면입니다.  
@@ -111,7 +111,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 4️⃣ 대기실 화면
-![waiting_room](p4/waiting_room.png)
+![waiting_room](/img/waiting_room.png)
 
 방에 입장한 유저들이 게임 시작을 기다리는 대기실 화면입니다.  
 참여자 목록이 실시간으로 갱신되며,  
@@ -120,7 +120,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 5️⃣ 채팅 말풍선
-![chat_bubble](p4/chat_bubble.png)
+![chat_bubble](/img/chat_bubble.png)
 
 대기실 및 게임 중 채팅 메시지가  
 각 사용자 캐릭터 옆 말풍선 형태로 표시됩니다.  
@@ -129,7 +129,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 6️⃣ 게임 시작 안내 모달
-![game_start_modal](p4/game_start_modal.png)
+![game_start_modal](/img/game_start_modal.png)
 
 게임이 시작될 때 표시되는 안내 모달입니다.  
 출제자와 참여자에게 서로 다른 역할 안내 메시지를 제공합니다.
@@ -137,7 +137,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 7️⃣ 게임 진행 화면 (출제자)
-![drawing_turn](p4/drawing_turn.png)
+![drawing_turn](/img/drawing_turn.png)
 
 출제자의 화면입니다.  
 제시어를 전달받고 캔버스에 그림을 그릴 수 있으며,  
@@ -146,7 +146,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 8️⃣ 게임 진행 화면 (정답자)
-![guessing_turn](p4/guessing_turn.png)
+![guessing_turn](/img/guessing_turn.png)
 
 정답자의 화면입니다.  
 출제자가 그린 그림을 보고 채팅을 통해 정답을 입력합니다.  
@@ -155,7 +155,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 9️⃣ 타이머 진행 바
-![time_progress](p4/time_progress.png)
+![time_progress](/img/time_progress.png)
 
 라운드 진행 시간을 시각적으로 표현한 프로그레스 바입니다.  
 시간 경과에 따라 실시간으로 줄어들며 긴장감을 제공합니다.
@@ -163,7 +163,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 🔟 투표 진행 화면
-![vote_progress](p4/vote_progress.png)
+![vote_progress](/img/vote_progress.png)
 
 라운드 종료 후 진행되는 투표 화면입니다.  
 각 그림에 대한 평가가 진행되며  
@@ -172,7 +172,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 1️⃣1️⃣ 투표 결과 화면
-![vote_result](p4/vote_result.png)
+![vote_result](/img/vote_result.png)
 
 투표가 종료된 뒤 결과를 시각적으로 보여주는 화면입니다.  
 득표 수에 따라 순위가 결정되며 점수에 반영됩니다.
@@ -180,7 +180,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 1️⃣2️⃣ 게임 종료 화면
-![game_end](p4/game_end.png)
+![game_end](/img/game_end.png)
 
 모든 라운드가 종료되었을 때 표시되는 화면입니다.  
 최종 점수와 순위를 확인할 수 있으며  
@@ -189,7 +189,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 1️⃣3️⃣ 명예의 전당
-![hall_of_fame](p4/hall_of_fame.png)
+![hall_of_fame](/img/hall_of_fame.png)
 
 월별 또는 기간별로 높은 평가를 받은 그림을 전시하는 공간입니다.  
 플레이 결과가 기록으로 남아 성취감을 제공합니다.
@@ -199,7 +199,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ## 🔤 끝말잇기 모드
 
 ### 1️⃣4️⃣ 끝말잇기 시작 화면
-![word_chain_start](p4/word_chain_start.png)
+![word_chain_start](/img/word_chain_start.png)
 
 끝말잇기 게임 모드 시작 화면입니다.  
 기존 로비 UI와 동일한 구조에서 게임이 진행됩니다.
@@ -207,7 +207,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 1️⃣5️⃣ 끝말잇기 진행 화면
-![word_chain_play](p4/word_chain_play.png)
+![word_chain_play](/img/word_chain_play.png)
 
 턴 기반으로 단어를 입력하는 화면입니다.  
 제한 시간 내에 단어를 입력해야 하며  
@@ -216,7 +216,7 @@ Draw It!의 전체적인 분위기와 아이덴티티를 가장 먼저 보여주
 ---
 
 ### 1️⃣6️⃣ 끝말잇기 결과 화면
-![word_chain_result](p4/word_chain_result.png)
+![word_chain_result](/img/word_chain_result.png)
 
 끝말잇기 게임 종료 후 결과 화면입니다.  
 각 플레이어의 점수와 로그가 정리되어 표시됩니다.
