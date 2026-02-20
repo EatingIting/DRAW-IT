@@ -88,7 +88,9 @@ function CreateRoomModal({ onClose, mode = "create", roomData = null }) {
         await axios.post(`${API_BASE_URL}/lobby`, payload);
 
         onClose();
-        navigate(`/lobby/${lobbyId}`, { state: { nickname: hostNickname } });
+        navigate(`/lobby/${lobbyId}`, {
+          state: { nickname: hostNickname, mode: modeValue },
+        });
         return;
       }
 

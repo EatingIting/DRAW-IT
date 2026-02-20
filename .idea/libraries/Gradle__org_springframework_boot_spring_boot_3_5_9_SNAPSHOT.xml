@@ -1,0 +1,14 @@
+<component name="libraryTable">
+  <library name="Gradle: org.springframework.boot:spring-boot:3.5.9-SNAPSHOT" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="org.springframework.boot" artifactId="spring-boot" version="3.5.9-SNAPSHOT" baseVersion="3.5.9-SNAPSHOT" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.boot/spring-boot/3.5.9-SNAPSHOT/b1cafb62d40bd3d6a908fe0a7ef6f76ef8b43df9/spring-boot-3.5.9-SNAPSHOT.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.boot/spring-boot/3.5.9-SNAPSHOT/48c977b7fa082d33171163a252796b6a2a8fc68c/spring-boot-3.5.9-SNAPSHOT-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.boot/spring-boot/3.5.9-SNAPSHOT/ed081962f7a507ee2beaec479f1cbdbcc365c3b6/spring-boot-3.5.9-SNAPSHOT-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

@@ -21,7 +21,7 @@ public class GameState {
     private int roundDuration;    // 라운드 남은 시간 (초단위)
 
     private int currentRound = 1; // 현재 라운드(1~10)
-    public static final int MAX_ROUND = 1; //총 라운드 10
+    public static final int MAX_ROUND = 10; // 총 라운드
 
     // 동시성 문제를 방지하기 위해 CopyOnWriteArrayList 사용 (좋습니다!)
     private List<DrawEvent> drawEvents = new CopyOnWriteArrayList<>();

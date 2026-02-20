@@ -6,6 +6,7 @@ import java.util.*;
 
 @Getter
 public class WordChainState {
+    public static final int MAX_TIMEOUT_COUNT = 5;
 
     private boolean started = false;
     private boolean finished = false;
@@ -21,6 +22,7 @@ public class WordChainState {
     private Set<String> usedWords = new HashSet<>();
 
     private int round = 0;
+    private int timeoutCount = 0;
     private long turnStartAt = 0L;
 
     private double turnLimitSec = 15;
@@ -65,6 +67,7 @@ public class WordChainState {
         turnUserId = playerIds.get(0);
 
         round = 0;
+        timeoutCount = 0;
         turnStartAt = System.currentTimeMillis();
     }
 
@@ -118,6 +121,8 @@ public class WordChainState {
        턴 변경 + 타이머 초기화
     ========================= */
     public void onNextTurn() {
+        if (playerIds.isEmpty()) return;
+
         round++;
 
         currentTurnIndex = (currentTurnIndex + 1) % playerIds.size();
@@ -156,6 +161,7 @@ public class WordChainState {
         turnUserId = playerIds.get(0);
 
         round = 0;
+        timeoutCount = 0;
 
         turnLimitSec = 15.0;
 
@@ -231,5 +237,9 @@ public class WordChainState {
                 MIN_TURN_LIMIT,
                 turnLimitSec - DECREASE_STEP
         );
+    }
+
+    public void increaseTimeoutCount() {
+        timeoutCount++;
     }
 }

@@ -39,6 +39,7 @@ function LobbyScreen() {
     sessionStorage.getItem("nickname") ||
     ""
   ).trim();
+  const initialModeFromState = location.state?.mode;
 
   const [players, setPlayers] = useState([]);
   const [isHost, setIsHost] = useState(false);
@@ -82,12 +83,19 @@ function LobbyScreen() {
   // 방 정보 REST 로드
   const fetchRoomInfo = async () => {
     const res = await axios.get(`${API_BASE_URL}/lobby/${roomId}`);
-    const data = res.data?.lobby ?? res.data;
+    const rawData = res.data?.lobby ?? res.data;
+    const data = {
+      ...rawData,
+      mode: normalizeMode(rawData?.mode || initialModeFromState),
+    };
     setRoomInfo(data);
     roomInfoRef.current = data;
+    if (typeof data.gameStarted === "boolean") {
+      setGameStarted(data.gameStarted);
+    }
 
     if(data.gameStarted) {
-      if(data.mode === "WORD_CHAIN") {
+      if(normalizeMode(data.mode) === "WORD_CHAIN") {
         navigate(`/wordchain/${roomId}`, {
           state : { nickname : myNickname },
           replace : true,
@@ -179,7 +187,7 @@ function LobbyScreen() {
               );
             }
             if (data.gameStarted) {
-              const mode = data.mode || roomInfoRef.current?.mode;
+              const mode = normalizeMode(data.mode || roomInfoRef.current?.mode || initialModeFromState);
 
               navigate(
                 mode === "WORD_CHAIN"
@@ -195,7 +203,7 @@ function LobbyScreen() {
               ...(roomInfoRef.current || {}),
               id: data.roomId ?? roomInfoRef.current?.id,
               name: data.roomName ?? roomInfoRef.current?.name,
-              mode: data.mode ?? roomInfoRef.current?.mode,
+              mode: normalizeMode(data.mode ?? roomInfoRef.current?.mode ?? initialModeFromState),
               gameStarted: data.gameStarted ?? roomInfoRef.current?.gameStarted,
             };
 
@@ -207,7 +215,7 @@ function LobbyScreen() {
             }
 
             if (data.gameStarted) {
-              const mode = data.mode || roomInfoRef.current?.mode;
+              const mode = normalizeMode(data.mode || roomInfoRef.current?.mode || initialModeFromState);
 
               navigate(
                 mode === "WORD_CHAIN"
@@ -219,7 +227,7 @@ function LobbyScreen() {
           }
 
           if (data.type === "GAME_START") {
-            const currentMode = data.mode || roomInfoRef.current?.mode;
+            const currentMode = normalizeMode(data.mode || roomInfoRef.current?.mode || initialModeFromState);
             if (currentMode === "WORD_CHAIN") {
               navigate(`/wordchain/${roomId}`, { 
                 state: { nickname: myNickname } 
@@ -272,6 +280,16 @@ function LobbyScreen() {
           bubbleTimeoutRef.current[uid] = timeoutId;
         });
 
+        client.subscribe(`/topic/wordchain/${roomId}`, (message) => {
+          const data = JSON.parse(message.body);
+          if (data.type === "START_DENIED") {
+            setModal({
+              title: "게임 시작 불가",
+              message: "끝말잇기 게임을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.",
+            });
+          }
+        });
+
         localStorage.setItem("userId", userIdRef.current);
         localStorage.setItem("nickname", myNickname);
 
@@ -300,7 +318,7 @@ function LobbyScreen() {
       bubbleTimeoutRef.current = {};
       client.deactivate();
     };
-  }, [roomId, myNickname, navigate]);
+  }, [roomId, myNickname, navigate, initialModeFromState]);
 
   const handleLeaveRoom = () => {
     if (clientRef.current?.connected) {
@@ -312,25 +330,56 @@ function LobbyScreen() {
     navigate(-1);
   };
 
+  const normalizeMode = (mode) => {
+    if (!mode) return "RANDOM";
+    const raw = String(mode).trim();
+    const upper = raw.toUpperCase();
+    if (upper === "WORDCHAIN" || raw === "끝말잇기") return "WORD_CHAIN";
+    return upper;
+  };
+
+  const openEditModal = async () => {
+    if (!isHost) return;
+    if (!roomInfoRef.current) {
+      try {
+        await fetchRoomInfo();
+      } catch (_) {
+        setModal({
+          title: "방 설정 불가",
+          message: "방 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
+        });
+        return;
+      }
+    }
+    setIsEditOpen(true);
+  };
+
   const handleStartGame = () => {
     if (!isHost) return;
-    if (!clientRef.current?.connected) return;
+    if (!clientRef.current?.connected) {
+      setModal({
+        title: "연결 오류",
+        message: "서버 연결이 끊어졌습니다. 잠시 후 다시 시도해주세요.",
+      });
+      return;
+    }
 
-    if (roomInfo?.mode === "WORD_CHAIN") {
-       clientRef.current.publish({
+    const currentMode = normalizeMode(roomInfo?.mode || roomInfoRef.current?.mode);
+
+    if (currentMode === "WORD_CHAIN") {
+      clientRef.current.publish({
         destination: `/app/wordchain/${roomId}/start`,
         body: JSON.stringify({}),
       });
+      return;
     }
 
     // 2. 0.2초 딜레이 후 로비 상태 변경 (화면 이동 트리거)
     // 이 딜레이가 있어야 소켓 끊기기 전에 서버가 시작 처리를 완료함
-    setTimeout(() => {
-        clientRef.current.publish({
-          destination: `/app/lobby/${roomId}/start`,
-          body: JSON.stringify({ roomId }),
-        });
-    }, 500);
+    clientRef.current.publish({
+      destination: `/app/lobby/${roomId}/start`,
+      body: JSON.stringify({ roomId }),
+    });
   };
 
   const handleUserCardClick = (user) => {
@@ -454,7 +503,7 @@ function LobbyScreen() {
                 <h2>{roomInfo?.name ?? "로비"}</h2>
                 <div className="room-detail">
                   <span>
-                    모드: {MODE_LABEL[roomInfo?.mode] ?? roomInfo?.mode}
+                    모드: {MODE_LABEL[normalizeMode(roomInfo?.mode || initialModeFromState)] ?? normalizeMode(roomInfo?.mode || initialModeFromState)}
                   </span>
                   <span>•</span>
                   <span>
@@ -469,7 +518,7 @@ function LobbyScreen() {
                     GAME START
                   </button>
 
-                  <button className="modify-btn" onClick={() => setIsEditOpen(true)}>
+                  <button className="modify-btn" onClick={openEditModal}>
                     방 설정
                   </button>
                 </div>
@@ -533,8 +582,17 @@ function LobbyScreen() {
           );
         })}
 
-        {isEditOpen && isHost && roomInfo && (
-          <CreateRoomModal mode="edit" roomData={roomInfo} onClose={closeEditModal} />
+        {isEditOpen && isHost && (
+          <CreateRoomModal
+            mode="edit"
+            roomData={{
+              id: roomId,
+              name: roomInfoRef.current?.name ?? roomInfo?.name ?? "",
+              mode: normalizeMode(roomInfoRef.current?.mode ?? roomInfo?.mode ?? "RANDOM"),
+              password: roomInfoRef.current?.password ?? roomInfo?.password ?? null,
+            }}
+            onClose={closeEditModal}
+          />
         )}
       </div>
     </>
