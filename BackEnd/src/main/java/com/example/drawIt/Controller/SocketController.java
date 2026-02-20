@@ -46,14 +46,28 @@ public class SocketController {
 
     private final Set<String> endingLobbies = ConcurrentHashMap.newKeySet();
 
+    private void notifyLobbyNotFound(String roomId) {
+        messagingTemplate.convertAndSend(
+                "/topic/lobby/" + roomId,
+                Map.of("type", "ROOM_DESTROYED", "reason", "LOBBY_NOT_FOUND")
+        );
+    }
+
     @MessageMapping("/lobby/{roomId}/join")
     public void join(@DestinationVariable("roomId") String roomId,
                      @Payload SocketJoinDTO dto,
                      StompHeaderAccessor accessor) {
+        Lobby lobby;
+        try {
+            lobby = lobbyService.getLobby(roomId);
+        } catch (Exception ex) {
+            notifyLobbyNotFound(roomId);
+            return;
+        }
+
         String sessionId = Objects.requireNonNull(accessor.getSessionId());
         lobbyUserStore.addUser(roomId, sessionId, dto.getUserId(), dto.getNickname());
 
-        Lobby lobby = lobbyService.getLobby(roomId);
         GameState state = gameStateManager.getGame(roomId);
         boolean gameStarted = (state != null);
         String drawerUserId = (state != null) ? state.getDrawerUserId() : null;
@@ -122,9 +136,16 @@ public class SocketController {
             return;
         }
 
+        Lobby lobby;
+        try {
+            lobby = lobbyService.getLobby(roomId);
+        } catch (Exception ex) {
+            notifyLobbyNotFound(roomId);
+            return;
+        }
+
         lobbyService.markGameStarted(roomId);
 
-        Lobby lobby = lobbyService.getLobby(roomId);
         String mode = normalizeMode(lobby.getMode());
         if (GameMode.WORD_CHAIN.name().equals(mode)) {
             startWordChainGame(roomId, users);

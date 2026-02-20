@@ -136,7 +136,17 @@ function WordChainScreen() {
     return () => clearInterval(interval);
   }, [started, effectiveTurnStartAt, turnTimeLimit, showStartModal]);
 
+  const leaveCurrentRoom = () => {
+    if (clientRef.current?.connected) {
+      clientRef.current.publish({
+        destination: `/app/lobby/${roomId}/leave`,
+        body: JSON.stringify({ userId }),
+      });
+    }
+  };
+
   const handleLeaveGame = () => {
+    leaveCurrentRoom();
     setForceExitModal(false);
     navigate("/join");
   }
@@ -450,6 +460,7 @@ function WordChainScreen() {
   };
 
   const handleConfirmEnd = () => {
+    leaveCurrentRoom();
     setGameEnded(false);
     navigate("/join");
   };
